@@ -1,0 +1,50 @@
+import * as U from './utils.js';
+
+const data={name:'All',children:[
+  {name:'Women',children:[
+    {name:'Dresses',children:[{name:'Silk Midi',value:180},{name:'Linen Wrap',value:140},{name:'Cotton Day',value:100}]},
+    {name:'Tops',children:[{name:'Blouses',value:90},{name:'Tees',value:75},{name:'Knits',value:120}]},
+    {name:'Outerwear',children:[{name:'Wool Coat',value:200},{name:'Blazer',value:110}]},
+  ]},
+  {name:'Men',children:[
+    {name:'Shirts',children:[{name:'Oxford',value:95},{name:'Linen',value:80},{name:'Casual',value:65}]},
+    {name:'Trousers',children:[{name:'Chinos',value:85},{name:'Wide-leg',value:110}]},
+  ]},
+  {name:'Living',children:[
+    {name:'Textiles',children:[{name:'Cushions',value:60},{name:'Throws',value:80}]},
+    {name:'Ceramics',children:[{name:'Mugs',value:45},{name:'Bowls',value:50}]},
+  ]},
+]};
+
+const colors={Women:U.C.purple,Men:U.C.teal,Living:U.C.coral};
+const el=document.getElementById('chart');
+const W=el.offsetWidth, H=420;
+const R=Math.min(W,H)/2-20;
+
+const svg=d3.select('#chart').append('svg').attr('width',W).attr('height',H)
+  .append('g').attr('transform',`translate(${W/2},${H/2})`);
+
+const root=d3.hierarchy(data).sum(d=>d.value||0);
+d3.partition().size([2*Math.PI,R])(root);
+
+const arc=d3.arc().startAngle(d=>d.x0).endAngle(d=>d.x1)
+  .innerRadius(d=>d.y0).outerRadius(d=>d.y1-2);
+
+function getColor(d){
+  const top=d.ancestors().find(a=>a.depth===1);
+  return top?colors[top.data.name]||U.C.gray:U.C.gray;
+}
+
+svg.selectAll('path').data(root.descendants().filter(d=>d.depth>0)).join('path')
+  .attr('d',arc)
+  .attr('fill',d=>getColor(d)+(d.depth===1?'cc':d.depth===2?'88':'55'))
+  .attr('stroke','rgba(255,255,255,.5)').attr('stroke-width',1)
+  .style('cursor','pointer')
+  .append('title').text(d=>d.data.name+'\n$'+d.value+'K');
+
+svg.selectAll('text').data(root.descendants().filter(d=>d.depth>0&&(d.x1-d.x0)>0.15)).join('text')
+  .attr('transform',d=>{const a=(d.x0+d.x1)/2-Math.PI/2,r=(d.y0+d.y1)/2;return `rotate(${a*180/Math.PI}) translate(${r},0) rotate(${a>Math.PI/2&&a<Math.PI*3/2?180:0})`;})
+  .attr('text-anchor','middle').attr('dy','0.35em')
+  .attr('font-size',d=>d.depth===1?12:10).attr('font-family','DM Sans,sans-serif')
+  .attr('fill','#fff').attr('pointer-events','none')
+  .text(d=>d.data.name);

@@ -1,0 +1,46 @@
+import * as U from './utils.js';
+
+const canvas=document.getElementById('chart');
+const W=canvas.offsetWidth,H=380;
+canvas.width=W*devicePixelRatio;canvas.height=H*devicePixelRatio;
+canvas.style.width=W+'px';canvas.style.height=H+'px';
+const ctx=canvas.getContext('2d');
+ctx.scale(devicePixelRatio,devicePixelRatio);
+
+const cols=[
+  {name:'Women',share:0.42,segs:[{name:'Premium',pct:0.45,color:U.C.purple},{name:'Mid',pct:0.35,color:U.C.purple+'88'},{name:'Value',pct:0.20,color:U.C.purple+'44'}]},
+  {name:'Men',  share:0.33,segs:[{name:'Premium',pct:0.38,color:U.C.teal},  {name:'Mid',pct:0.40,color:U.C.teal+'88'},  {name:'Value',pct:0.22,color:U.C.teal+'44'}]},
+  {name:'Living',share:0.25,segs:[{name:'Premium',pct:0.55,color:U.C.coral}, {name:'Mid',pct:0.30,color:U.C.coral+'88'},{name:'Value',pct:0.15,color:U.C.coral+'44'}]},
+];
+const pad={t:24,r:16,b:40,l:16};
+const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+
+let xCursor=pad.l;
+cols.forEach(col=>{
+  const colW=col.share*cw;
+  let yCursor=pad.t;
+  col.segs.forEach(seg=>{
+    const segH=seg.pct*ch;
+    ctx.fillStyle=seg.color;
+    ctx.strokeStyle='rgba(255,255,255,.6)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.roundRect(xCursor+1,yCursor+1,colW-2,segH-2,2);ctx.fill();ctx.stroke();
+    if(segH>22){
+      ctx.fillStyle='rgba(255,255,255,.9)';
+      ctx.font='10px DM Sans,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(seg.name,xCursor+colW/2,yCursor+segH/2+3);
+      ctx.fillText(Math.round(seg.pct*100)+'%',xCursor+colW/2,yCursor+segH/2+15);
+    }
+    yCursor+=segH;
+  });
+  // column label
+  ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('color')||'#111';
+  ctx.font='500 12px DM Sans,sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText(col.name,xCursor+colW/2,H-pad.b+18);
+  ctx.fillStyle='rgba(128,128,128,.7)';
+  ctx.font='10px DM Sans,sans-serif';
+  ctx.fillText(Math.round(col.share*100)+'%',xCursor+colW/2,H-pad.b+30);
+  xCursor+=colW;
+});

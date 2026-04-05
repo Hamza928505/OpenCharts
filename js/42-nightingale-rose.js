@@ -1,0 +1,38 @@
+import * as U from './utils.js';
+
+const canvas=document.getElementById('chart');
+const S=Math.min(canvas.offsetWidth,420);
+canvas.width=S*devicePixelRatio;canvas.height=S*devicePixelRatio;
+canvas.style.width=S+'px';canvas.style.height=S+'px';
+const ctx=canvas.getContext('2d');
+ctx.scale(devicePixelRatio,devicePixelRatio);
+const cx=S/2,cy=S/2,maxR=S/2-32;
+const months=U.MO3;
+const vals=[185,210,198,240,275,310,295,330,285,320,355,410];
+const maxV=Math.max(...vals);
+const colors=[U.C.purple,U.C.purple,U.C.teal,U.C.teal,U.C.teal,U.C.coral,U.C.coral,U.C.coral,U.C.blue,U.C.blue,U.C.amber,U.C.amber];
+const sliceAngle=(2*Math.PI)/12;
+
+// grid rings
+[0.25,0.5,0.75,1].forEach(t=>{
+  ctx.beginPath();
+  ctx.arc(cx,cy,maxR*t,0,2*Math.PI);
+  ctx.strokeStyle='rgba(128,128,128,.12)';ctx.lineWidth=1;ctx.stroke();
+});
+
+vals.forEach((v,i)=>{
+  const angle=sliceAngle*i-Math.PI/2;
+  const r=Math.sqrt(v/maxV)*maxR;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.arc(cx,cy,r,angle,angle+sliceAngle);
+  ctx.closePath();
+  ctx.fillStyle=colors[i]+'bb';ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1;ctx.stroke();
+  // label
+  const la=angle+sliceAngle/2;
+  const lr=maxR+14;
+  ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('color')||'#111';
+  ctx.font='10px DM Sans,sans-serif';ctx.textAlign='center';
+  ctx.fillText(months[i],cx+Math.cos(la)*lr,cy+Math.sin(la)*lr+3);
+});
