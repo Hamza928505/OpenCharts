@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doughnut chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Doughnut chart</h1>
+      <p>Like a pie chart but with a hollow centre — the cutout can display a summary stat.</p>
+    </div>
+    <span class="badge">Circular</span>
+  </header>
+  
+<div class="card" style="position:relative">
+  <div class="card-header"><div><h2>Traffic sources</h2><p>Sessions share, 2024</p></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels=['Organic','Paid','Social','Direct','Referral'];
+const data  =[40,27,15,11,7];
+const colors=[U.C.purple,U.C.teal,U.C.coral,U.C.blue,U.C.amber];
+
+const chart = new Chart('chart',{
+  type:'doughnut',
+  data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:8 }] },
+  options: U.baseOpts({
+    cutout:'68%',
+    layout:{ padding:16 },
+    plugins:{
+      tooltip:{ callbacks:{ label:ctx=>` ${ctx.label}: ${ctx.parsed}%` } }
+    }
+  })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>

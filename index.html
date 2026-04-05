@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Chart library — 45 charts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Chart library</h1>
+      <p>45 standalone, production-ready chart files — click any card to open</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="badge">45 charts</span>
+    </div>
+  </header>
+  <h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Line charts</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="01-line-basic.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Basic line</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Single series, smooth/linear toggle</div>
+  </div>
+</a>
+<a href="02-line-multi.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Multi-line</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Compare up to 4 series</div>
+  </div>
+</a>
+<a href="03-line-stepped.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Stepped line</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Discrete state changes</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Area charts</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="04-area-basic.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Area</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Filled area below a line</div>
+  </div>
+</a>
+<a href="05-area-stacked.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Stacked area</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Cumulative fills</div>
+  </div>
+</a>
+<a href="06-area-band.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Area band</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Min/max confidence band</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Bar charts</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="07-bar-vertical.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Vertical bar</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Grouped columns</div>
+  </div>
+</a>
+<a href="08-bar-stacked.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Stacked bar</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Segmented totals</div>
+  </div>
+</a>
+<a href="09-bar-horizontal.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Horizontal bar</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Ranking / long labels</div>
+  </div>
+</a>
+<a href="10-bar-100stacked.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">100% stacked</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Proportional segments</div>
+  </div>
+</a>
+<a href="11-bar-diverging.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Diverging bar</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Positive & negative values</div>
+  </div>
+</a>
+<a href="12-bar-floating.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Floating bar</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">[min,max] ranges / Gantt</div>
+  </div>
+</a>
+<a href="13-bar-waterfall.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Waterfall</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Step-by-step bridge</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Circular charts</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="14-pie.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Pie</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Full circle slices</div>
+  </div>
+</a>
+<a href="15-doughnut.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Doughnut</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Hollow ring</div>
+  </div>
+</a>
+<a href="16-doughnut-gauge.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Gauge</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Half-doughnut KPI</div>
+  </div>
+</a>
+<a href="17-polar-area.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Polar area</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Varying-radius spokes</div>
+  </div>
+</a>
+<a href="42-nightingale-rose.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Nightingale rose</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Polar bars, area = value</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Radar charts</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="18-radar-single.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Radar — single</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">One entity, N axes</div>
+  </div>
+</a>
+<a href="19-radar-multi.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Radar — multi</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Compare 3 entities</div>
+  </div>
+</a>
+<a href="20-radar-filled.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Radar filled</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Area-emphasis web</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Scatter & bubble</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="21-scatter-basic.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Scatter</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">X/Y correlation</div>
+  </div>
+</a>
+<a href="22-scatter-clusters.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Scatter clusters</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Colour-coded groups</div>
+  </div>
+</a>
+<a href="23-bubble.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Bubble</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">X/Y/size encoding</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Mixed / combo</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="24-mixed-bar-line.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Bar + line</span>
+      
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Dual-axis combo</div>
+  </div>
+</a>
+<a href="25-mixed-stacked-line.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Stacked + trend</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Composition + trend line</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Statistical</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="26-histogram.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Histogram</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Frequency distribution in bins</div>
+  </div>
+</a>
+<a href="27-box-plot.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Box plot</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Median, quartiles, outliers</div>
+  </div>
+</a>
+<a href="28-violin.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Violin</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Full distribution shape</div>
+  </div>
+</a>
+<a href="29-butterfly.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Butterfly</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Back-to-back diverging bars</div>
+  </div>
+</a>
+<a href="30-lollipop.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Lollipop</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Dot-and-stem ranked bars</div>
+  </div>
+</a>
+<a href="31-heatmap.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Heatmap</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Colour-coded grid / calendar</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Hierarchical</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="32-treemap.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Treemap</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Nested rectangles by value</div>
+  </div>
+</a>
+<a href="33-sunburst.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Sunburst</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Radial hierarchy rings</div>
+  </div>
+</a>
+<a href="34-bubble-pack.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Bubble pack</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Packed circles by value</div>
+  </div>
+</a>
+<a href="35-waffle.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Waffle</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Grid of proportional cells</div>
+  </div>
+</a>
+<a href="36-marimekko.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Marimekko</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Variable-width stacked bars</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Flow & relationships</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="37-sankey.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Sankey</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Flow quantities between nodes</div>
+  </div>
+</a>
+<a href="38-funnel.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Funnel</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Conversion drop-off stages</div>
+  </div>
+</a>
+<a href="43-stream-graph.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Stream graph</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Flowing stacked areas</div>
+  </div>
+</a>
+<a href="45-chord-diagram.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Chord diagram</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Pairwise relationship flows</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Financial</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="39-candlestick.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Candlestick</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">OHLC financial price bars</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Ranking & time</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="40-bump-chart.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Bump chart</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Rank positions over time</div>
+  </div>
+</a>
+<a href="41-slope-chart.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Slope chart</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Two-point before/after view</div>
+  </div>
+</a>
+</div>
+<h2 style="font-size:.95rem;font-weight:600;margin:2rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);">Multivariate</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:10px;margin-bottom:.5rem;">
+<a href="44-parallel-coords.html" style="text-decoration:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;" onmouseover="this.style.borderColor='#7F77DD'" onmouseout="this.style.borderColor='var(--border)'" >
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <span style="font-size:.85rem;font-weight:600;color:var(--text);">Parallel coords</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted);">Multi-dimensional lines</div>
+  </div>
+</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Area band chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Area band chart</h1>
+      <p>Confidence interval or min/max range visualised as a filled band around a central line.</p>
+    </div>
+    <span class="badge">Area</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header">
+    <div><h2>Temperature forecast</h2><p>Mean with ±1 std dev band, °C</p></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels = Array.from({length:14},(_,i)=>'Day '+(i+1));
+const mean=[18,19,21,22,20,19,23,25,24,22,21,23,26,25];
+const hi  = mean.map(v=>v+U.rand(2,5));
+const lo  = mean.map(v=>v-U.rand(2,5));
+
+const chart = new Chart('chart',{
+  type:'line',
+  data:{
+    labels,
+    datasets:[
+      { label:'Upper bound', data:hi,  borderColor:'transparent', backgroundColor:'rgba(127,119,221,.18)', fill:'+1', pointRadius:0, tension:0.4, borderWidth:0 },
+      { label:'Lower bound', data:lo,  borderColor:'transparent', backgroundColor:'rgba(127,119,221,.18)', fill:false, pointRadius:0, tension:0.4, borderWidth:0 },
+      { label:'Mean',        data:mean, borderColor:U.C.purple,   backgroundColor:'transparent', fill:false, tension:0.4, pointRadius:4, pointBackgroundColor:U.C.purple, borderWidth:2.5 },
+    ]
+  },
+  options: U.baseOpts({
+    scales:{
+      x: U.xAxis(),
+      y: U.yAxis({ ticks:{ ...U.TICK, callback:v=>v+'°C' } }),
+    }
+  })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>

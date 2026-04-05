@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Basic line chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Basic line chart</h1>
+      <p>Single series with smooth tension, interactive tooltips and toggleable point visibility.</p>
+    </div>
+    <span class="badge">Line</span>
+  </header>
+  
+<div class="metrics">
+  <div class="metric"><div class="metric-label">Peak value</div><div class="metric-value" id="m-peak">—</div></div>
+  <div class="metric"><div class="metric-label">Average</div><div class="metric-value" id="m-avg">—</div></div>
+  <div class="metric"><div class="metric-label">Total</div><div class="metric-value" id="m-total">—</div></div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <div><h2>Monthly revenue</h2><p>Jan – Dec 2024</p></div>
+    <div class="controls">
+      <button class="btn active" id="btn-smooth">Smooth</button>
+      <button class="btn" id="btn-linear">Linear</button>
+      <button class="btn" id="btn-pts">Hide points</button>
+    </div>
+  </div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const data = [185,210,198,240,275,310,295,330,285,320,355,410];
+const labels = U.MO3;
+
+document.getElementById('m-peak').textContent  = '$' + Math.max(...data) + 'K';
+document.getElementById('m-avg').textContent   = '$' + Math.round(data.reduce((a,b)=>a+b)/data.length) + 'K';
+document.getElementById('m-total').textContent = '$' + (data.reduce((a,b)=>a+b)/1000).toFixed(2) + 'M';
+
+const dataset = {
+  label:'Revenue', data,
+  borderColor: U.C.purple,
+  backgroundColor: U.C.purpleA,
+  fill: true, tension: 0.4,
+  pointRadius: 5, pointHoverRadius: 7,
+  pointBackgroundColor: U.C.purple,
+  borderWidth: 2,
+};
+
+const chart = new Chart('chart', {
+  type:'line',
+  data:{ labels, datasets:[dataset] },
+  options: U.baseOpts({
+    scales:{
+      x: U.xAxis(),
+      y: U.yAxis({ ticks:{ ...U.TICK, callback:v=>'$'+v+'K' } }),
+    }
+  })
+});
+
+// Controls
+let showPts = true;
+document.getElementById('btn-smooth').addEventListener('click', () => {
+  chart.data.datasets[0].tension = 0.4; chart.update();
+  document.getElementById('btn-smooth').classList.add('active');
+  document.getElementById('btn-linear').classList.remove('active');
+});
+document.getElementById('btn-linear').addEventListener('click', () => {
+  chart.data.datasets[0].tension = 0; chart.update();
+  document.getElementById('btn-linear').classList.add('active');
+  document.getElementById('btn-smooth').classList.remove('active');
+});
+document.getElementById('btn-pts').addEventListener('click', function() {
+  showPts = !showPts;
+  chart.data.datasets[0].pointRadius = showPts ? 5 : 0;
+  chart.update();
+  this.textContent = showPts ? 'Hide points' : 'Show points';
+});
+
+</script>
+</body>
+</html>

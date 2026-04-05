@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Waffle chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="lib/fonts.googleapis.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div><h1>Waffle chart</h1><p>A grid of cells shaded by proportion — each cell represents 1%. Intuitive part-to-whole view.</p></div>
+    <span class="badge">Hierarchical</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Market share — browsers</h2><p>Each cell = 1% of market</p></div></div>
+  <div class="legend" id="legend" style="margin-bottom:1rem;"></div>
+  <div id="waffle" style="display:grid;grid-template-columns:repeat(20,1fr);gap:3px;max-width:520px;margin:0 auto;"></div>
+</div>
+</div>
+
+<script type="module">
+import * as U from './js/utils.js';
+
+const segments=[
+  {label:'Chrome',  pct:65, color:U.C.blue},
+  {label:'Safari',  pct:19, color:U.C.teal},
+  {label:'Firefox', pct:8,  color:U.C.coral},
+  {label:'Edge',    pct:5,  color:U.C.purple},
+  {label:'Other',   pct:3,  color:U.C.gray},
+];
+const cells=[];
+segments.forEach(s=>{for(let i=0;i<s.pct;i++) cells.push(s.color);});
+
+const grid=document.getElementById('waffle');
+cells.forEach((color,i)=>{
+  const d=document.createElement('div');
+  d.style.cssText=`background:${color};border-radius:2px;aspect-ratio:1;transition:opacity .15s;`;
+  d.title=`${segments.find(s=>s.color===color)?.label} — ${segments.find(s=>s.color===color)?.pct}%`;
+  d.onmouseenter=()=>d.style.opacity='0.7';
+  d.onmouseleave=()=>d.style.opacity='1';
+  grid.appendChild(d);
+});
+
+const lg=document.getElementById('legend');
+segments.forEach(s=>{
+  const span=document.createElement('span');
+  span.className='legend-item';
+  span.innerHTML=`<span class="legend-swatch" style="background:${s.color}"></span>${s.label} ${s.pct}%`;
+  lg.appendChild(span);
+});
+
+</script>
+</body>
+</html>

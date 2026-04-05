@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radar chart (single series)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Radar chart (single series)</h1>
+      <p>Spider/web chart — compare a single entity across multiple quantitative dimensions.</p>
+    </div>
+    <span class="badge">Radar</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Product performance scorecard</h2><p>Score out of 100</p></div></div>
+  <div class="chart-wrap" style="height:380px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const axes=['Quality','Speed','Value','Support','UX','Reliability'];
+const data =[82,74,68,90,78,85];
+
+new Chart('chart',{
+  type:'radar',
+  data:{
+    labels:axes,
+    datasets:[{
+      label:'Score', data,
+      borderColor:U.C.purple,
+      backgroundColor:U.C.purpleA,
+      pointBackgroundColor:U.C.purple,
+      borderWidth:2, pointRadius:5, pointHoverRadius:7,
+    }]
+  },
+  options: U.baseOpts({
+    scales:{ r:{ min:0, max:100, ticks:{ stepSize:20, font:{ size:10 } }, pointLabels:{ font:{ size:12 } }, grid:{ color:'rgba(128,128,128,.15)' } } }
+  })
+});
+
+</script>
+</body>
+</html>

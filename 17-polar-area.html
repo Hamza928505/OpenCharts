@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polar area chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Polar area chart</h1>
+      <p>Equal angles with varying radii — encodes quantity through area, good for cyclic data.</p>
+    </div>
+    <span class="badge">Circular</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Monthly sales distribution</h2><p>Units sold by month</p></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:380px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels=U.MO3;
+const data  =[850,920,880,1050,1140,1260,1310,1280,1120,1090,1190,1420];
+const colors=['#7F77DD','#7F77DD','#1D9E75','#1D9E75','#1D9E75','#D85A30','#D85A30','#D85A30','#378ADD','#378ADD','#BA7517','#BA7517'];
+
+const chart = new Chart('chart',{
+  type:'polarArea',
+  data:{
+    labels,
+    datasets:[{
+      data,
+      backgroundColor:colors.map(c=>c+'bb'),
+      borderColor:colors,
+      borderWidth:1,
+    }]
+  },
+  options: U.baseOpts({
+    scales:{ r:{ ticks:{ font:{ size:9 }, display:false }, grid:{ color:'rgba(128,128,128,.12)' } } },
+    layout:{ padding:12 },
+  })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>

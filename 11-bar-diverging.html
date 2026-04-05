@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diverging bar chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Diverging bar chart</h1>
+      <p>Positive and negative values either side of a zero baseline — great for variance or sentiment.</p>
+    </div>
+    <span class="badge">Bar</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Monthly profit variance</h2><p>Actual vs budget, $K</p></div></div>
+  <div class="chart-wrap" style="height:320px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels = U.MO3;
+const data   = [12,-8,20,-5,15,-12,18,25,-6,14,-9,30];
+const colors = data.map(v=>v>=0 ? U.C.teal : U.C.coral);
+
+new Chart('chart',{
+  type:'bar',
+  data:{
+    labels,
+    datasets:[{
+      label:'Variance', data,
+      backgroundColor:colors,
+      borderRadius:3, borderSkipped:false,
+    }]
+  },
+  options: U.baseOpts({
+    scales:{
+      x: U.xAxis(),
+      y: U.yAxis({ ticks:{ ...U.TICK, callback:v=>(v>=0?'+':'')+v+'K' } }),
+    }
+  })
+});
+
+</script>
+</body>
+</html>

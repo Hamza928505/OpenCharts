@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Sankey diagram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="lib/fonts.googleapis.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div><h1>Sankey diagram</h1><p>Flowing ribbon widths show quantities moving between nodes — budget, traffic, energy.</p></div>
+    <span class="badge">Flow</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Customer acquisition flow</h2><p>Sessions → conversions by channel</p></div></div>
+  <div class="chart-wrap" style="height:380px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/chartjs-chart-sankey.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const c=U.C;
+new Chart('chart',{
+  type:'sankey',
+  data:{datasets:[{
+    label:'Flow',
+    colorFrom:ctx=>({Organic:c.teal,Paid:c.coral,Social:c.purple,Email:c.blue,Visit:c.amber,Checkout:c.amber,Purchase:c.teal,Bounce:c.gray}[ctx.dataset.data[ctx.dataIndex]?.from]||c.gray),
+    colorTo:ctx=>({Visit:c.amber,Checkout:c.amber,Purchase:c.teal,Bounce:c.gray,Support:c.coral}[ctx.dataset.data[ctx.dataIndex]?.to]||c.gray),
+    colorMode:'gradient',
+    data:[
+      {from:'Organic',to:'Visit',flow:4200},
+      {from:'Paid',   to:'Visit',flow:2800},
+      {from:'Social', to:'Visit',flow:1900},
+      {from:'Email',  to:'Visit',flow:1400},
+      {from:'Visit',  to:'Checkout',flow:3800},
+      {from:'Visit',  to:'Bounce',  flow:6500},
+      {from:'Checkout',to:'Purchase',flow:2900},
+      {from:'Checkout',to:'Abandon', flow:900},
+    ],
+  }]},
+  options:U.baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw.from} → ${ctx.raw.to}: ${ctx.raw.flow.toLocaleString()}`}}}})
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mixed bar + line chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Mixed bar + line chart</h1>
+      <p>Dual-axis combo chart — bars for absolute values, line for a secondary rate or trend metric.</p>
+    </div>
+    <span class="badge">Mixed</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Revenue and growth rate</h2><p>Quarterly, $K and %</p></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const chart = new Chart('chart',{
+  type:'bar',
+  data:{
+    labels:U.QTR,
+    datasets:[
+      { type:'bar',  label:'Revenue ($K)', data:[520,680,740,910], backgroundColor:U.C.purpleA, borderColor:U.C.purple, borderWidth:1.5, borderRadius:4, borderSkipped:false, yAxisID:'y' },
+      { type:'line', label:'Growth (%)',   data:[null,31,9,23],    borderColor:U.C.coral, backgroundColor:'transparent', tension:0.3, pointRadius:6, pointBackgroundColor:U.C.coral, borderWidth:2.5, yAxisID:'y2' },
+    ]
+  },
+  options: U.baseOpts({
+    scales:{
+      x: U.xAxis(),
+      y:  U.yAxis({ ticks:{ ...U.TICK, callback:v=>'$'+v+'K' } }),
+      y2: { position:'right', ticks:{ font:{ size:11 }, callback:v=>v+'%' }, grid:{ display:false } },
+    }
+  })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>

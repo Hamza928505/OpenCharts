@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pie chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Pie chart</h1>
+      <p>Full-circle slices showing part-to-whole proportions. Best for 2–5 categories.</p>
+    </div>
+    <span class="badge">Circular</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header"><div><h2>Revenue by category</h2><p>FY 2024</p></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels=['Women','Men','Living','Accessories'];
+const data  =[48,31,13,8];
+const colors=[U.C.purple,U.C.teal,U.C.coral,U.C.blue];
+
+const chart = new Chart('chart',{
+  type:'pie',
+  data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:8 }] },
+  options: U.baseOpts({
+    layout:{ padding:16 },
+    plugins:{ tooltip:{ callbacks:{ label:ctx=>` ${ctx.label}: ${ctx.parsed}%` } } }
+  })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>

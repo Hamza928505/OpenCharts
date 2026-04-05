@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-line chart</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  
+</head>
+<body>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Multi-line chart</h1>
+      <p>Compare multiple series side-by-side. Click legend items to toggle series.</p>
+    </div>
+    <span class="badge">Line</span>
+  </header>
+  
+<div class="card">
+  <div class="card-header">
+    <div><h2>Sales by region</h2><p>Monthly units sold, 2024</p></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+</div>
+</div>
+<script src="lib/chart.umd.min.js"></script>
+<script type="module">
+import * as U from './js/utils.js';
+
+const labels = U.MO3;
+const sets = [
+  { label:'North', data:[420,510,480,560,620,700,680,740,660,720,790,880], color:U.C.purple },
+  { label:'South', data:[310,380,355,420,455,510,490,540,500,550,590,640], color:U.C.teal },
+  { label:'East',  data:[260,295,275,330,360,410,395,430,415,455,480,520], color:U.C.coral },
+  { label:'West',  data:[190,220,210,250,275,310,300,335,315,350,375,410], color:U.C.blue },
+];
+
+const chart = new Chart('chart', {
+  type:'line',
+  data:{
+    labels,
+    datasets: sets.map(s=>({
+      label:s.label, data:s.data,
+      borderColor:s.color, backgroundColor:'transparent',
+      tension:0.35, pointRadius:3, pointHoverRadius:6,
+      pointBackgroundColor:s.color, borderWidth:2,
+    }))
+  },
+  options: U.baseOpts({ scales:{ x:U.xAxis(), y:U.yAxis() } })
+});
+U.buildLegend(chart,'legend');
+
+</script>
+</body>
+</html>
