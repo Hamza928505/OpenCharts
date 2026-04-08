@@ -3,94 +3,201 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Basic line chart</title>
+  <title>Line Chart Designer — ChartAdmin</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="css/styles.css" />
-  
+
+  <style>
+    /* Designer Specific Styles */
+    .code-section { 
+      background: var(--surface); 
+      border: 1px solid var(--border); 
+      border-radius: var(--rl); 
+      padding: 1.5rem; 
+      margin-top: 1.5rem; 
+    }
+    .nav-tabs { border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    .nav-link { 
+      color: var(--muted); 
+      font-size: 13px; 
+      font-weight: 600; 
+      border: none !important; 
+      transition: color 0.2s;
+    }
+    .nav-link.active { 
+      color: var(--a1) !important; 
+      border-bottom: 2px solid var(--a1) !important; 
+      background: none !important; 
+    }
+    .code-area { 
+      width: 100%; 
+      height: 280px; 
+      background: var(--bg); 
+      color: var(--text); 
+      font-family: 'DM Mono', monospace; 
+      font-size: 12px; 
+      padding: 1rem; 
+      border: 1px solid var(--border); 
+      border-radius: var(--r);
+      resize: none; 
+      outline: none;
+    }
+    .config-card { border-left: 4px solid var(--a1); }
+
+    /* ── Global Sidebar & Layout ── */
+:root {
+  --sidebar-w: 240px;
+  --font-syne: 'Syne', sans-serif;
+}
+
+body { 
+  display: flex; 
+  background: var(--bg); 
+  color: var(--text); 
+  min-height: 100vh; 
+  margin: 0;
+}
+
+#sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 1000;
+}
+
+#main-content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  width: calc(100% - var(--sidebar-w));
+  min-height: 100vh;
+}
+
+/* Sidebar Internal UI */
+.sidebar-logo { padding: 22px 20px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-family: var(--font-syne); }
+.sidebar-logo .logo-icon { width: 34px; height: 34px; background: var(--a1); border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; }
+.sidebar-logo span { font-size: 1rem; font-weight: 700; color: var(--text); }
+.sidebar-nav { flex: 1; padding: 14px 10px; overflow-y: auto; }
+.nav-label { font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 12px 6px; }
+.nav-link-sidebar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: .84rem; font-weight: 600; color: var(--muted); text-decoration: none; transition: all .15s; margin-bottom: 2px; }
+.nav-link-sidebar:hover { background: var(--border); color: var(--text); }
+.nav-link-sidebar.active { background: var(--a1l); color: var(--a1); }
+
+/* Designer Tab Styles */
+.code-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.5rem; margin-top: 1.5rem; }
+.code-area { width: 100%; height: 260px; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 1rem; border: 1px solid var(--border); border-radius: var(--r); resize: none; outline: none; }
+.nav-tabs-designer { border-bottom: 1px solid var(--border); margin-bottom: 1rem; display: flex; gap: 1.5rem; list-style: none; padding: 0; }
+.tab-btn { background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 600; padding-bottom: 8px; position: relative; transition: color 0.2s; }
+.tab-btn.active { color: var(--a1); }
+.tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--a1); }
+
+.bi-graph-up { color: red !important; }
+.bi-triangle-fill { color: var(--accent) !important; }
+.bi-bar-chart-fill { color: var(--accent) !important; }
+.bi-pie-chart-fill { color: var(--accent) !important; }
+.bi-star-fill { color: var(--accent) !important; }
+.bi-diagram-3-fill { color: var(--accent) !important; }
+.bi-distribute-vertical { color: var(--accent2) !important; }
+.bi-share-fill { color: var(--accent3) !important; }
+
+  </style>
 </head>
 <body>
+
+  <nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">📊</div>
+    <div><span>ChartAdmin</span></div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-label">Overview</div>
+    <a href="index.html" class="nav-link-sidebar"><i class="bi bi-grid-1x2-fill"></i> Dashboard</a>
+    
+    <div class="nav-label">Chart Library</div>
+    <a href="01-line-basic.html" class="nav-link-sidebar active"><i class="bi bi-graph-up"></i> Line Charts</a>
+    <a href="#" class="nav-link-sidebar"><i style="color:red;" class="bi bi-triangle-fill"></i> Area Charts</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-bar-chart-fill"></i> Bar Charts</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-pie-chart-fill"></i> Circular Charts</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-star-fill"></i> Radar Charts</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-diagram-3-fill"></i> Scatter & Bubble</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-distribute-vertical"></i> Statistical</a>
+    <a href="#" class="nav-link-sidebar"><i class="bi bi-share-fill"></i> Flow Charts</a>
+  </div>
+</nav>
+
 <div class="page">
   <header class="page-header">
     <div>
-      <h1>Basic line chart</h1>
-      <p>Single series with smooth tension, interactive tooltips and toggleable point visibility.</p>
+      <h1>Line Chart Designer</h1>
+      <p>Configure your static chart visuals and copy the code blocks below.</p>
     </div>
-    <span class="badge">Line</span>
+    <span class="badge">Static Editor</span>
   </header>
-  
-<div class="metrics">
-  <div class="metric"><div class="metric-label">Peak value</div><div class="metric-value" id="m-peak">—</div></div>
-  <div class="metric"><div class="metric-label">Average</div><div class="metric-value" id="m-avg">—</div></div>
-  <div class="metric"><div class="metric-label">Total</div><div class="metric-value" id="m-total">—</div></div>
-</div>
-<div class="card">
-  <div class="card-header">
-    <div><h2>Monthly revenue</h2><p>Jan – Dec 2024</p></div>
-    <div class="controls">
-      <button class="btn active" id="btn-smooth">Smooth</button>
-      <button class="btn" id="btn-linear">Linear</button>
-      <button class="btn" id="btn-pts">Hide points</button>
+
+  <div class="card config-card mb-4">
+    <div class="card-header">
+      <div><h2>Visual Parameters</h2><p>Adjust line styles and independent dot colors</p></div>
+    </div>
+    <div class="row g-3">
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-bold">Line Color</label>
+        <input type="color" class="form-control form-control-color w-100" id="cfg-line-color" value="#7F77DD">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-bold">Dot Color</label>
+        <input type="color" class="form-control form-control-color w-100" id="cfg-dot-color" value="#7F77DD">
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <div class="controls w-100 m-0 justify-content-start">
+          <button class="btn active" id="btn-smooth">Smooth</button>
+          <button class="btn" id="btn-linear">Linear</button>
+          <button class="btn" id="btn-pts">Show Points</button>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+
+  <div class="card">
+    <div class="card-header">
+      <div><h2>Design Preview</h2><p>Real-time visual feedback</p></div>
+    </div>
+    <div class="chart-wrap" style="height:320px">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="code-section">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h6 m-0 fw-bold"><i class="bi bi-code-square me-2"></i>Developer Output</h2>
+      <button class="btn btn-sm btn-outline-secondary" onclick="copyActiveCode()">
+        <i class="bi bi-clipboard"></i> Copy Selection
+      </button>
+    </div>
+    
+    <ul class="nav nav-tabs" id="codeTabs">
+      <li class="nav-item"><button class="nav-link active" data-tab="html">HTML</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="js">JavaScript</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="css">CSS</button></li>
+    </ul>
+
+    <div class="tab-content">
+      <textarea id="code-display" class="code-area" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
 </div>
-</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="lib/chart.umd.min.js"></script>
-<<<<<<< HEAD
-<script type="module">
-import * as U from './js/utils.js';
-
-const data = [185,210,198,240,275,310,295,330,285,320,355,410];
-const labels = U.MO3;
-
-document.getElementById('m-peak').textContent  = '$' + Math.max(...data) + 'K';
-document.getElementById('m-avg').textContent   = '$' + Math.round(data.reduce((a,b)=>a+b)/data.length) + 'K';
-document.getElementById('m-total').textContent = '$' + (data.reduce((a,b)=>a+b)/1000).toFixed(2) + 'M';
-
-const dataset = {
-  label:'Revenue', data,
-  borderColor: U.C.purple,
-  backgroundColor: U.C.purpleA,
-  fill: true, tension: 0.4,
-  pointRadius: 5, pointHoverRadius: 7,
-  pointBackgroundColor: U.C.purple,
-  borderWidth: 2,
-};
-
-const chart = new Chart('chart', {
-  type:'line',
-  data:{ labels, datasets:[dataset] },
-  options: U.baseOpts({
-    scales:{
-      x: U.xAxis(),
-      y: U.yAxis({ ticks:{ ...U.TICK, callback:v=>'$'+v+'K' } }),
-    }
-  })
-});
-
-// Controls
-let showPts = true;
-document.getElementById('btn-smooth').addEventListener('click', () => {
-  chart.data.datasets[0].tension = 0.4; chart.update();
-  document.getElementById('btn-smooth').classList.add('active');
-  document.getElementById('btn-linear').classList.remove('active');
-});
-document.getElementById('btn-linear').addEventListener('click', () => {
-  chart.data.datasets[0].tension = 0; chart.update();
-  document.getElementById('btn-linear').classList.add('active');
-  document.getElementById('btn-smooth').classList.remove('active');
-});
-document.getElementById('btn-pts').addEventListener('click', function() {
-  showPts = !showPts;
-  chart.data.datasets[0].pointRadius = showPts ? 5 : 0;
-  chart.update();
-  this.textContent = showPts ? 'Hide points' : 'Show points';
-});
-
-</script>
-=======
 <script type="module" src="js/01-line-basic.js"></script>
->>>>>>> ddb8bd3 (Initial commit from VScode)
+
 </body>
 </html>
