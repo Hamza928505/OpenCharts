@@ -11,9 +11,15 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/global.css" />
 
   <style>
     /* Designer Specific Styles */
+    .container {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
     .code-section { 
       background: var(--surface); 
       border: 1px solid var(--border); 
@@ -70,7 +76,7 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  position: fixed;
+  /* position: fixed; */
   top: 0; left: 0; bottom: 0;
   z-index: 1000;
 }
@@ -82,59 +88,67 @@ body {
   min-height: 100vh;
 }
 
-/* Sidebar Internal UI */
-.sidebar-logo { padding: 22px 20px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-family: var(--font-syne); }
-.sidebar-logo .logo-icon { width: 34px; height: 34px; background: var(--a1); border-radius: 9px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; }
-.sidebar-logo span { font-size: 1rem; font-weight: 700; color: var(--text); }
-.sidebar-nav { flex: 1; padding: 14px 10px; overflow-y: auto; }
-.nav-label { font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 12px 6px; }
-.nav-link-sidebar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 9px; font-size: .84rem; font-weight: 600; color: var(--muted); text-decoration: none; transition: all .15s; margin-bottom: 2px; }
-.nav-link-sidebar:hover { background: var(--border); color: var(--text); }
-.nav-link-sidebar.active { background: var(--a1l); color: var(--a1); }
-
-/* Designer Tab Styles */
-.code-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.5rem; margin-top: 1.5rem; }
-.code-area { width: 100%; height: 260px; background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 1rem; border: 1px solid var(--border); border-radius: var(--r); resize: none; outline: none; }
-.nav-tabs-designer { border-bottom: 1px solid var(--border); margin-bottom: 1rem; display: flex; gap: 1.5rem; list-style: none; padding: 0; }
-.tab-btn { background: none; border: none; color: var(--muted); font-size: 13px; font-weight: 600; padding-bottom: 8px; position: relative; transition: color 0.2s; }
-.tab-btn.active { color: var(--a1); }
-.tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--a1); }
-
-.bi-graph-up { color: red !important; }
-.bi-triangle-fill { color: var(--accent) !important; }
-.bi-bar-chart-fill { color: var(--accent) !important; }
-.bi-pie-chart-fill { color: var(--accent) !important; }
-.bi-star-fill { color: var(--accent) !important; }
-.bi-diagram-3-fill { color: var(--accent) !important; }
-.bi-distribute-vertical { color: var(--accent2) !important; }
-.bi-share-fill { color: var(--accent3) !important; }
-
   </style>
 </head>
 <body>
 
-  <nav id="sidebar">
+  <div class="container row">
+    
+    <div class="col-2">
+
+<!-- ── Sidebar ── -->
+ <nav id="sidebar">
   <div class="sidebar-logo">
     <div class="logo-icon">📊</div>
-    <div><span>ChartAdmin</span></div>
+    <div>
+      <div class="logo-text">ChartAdmin</div>
+      <div class="logo-sub">chart library · 45</div>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="Toggle light / dark">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+    </button>
   </div>
+
   <div class="sidebar-nav">
     <div class="nav-label">Overview</div>
-    <a href="index.html" class="nav-link-sidebar"><i class="bi bi-grid-1x2-fill"></i> Dashboard</a>
-    
+    <a href="#top" class="nav-link active" data-c="1" data-tip="Dashboard">
+      <i class="bi bi-grid-1x2-fill"></i> Dashboard
+      <span class="nav-badge">45</span>
+    </a>
+    <a href="#" class="nav-link" data-c="2" data-tip="Visitors" onclick="showVisitorDetail(event)">
+      <i class="bi bi-people-fill"></i> Visitors
+      <span class="nav-badge" id="navVisitors">—</span>
+    </a>
+
     <div class="nav-label">Chart Library</div>
-    <a href="01-line-basic.html" class="nav-link-sidebar active"><i class="bi bi-graph-up"></i> Line Charts</a>
-    <a href="#" class="nav-link-sidebar"><i style="color:red;" class="bi bi-triangle-fill"></i> Area Charts</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-bar-chart-fill"></i> Bar Charts</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-pie-chart-fill"></i> Circular Charts</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-star-fill"></i> Radar Charts</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-diagram-3-fill"></i> Scatter & Bubble</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-distribute-vertical"></i> Statistical</a>
-    <a href="#" class="nav-link-sidebar"><i class="bi bi-share-fill"></i> Flow Charts</a>
+    <a href="#sec-line"        class="nav-link" data-c="1" data-tip="Line (3)"><i class="bi bi-graph-up"></i>          Line          <span class="nav-badge">3</span></a>
+    <a href="#sec-area"        class="nav-link" data-c="2" data-tip="Area (3)"><i class="bi bi-triangle-fill"></i>     Area          <span class="nav-badge">3</span></a>
+    <a href="#sec-bar"         class="nav-link" data-c="3" data-tip="Bar (7)"><i class="bi bi-bar-chart-fill"></i>    Bar           <span class="nav-badge">7</span></a>
+    <a href="#sec-circular"    class="nav-link" data-c="4" data-tip="Circular (5)"><i class="bi bi-pie-chart-fill"></i>    Circular      <span class="nav-badge">5</span></a>
+    <a href="#sec-radar"       class="nav-link" data-c="1" data-tip="Radar (3)"><i class="bi bi-star-fill"></i>         Radar         <span class="nav-badge">3</span></a>
+    <a href="#sec-scatter"     class="nav-link" data-c="2" data-tip="Scatter (3)"><i class="bi bi-diagram-3-fill"></i>    Scatter       <span class="nav-badge">3</span></a>
+    <a href="#sec-mixed"       class="nav-link" data-c="4" data-tip="Mixed (2)"><i class="bi bi-layers-fill"></i>       Mixed         <span class="nav-badge">2</span></a>
+    <a href="#sec-statistical" class="nav-link" data-c="3" data-tip="Statistical (6)"><i class="bi bi-distribute-vertical"></i> Statistical <span class="nav-badge">6</span></a>
+    <a href="#sec-hierarchical"class="nav-link" data-c="2" data-tip="Hierarchical (3)"><i class="bi bi-diagram-2-fill"></i>   Hierarchical  <span class="nav-badge">3</span></a>
+    <a href="#sec-specialised" class="nav-link" data-c="1" data-tip="Specialised (3)"><i class="bi bi-grid-3x3-gap-fill"></i> Specialised  <span class="nav-badge">3</span></a>
+    <a href="#sec-flow"        class="nav-link" data-c="4" data-tip="Flow (4)"><i class="bi bi-share-fill"></i>        Flow          <span class="nav-badge">4</span></a>
+    <a href="#sec-financial"   class="nav-link" data-c="2" data-tip="Financial (3)"><i class="bi bi-currency-dollar"></i>   Financial     <span class="nav-badge">3</span></a>
   </div>
+
+  <!-- tablet icon-only theme toggle -->
+  <div class="sidebar-footer-theme">
+    <button class="theme-btn" id="themeBtnTablet" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIconTablet"></i>
+    </button>
+  </div>
+
 </nav>
 
-<div class="page">
+<div id="overlay" onclick="closeSidebar()"></div>
+
+    </div>
+
+<div class="page col-10">
   <header class="page-header">
     <div>
       <h1>Line Chart Designer</h1>
@@ -198,6 +212,10 @@ body {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="lib/chart.umd.min.js"></script>
 <script type="module" src="js/01-line-basic.js"></script>
+<script type="module" src="js/global.js"></script>
+
+
+  </div>
 
 </body>
 </html>
