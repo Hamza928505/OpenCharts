@@ -3,193 +3,308 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Line Chart Designer — ChartAdmin</title>
+  <title>Multi-Series Line Chart Designer — ChartAdmin</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/global.css" />
-  <link rel="stylesheet" href="css/02-line-multi.css" />
+  <link rel="stylesheet" href="css/line-shared.css" />
 </head>
 <body>
-
 <div class="row g-0">
 
-<!-- ── Sidebar (UNTOUCHED) ── -->
-<div class="col-2">
-
-  <nav id="sidebar">
-  <div class="sidebar-logo">
-    <div class="logo-icon">📊</div>
-    <div>
-      <div class="logo-text">ChartAdmin</div>
-      <div class="logo-sub">chart library · 45</div>
-    </div>
-    <button class="theme-btn" id="themeBtn" title="Toggle light / dark">
-      <i class="bi bi-moon-fill" id="themeIcon"></i>
-    </button>
-  </div>
-
-  <div class="sidebar-nav">
-    <div class="nav-label">Overview</div>
-    <a href="#top" class="nav-link active" data-c="1" data-tip="Dashboard">
-      <i class="bi bi-grid-1x2-fill"></i> Dashboard
-      <span class="nav-badge">45</span>
-    </a>
-    <a href="#" class="nav-link" data-c="2" data-tip="Visitors" onclick="showVisitorDetail(event)">
-      <i class="bi bi-people-fill"></i> Visitors
-      <span class="nav-badge" id="navVisitors">—</span>
-    </a>
-
-    <div class="nav-label">Chart Library</div>
-    <a href="#sec-line"         class="nav-link" data-c="1"><i class="bi bi-graph-up"></i>          Line          <span class="nav-badge">3</span></a>
-    <a href="#sec-area"         class="nav-link" data-c="2"><i class="bi bi-triangle-fill"></i>     Area          <span class="nav-badge">3</span></a>
-    <a href="#sec-bar"          class="nav-link" data-c="3"><i class="bi bi-bar-chart-fill"></i>    Bar           <span class="nav-badge">7</span></a>
-    <a href="#sec-circular"     class="nav-link" data-c="4"><i class="bi bi-pie-chart-fill"></i>    Circular      <span class="nav-badge">5</span></a>
-    <a href="#sec-radar"        class="nav-link" data-c="1"><i class="bi bi-star-fill"></i>         Radar         <span class="nav-badge">3</span></a>
-    <a href="#sec-scatter"      class="nav-link" data-c="2"><i class="bi bi-diagram-3-fill"></i>    Scatter       <span class="nav-badge">3</span></a>
-    <a href="#sec-mixed"        class="nav-link" data-c="4"><i class="bi bi-layers-fill"></i>       Mixed         <span class="nav-badge">2</span></a>
-    <a href="#sec-statistical"  class="nav-link" data-c="3"><i class="bi bi-distribute-vertical"></i> Statistical <span class="nav-badge">6</span></a>
-    <a href="#sec-hierarchical" class="nav-link" data-c="2"><i class="bi bi-diagram-2-fill"></i>    Hierarchical  <span class="nav-badge">3</span></a>
-    <a href="#sec-specialised"  class="nav-link" data-c="1"><i class="bi bi-grid-3x3-gap-fill"></i> Specialised  <span class="nav-badge">3</span></a>
-    <a href="#sec-flow"         class="nav-link" data-c="4"><i class="bi bi-share-fill"></i>        Flow          <span class="nav-badge">4</span></a>
-    <a href="#sec-financial"    class="nav-link" data-c="2"><i class="bi bi-currency-dollar"></i>   Financial     <span class="nav-badge">3</span></a>
-  </div>
-
-  <div class="sidebar-footer-theme">
-    <button class="theme-btn" id="themeBtnTablet" title="Toggle theme">
-      <i class="bi bi-moon-fill" id="themeIconTablet"></i>
-    </button>
-  </div>
-  </nav>
-
-  <div id="overlay" onclick="closeSidebar()"></div>
-</div>
-<!-- ── /Sidebar ── -->
-
-
-<!-- ── Main Content ── -->
-<div class="page col-xl-10 col-lg-12">
-
-  <!-- Page Header -->
-  <header class="lc-header">
-    <div class="lc-header-left">
-      <div class="lc-eyebrow">
-        <i class="bi bi-graph-up"></i>
-        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Basic</span>
-      </div>
-      <h1 class="lc-title">Line Chart <em>Designer</em></h1>
-      <p class="lc-desc">Add and configure multiple series in real‑time, then export production‑ready code.</p>
-    </div>
-    <div class="lc-header-right">
-      <div class="lc-live-pill">
-        <span class="lc-live-dot"></span>
-        Live Preview
-      </div>
-    </div>
-  </header>
-
-  <!-- Studio: Controls + Chart -->
-  <div class="lc-studio">
-
-    <!-- ── Controls Column ── -->
-    <aside class="lc-controls">
-
-      <!-- 01 Curve Mode -->
-      <div class="lc-section-label">
-        <span class="lc-step">01</span> Curve Mode
-      </div>
-
-      <div class="lc-seg-group" style="margin-bottom:1.5rem;">
-        <button class="lc-seg active" id="btn-smooth">
-          <i class="bi bi-bezier2"></i> Smooth
-        </button>
-        <button class="lc-seg" id="btn-linear">
-          <i class="bi bi-slash-lg"></i> Linear
-        </button>
-      </div>
-
-      <!-- 02 Data Points -->
-      <div class="lc-section-label">
-        <span class="lc-step">02</span> Data Points
-      </div>
-
-      <button class="lc-toggle-row active" id="btn-pts" style="margin-bottom:1.5rem;">
-        <span class="lc-track"><span class="lc-thumb"></span></span>
-        <span class="lc-toggle-text">Hide Points</span>
-      </button>
-
-      <!-- 03 Series Manager -->
-      <div class="lc-section-label">
-        <span class="lc-step">03</span> Series
-        <span class="lc-series-count" id="series-count">1</span>
-      </div>
-
-      <!-- Series cards rendered by JS -->
-      <div class="lc-series-list" id="series-list"></div>
-
-      <!-- Add series -->
-      <button class="lc-add-series" id="btn-add-series">
-        <i class="bi bi-plus-lg"></i> Add Series
-      </button>
-
-    </aside>
-
-    <!-- ── Chart Panel ── -->
-    <div class="lc-chart-panel">
-      <div class="lc-chart-bar">
-        <span class="lc-chart-label">
-          <span class="lc-pulse"></span>
-          <span id="chart-bar-label">Revenue &nbsp;·&nbsp; 12 Months</span>
-        </span>
-        <div class="lc-chip-group">
-          <span class="lc-chip">Chart.js</span>
-          <span class="lc-chip" id="chip-series">1 Series</span>
+  <!-- ── Sidebar ── -->
+  <div class="col-2">
+    <nav id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">📊</div>
+        <div>
+          <div class="logo-text">ChartAdmin</div>
+          <div class="logo-sub">chart library · 45</div>
         </div>
-      </div>
-      <div class="lc-canvas-wrap">
-        <canvas id="chart"></canvas>
-      </div>
-    </div>
-
-  </div><!-- /lc-studio -->
-
-  <!-- ── Code Output ── -->
-  <div class="lc-code-section">
-    <div class="lc-code-bar">
-      <div class="lc-tab-group">
-        <button class="lc-tab active" data-tab="html">
-          <i class="bi bi-filetype-html"></i> HTML
-        </button>
-        <button class="lc-tab" data-tab="js">
-          <i class="bi bi-filetype-js"></i> JavaScript
-        </button>
-        <button class="lc-tab" data-tab="css">
-          <i class="bi bi-filetype-css"></i> CSS
+        <button class="theme-btn" id="themeBtn" title="Toggle light / dark">
+          <i class="bi bi-moon-fill" id="themeIcon"></i>
         </button>
       </div>
-      <button class="lc-copy-btn" onclick="copyActiveCode()">
-        <i class="bi bi-clipboard" id="copy-icon"></i>
-        <span id="copy-label">Copy</span>
-      </button>
-    </div>
-
-    <div class="lc-terminal">
-      <div class="lc-gutter" id="lc-gutter"></div>
-      <textarea id="code-display" class="lc-textarea" readonly spellcheck="false"></textarea>
-    </div>
+      <div class="sidebar-nav">
+        <div class="nav-label">Overview</div>
+        <a href="#top" class="nav-link active" data-c="1" data-tip="Dashboard"><i class="bi bi-grid-1x2-fill"></i> Dashboard <span class="nav-badge">45</span></a>
+        <a href="#" class="nav-link" data-c="2" data-tip="Visitors" onclick="showVisitorDetail(event)"><i class="bi bi-people-fill"></i> Visitors <span class="nav-badge" id="navVisitors">—</span></a>
+        <div class="nav-label">Chart Library</div>
+        <a href="#sec-line"         class="nav-link" data-c="1"><i class="bi bi-graph-up"></i>              Line          <span class="nav-badge">4</span></a>
+        <a href="#sec-area"         class="nav-link" data-c="2"><i class="bi bi-triangle-fill"></i>         Area          <span class="nav-badge">3</span></a>
+        <a href="#sec-bar"          class="nav-link" data-c="3"><i class="bi bi-bar-chart-fill"></i>        Bar           <span class="nav-badge">7</span></a>
+        <a href="#sec-circular"     class="nav-link" data-c="4"><i class="bi bi-pie-chart-fill"></i>        Circular      <span class="nav-badge">5</span></a>
+        <a href="#sec-radar"        class="nav-link" data-c="1"><i class="bi bi-star-fill"></i>             Radar         <span class="nav-badge">3</span></a>
+        <a href="#sec-scatter"      class="nav-link" data-c="2"><i class="bi bi-diagram-3-fill"></i>        Scatter       <span class="nav-badge">3</span></a>
+        <a href="#sec-mixed"        class="nav-link" data-c="4"><i class="bi bi-layers-fill"></i>           Mixed         <span class="nav-badge">2</span></a>
+        <a href="#sec-statistical"  class="nav-link" data-c="3"><i class="bi bi-distribute-vertical"></i>  Statistical   <span class="nav-badge">6</span></a>
+        <a href="#sec-hierarchical" class="nav-link" data-c="2"><i class="bi bi-diagram-2-fill"></i>        Hierarchical  <span class="nav-badge">3</span></a>
+        <a href="#sec-specialised"  class="nav-link" data-c="1"><i class="bi bi-grid-3x3-gap-fill"></i>    Specialised   <span class="nav-badge">3</span></a>
+        <a href="#sec-flow"         class="nav-link" data-c="4"><i class="bi bi-share-fill"></i>            Flow          <span class="nav-badge">4</span></a>
+        <a href="#sec-financial"    class="nav-link" data-c="2"><i class="bi bi-currency-dollar"></i>       Financial     <span class="nav-badge">3</span></a>
+      </div>
+      <div class="sidebar-footer-theme">
+        <button class="theme-btn" id="themeBtnTablet"><i class="bi bi-moon-fill" id="themeIconTablet"></i></button>
+      </div>
+    </nav>
+    <div id="overlay" onclick="closeSidebar()"></div>
   </div>
 
-</div><!-- /page -->
+  <!-- ── Main ── -->
+  <div class="page col-xl-10 col-lg-12">
+
+    <header class="lc-header">
+      <div class="lc-header-left">
+        <div class="lc-eyebrow"><i class="bi bi-graph-up"></i><span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Multi-Series</span></div>
+        <h1 class="lc-title">Line Chart <em>Multi-Series</em></h1>
+        <p class="lc-desc">Add and configure multiple series in real‑time, then export production‑ready code.</p>
+      </div>
+      <div class="lc-header-right">
+        <div class="lc-live-pill"><span class="lc-live-dot"></span>Live Preview</div>
+      </div>
+    </header>
+
+    <div class="lc-studio">
+
+      <!-- Controls -->
+      <aside class="lc-controls">
+
+        <div class="lc-section-label"><span class="lc-step">01</span> Curve Mode</div>
+        <div class="lc-seg-group">
+          <button class="lc-seg active" id="btn-smooth"><i class="bi bi-bezier2"></i> Smooth</button>
+          <button class="lc-seg"        id="btn-linear"><i class="bi bi-slash-lg"></i> Linear</button>
+        </div>
+
+        <div class="lc-section-label"><span class="lc-step">02</span> Data Points</div>
+        <button class="lc-toggle-row active" id="btn-pts">
+          <span class="lc-track"><span class="lc-thumb"></span></span>
+          <span class="lc-toggle-text">Hide Points</span>
+        </button>
+
+        <div class="lc-section-label"><span class="lc-step">03</span> Fill Area</div>
+        <button class="lc-toggle-row" id="btn-fill">
+          <span class="lc-track"><span class="lc-thumb"></span></span>
+          <span class="lc-toggle-text">Show Fill</span>
+        </button>
+
+        <div class="lc-section-label">
+          <span class="lc-step">04</span> Series
+          <span class="lc-series-count" id="series-count">2</span>
+        </div>
+        <div class="lc-series-list" id="series-list"></div>
+        <button class="lc-add-series" id="btn-add-series">
+          <i class="bi bi-plus-lg"></i> Add Series
+        </button>
+
+      </aside>
+
+      <!-- Chart -->
+      <div class="lc-chart-panel">
+        <div class="lc-chart-bar">
+          <span class="lc-chart-label">
+            <span class="lc-pulse"></span>
+            <span id="chart-bar-label">Revenue &nbsp;·&nbsp; 12 Months</span>
+          </span>
+          <div class="lc-chip-group">
+            <span class="lc-chip">Chart.js</span>
+            <span class="lc-chip">Line</span>
+            <span class="lc-chip" id="chip-series">2 Series</span>
+          </div>
+        </div>
+        <div class="lc-canvas-wrap"><canvas id="chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Code -->
+    <div class="lc-code-section">
+      <div class="lc-code-bar">
+        <div class="lc-tab-group">
+          <button class="lc-tab active" data-tab="html"><i class="bi bi-filetype-html"></i> HTML</button>
+          <button class="lc-tab" data-tab="js"><i class="bi bi-filetype-js"></i> JavaScript</button>
+          <button class="lc-tab" data-tab="css"><i class="bi bi-filetype-css"></i> CSS</button>
+        </div>
+        <button class="lc-copy-btn" onclick="copyActiveCode()">
+          <i class="bi bi-clipboard" id="copy-icon"></i><span id="copy-label">Copy</span>
+        </button>
+      </div>
+      <div class="lc-terminal">
+        <div class="lc-gutter" id="lc-gutter"></div>
+        <textarea id="code-display" class="lc-textarea" readonly spellcheck="false"></textarea>
+      </div>
+    </div>
+
+  </div><!-- /page -->
 </div><!-- /row -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="lib/chart.umd.min.js"></script>
-<script type="module" src="js/02-line-multi.js"></script>
+<script src="js/line-shared.js"></script>
 <script type="module" src="js/global.js"></script>
 
+<script>
+/* ── State ─────────────────────────────────────── */
+var MAX_SERIES  = 6;
+var tension     = 0.4;
+var pointRadius = 5;
+var fillEnabled = false;
+var activeTab   = 'html';
+var seriesIdSeq = 0;
+var seriesStore = [];
+
+var labels = LC.MONTHS;
+
+/* ── Seed data ─────────────────────────────────── */
+var SEED = [
+  [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410],
+  [120, 145, 138, 165, 190, 215, 205, 240, 220, 250, 275, 310],
+];
+
+/* ── Chart ─────────────────────────────────────── */
+var chart = new Chart('chart', {
+  type: 'line',
+  data: { labels: labels, datasets: [] },
+  options: LC.baseOpts({
+    scales: {
+      x: LC.xAxis(),
+      y: LC.yAxis({ ticks: Object.assign({}, LC.TICK, { callback: function(v){ return '$' + v + 'K'; } }) }),
+    }
+  })
+});
+
+/* ── Dataset builder ───────────────────────────── */
+function toDataset(s) {
+  return {
+    label:               s.label,
+    data:                s.data,
+    borderColor:         s.color,
+    backgroundColor:     fillEnabled ? s.color + '26' : 'transparent',
+    pointBackgroundColor: s.color,
+    pointBorderColor:    s.color,
+    fill:        fillEnabled,
+    tension:     tension,
+    pointRadius: pointRadius,
+    borderWidth: 2.5,
+  };
+}
+
+/* ── Sync everything ───────────────────────────── */
+function syncAll() {
+  chart.data.datasets = seriesStore.map(toDataset);
+  chart.update('active');
+  LC.refreshRemoveButtons(seriesStore);
+  var chip = document.getElementById('chip-series');
+  if (chip) chip.textContent = seriesStore.length + ' Series';
+  var addBtn = document.getElementById('btn-add-series');
+  if (addBtn) addBtn.disabled = seriesStore.length >= MAX_SERIES;
+  updateCode();
+}
+
+/* ── Code generator ────────────────────────────── */
+function getCode() {
+  var dsLines = seriesStore.map(function(s) {
+    return [
+      '    {',
+      "      label: '" + s.label + "',",
+      '      data: ' + JSON.stringify(s.data) + ',',
+      "      borderColor: '" + s.color + "',",
+      "      backgroundColor: '" + (fillEnabled ? s.color + '26' : 'transparent') + "',",
+      "      pointBackgroundColor: '" + s.color + "',",
+      '      tension: ' + tension + ',',
+      '      fill: ' + fillEnabled + ',',
+      '      pointRadius: ' + pointRadius + ',',
+      '      borderWidth: 2.5',
+      '    }',
+    ].join('\n');
+  }).join(',\n');
+
+  return {
+    html: '<canvas id="lineChart"></canvas>\n\n<!-- Chart.js -->\n<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>',
+    js: [
+      "const ctx = document.getElementById('lineChart');",
+      '',
+      'new Chart(ctx, {',
+      "  type: 'line',",
+      '  data: {',
+      '    labels: ' + JSON.stringify(labels) + ',',
+      '    datasets: [',
+      dsLines,
+      '    ]',
+      '  }',
+      '});',
+    ].join('\n'),
+    css: "#lineChart {\n  width: 100%;\n  height: 400px;\n  background: transparent;\n}",
+  };
+}
+
+function updateCode() { LC.displayCode(getCode()[activeTab]); }
+
+/* ── Add series ────────────────────────────────── */
+function addSeries(label, color, data) {
+  if (seriesStore.length >= MAX_SERIES) { LC.toastInfo('Maximum ' + MAX_SERIES + ' series reached.'); return; }
+  var s = { id: seriesIdSeq++, label: label, color: color, data: data || generateData() };
+  seriesStore.push(s);
+  var card = LC.buildSeriesCard(s, seriesStore, syncAll);
+  document.getElementById('series-list').appendChild(card);
+  syncAll();
+}
+
+function generateData() {
+  var out = [], v = 100 + Math.random() * 100;
+  for (var i = 0; i < 12; i++) {
+    v = Math.max(50, Math.min(450, v + (Math.random() - 0.45) * 40));
+    out.push(Math.round(v));
+  }
+  return out;
+}
+
+/* ── Listeners ─────────────────────────────────── */
+document.getElementById('btn-smooth').addEventListener('click', function() {
+  tension = 0.4;
+  chart.data.datasets.forEach(function(d){ d.tension = tension; });
+  chart.update();
+  document.querySelectorAll('#btn-smooth,#btn-linear').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('btn-smooth').classList.add('active');
+  updateCode();
+});
+
+document.getElementById('btn-linear').addEventListener('click', function() {
+  tension = 0;
+  chart.data.datasets.forEach(function(d){ d.tension = tension; });
+  chart.update();
+  document.querySelectorAll('#btn-smooth,#btn-linear').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('btn-linear').classList.add('active');
+  updateCode();
+});
+
+LC.initToggle('btn-pts', 'Hide Points', 'Show Points', true, function(active) {
+  pointRadius = active ? 5 : 0;
+  syncAll();
+});
+
+LC.initToggle('btn-fill', 'Hide Fill', 'Show Fill', false, function(active) {
+  fillEnabled = active;
+  syncAll();
+});
+
+document.getElementById('btn-add-series').addEventListener('click', function() {
+  var idx = seriesStore.length;
+  addSeries('Series ' + String.fromCharCode(65 + idx), LC.PALETTE[idx % LC.PALETTE.length]);
+});
+
+LC.initTabs(function(tab) { activeTab = tab; updateCode(); });
+LC.initCopyBtn();
+
+/* ── Init ──────────────────────────────────────── */
+addSeries('Revenue A', LC.PALETTE[0], SEED[0]);
+addSeries('Revenue B', LC.PALETTE[1], SEED[1]);
+</script>
 </body>
 </html>
