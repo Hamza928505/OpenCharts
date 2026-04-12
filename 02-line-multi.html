@@ -3,61 +3,193 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Multi-line chart</title>
+  <title>Line Chart Designer — ChartAdmin</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="lib/fonts.googleapis.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="css/styles.css" />
-  
+  <link rel="stylesheet" href="css/global.css" />
+  <link rel="stylesheet" href="css/02-line-multi.css" />
 </head>
 <body>
-<div class="page">
-  <header class="page-header">
+
+<div class="row g-0">
+
+<!-- ── Sidebar (UNTOUCHED) ── -->
+<div class="col-2">
+
+  <nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">📊</div>
     <div>
-      <h1>Multi-line chart</h1>
-      <p>Compare multiple series side-by-side. Click legend items to toggle series.</p>
+      <div class="logo-text">ChartAdmin</div>
+      <div class="logo-sub">chart library · 45</div>
     </div>
-    <span class="badge">Line</span>
-  </header>
-  
-<div class="card">
-  <div class="card-header">
-    <div><h2>Sales by region</h2><p>Monthly units sold, 2024</p></div>
+    <button class="theme-btn" id="themeBtn" title="Toggle light / dark">
+      <i class="bi bi-moon-fill" id="themeIcon"></i>
+    </button>
   </div>
-  <div class="legend" id="legend"></div>
-  <div class="chart-wrap" style="height:340px"><canvas id="chart"></canvas></div>
+
+  <div class="sidebar-nav">
+    <div class="nav-label">Overview</div>
+    <a href="#top" class="nav-link active" data-c="1" data-tip="Dashboard">
+      <i class="bi bi-grid-1x2-fill"></i> Dashboard
+      <span class="nav-badge">45</span>
+    </a>
+    <a href="#" class="nav-link" data-c="2" data-tip="Visitors" onclick="showVisitorDetail(event)">
+      <i class="bi bi-people-fill"></i> Visitors
+      <span class="nav-badge" id="navVisitors">—</span>
+    </a>
+
+    <div class="nav-label">Chart Library</div>
+    <a href="#sec-line"         class="nav-link" data-c="1"><i class="bi bi-graph-up"></i>          Line          <span class="nav-badge">3</span></a>
+    <a href="#sec-area"         class="nav-link" data-c="2"><i class="bi bi-triangle-fill"></i>     Area          <span class="nav-badge">3</span></a>
+    <a href="#sec-bar"          class="nav-link" data-c="3"><i class="bi bi-bar-chart-fill"></i>    Bar           <span class="nav-badge">7</span></a>
+    <a href="#sec-circular"     class="nav-link" data-c="4"><i class="bi bi-pie-chart-fill"></i>    Circular      <span class="nav-badge">5</span></a>
+    <a href="#sec-radar"        class="nav-link" data-c="1"><i class="bi bi-star-fill"></i>         Radar         <span class="nav-badge">3</span></a>
+    <a href="#sec-scatter"      class="nav-link" data-c="2"><i class="bi bi-diagram-3-fill"></i>    Scatter       <span class="nav-badge">3</span></a>
+    <a href="#sec-mixed"        class="nav-link" data-c="4"><i class="bi bi-layers-fill"></i>       Mixed         <span class="nav-badge">2</span></a>
+    <a href="#sec-statistical"  class="nav-link" data-c="3"><i class="bi bi-distribute-vertical"></i> Statistical <span class="nav-badge">6</span></a>
+    <a href="#sec-hierarchical" class="nav-link" data-c="2"><i class="bi bi-diagram-2-fill"></i>    Hierarchical  <span class="nav-badge">3</span></a>
+    <a href="#sec-specialised"  class="nav-link" data-c="1"><i class="bi bi-grid-3x3-gap-fill"></i> Specialised  <span class="nav-badge">3</span></a>
+    <a href="#sec-flow"         class="nav-link" data-c="4"><i class="bi bi-share-fill"></i>        Flow          <span class="nav-badge">4</span></a>
+    <a href="#sec-financial"    class="nav-link" data-c="2"><i class="bi bi-currency-dollar"></i>   Financial     <span class="nav-badge">3</span></a>
+  </div>
+
+  <div class="sidebar-footer-theme">
+    <button class="theme-btn" id="themeBtnTablet" title="Toggle theme">
+      <i class="bi bi-moon-fill" id="themeIconTablet"></i>
+    </button>
+  </div>
+  </nav>
+
+  <div id="overlay" onclick="closeSidebar()"></div>
 </div>
-</div>
+<!-- ── /Sidebar ── -->
+
+
+<!-- ── Main Content ── -->
+<div class="page col-xl-10 col-lg-12">
+
+  <!-- Page Header -->
+  <header class="lc-header">
+    <div class="lc-header-left">
+      <div class="lc-eyebrow">
+        <i class="bi bi-graph-up"></i>
+        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Basic</span>
+      </div>
+      <h1 class="lc-title">Line Chart <em>Designer</em></h1>
+      <p class="lc-desc">Add and configure multiple series in real‑time, then export production‑ready code.</p>
+    </div>
+    <div class="lc-header-right">
+      <div class="lc-live-pill">
+        <span class="lc-live-dot"></span>
+        Live Preview
+      </div>
+    </div>
+  </header>
+
+  <!-- Studio: Controls + Chart -->
+  <div class="lc-studio">
+
+    <!-- ── Controls Column ── -->
+    <aside class="lc-controls">
+
+      <!-- 01 Curve Mode -->
+      <div class="lc-section-label">
+        <span class="lc-step">01</span> Curve Mode
+      </div>
+
+      <div class="lc-seg-group" style="margin-bottom:1.5rem;">
+        <button class="lc-seg active" id="btn-smooth">
+          <i class="bi bi-bezier2"></i> Smooth
+        </button>
+        <button class="lc-seg" id="btn-linear">
+          <i class="bi bi-slash-lg"></i> Linear
+        </button>
+      </div>
+
+      <!-- 02 Data Points -->
+      <div class="lc-section-label">
+        <span class="lc-step">02</span> Data Points
+      </div>
+
+      <button class="lc-toggle-row active" id="btn-pts" style="margin-bottom:1.5rem;">
+        <span class="lc-track"><span class="lc-thumb"></span></span>
+        <span class="lc-toggle-text">Hide Points</span>
+      </button>
+
+      <!-- 03 Series Manager -->
+      <div class="lc-section-label">
+        <span class="lc-step">03</span> Series
+        <span class="lc-series-count" id="series-count">1</span>
+      </div>
+
+      <!-- Series cards rendered by JS -->
+      <div class="lc-series-list" id="series-list"></div>
+
+      <!-- Add series -->
+      <button class="lc-add-series" id="btn-add-series">
+        <i class="bi bi-plus-lg"></i> Add Series
+      </button>
+
+    </aside>
+
+    <!-- ── Chart Panel ── -->
+    <div class="lc-chart-panel">
+      <div class="lc-chart-bar">
+        <span class="lc-chart-label">
+          <span class="lc-pulse"></span>
+          <span id="chart-bar-label">Revenue &nbsp;·&nbsp; 12 Months</span>
+        </span>
+        <div class="lc-chip-group">
+          <span class="lc-chip">Chart.js</span>
+          <span class="lc-chip" id="chip-series">1 Series</span>
+        </div>
+      </div>
+      <div class="lc-canvas-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+  </div><!-- /lc-studio -->
+
+  <!-- ── Code Output ── -->
+  <div class="lc-code-section">
+    <div class="lc-code-bar">
+      <div class="lc-tab-group">
+        <button class="lc-tab active" data-tab="html">
+          <i class="bi bi-filetype-html"></i> HTML
+        </button>
+        <button class="lc-tab" data-tab="js">
+          <i class="bi bi-filetype-js"></i> JavaScript
+        </button>
+        <button class="lc-tab" data-tab="css">
+          <i class="bi bi-filetype-css"></i> CSS
+        </button>
+      </div>
+      <button class="lc-copy-btn" onclick="copyActiveCode()">
+        <i class="bi bi-clipboard" id="copy-icon"></i>
+        <span id="copy-label">Copy</span>
+      </button>
+    </div>
+
+    <div class="lc-terminal">
+      <div class="lc-gutter" id="lc-gutter"></div>
+      <textarea id="code-display" class="lc-textarea" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+</div><!-- /page -->
+</div><!-- /row -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="lib/chart.umd.min.js"></script>
-<<<<<<< HEAD
-<script type="module">
-import * as U from './js/utils.js';
-
-const labels = U.MO3;
-const sets = [
-  { label:'North', data:[420,510,480,560,620,700,680,740,660,720,790,880], color:U.C.purple },
-  { label:'South', data:[310,380,355,420,455,510,490,540,500,550,590,640], color:U.C.teal },
-  { label:'East',  data:[260,295,275,330,360,410,395,430,415,455,480,520], color:U.C.coral },
-  { label:'West',  data:[190,220,210,250,275,310,300,335,315,350,375,410], color:U.C.blue },
-];
-
-const chart = new Chart('chart', {
-  type:'line',
-  data:{
-    labels,
-    datasets: sets.map(s=>({
-      label:s.label, data:s.data,
-      borderColor:s.color, backgroundColor:'transparent',
-      tension:0.35, pointRadius:3, pointHoverRadius:6,
-      pointBackgroundColor:s.color, borderWidth:2,
-    }))
-  },
-  options: U.baseOpts({ scales:{ x:U.xAxis(), y:U.yAxis() } })
-});
-U.buildLegend(chart,'legend');
-
-</script>
-=======
 <script type="module" src="js/02-line-multi.js"></script>
->>>>>>> ddb8bd3 (Initial commit from VScode)
+<script type="module" src="js/global.js"></script>
+
 </body>
 </html>

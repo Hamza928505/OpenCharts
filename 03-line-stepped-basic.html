@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Line Chart Designer — ChartAdmin</title>
+  <title>Stepped Line Chart Designer — ChartAdmin</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/global.css" />
-  <link rel="stylesheet" href="css/01-line-basic.css" />
+  <link rel="stylesheet" href="css/03-line-stepped-basic.css" />
 </head>
 <body>
 
@@ -71,7 +71,7 @@
 <!-- ── /Sidebar ── -->
 
 
-<!-- ── Main Content (redesigned) ── -->
+<!-- ── Main Content ── -->
 <div class="page col-xl-10 col-lg-12">
 
   <!-- Page Header -->
@@ -79,10 +79,10 @@
     <div class="lc-header-left">
       <div class="lc-eyebrow">
         <i class="bi bi-graph-up"></i>
-        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Basic</span>
+        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Stepped</span>
       </div>
-      <h1 class="lc-title">Line Chart <em>Designer</em></h1>
-      <p class="lc-desc">Configure visual parameters in real‑time and export production‑ready code.</p>
+      <h1 class="lc-title">Stepped Line <em>Designer</em></h1>
+      <p class="lc-desc">Configure stepped line visuals and step mode in real‑time, then export production‑ready code.</p>
     </div>
     <div class="lc-header-right">
       <div class="lc-live-pill">
@@ -98,67 +98,66 @@
     <!-- Controls Column -->
     <aside class="lc-controls">
 
-      <!-- 01 Colors -->
+      <!-- 01 Visual Parameters -->
       <div class="lc-section-label">
         <span class="lc-step">01</span> Visual Parameters
       </div>
 
       <div class="lc-color-group">
-        <!-- Line Color -->
         <label class="lc-color-field" for="cfg-line-color">
           <span class="lc-color-swatch" id="line-swatch"></span>
           <span class="lc-color-meta">
             <span class="lc-color-name">Line Color</span>
-            <span class="lc-color-hex" id="line-hex">#7F77DD</span>
+            <span class="lc-color-hex" id="line-hex">#4DABF7</span>
           </span>
           <i class="bi bi-eyedropper lc-color-icon"></i>
-          <input type="color" class="lc-color-input" id="cfg-line-color" value="#7F77DD">
+          <input type="color" class="lc-color-input" id="cfg-line-color" value="#4DABF7">
         </label>
 
-        <!-- Dot Color -->
         <label class="lc-color-field" for="cfg-dot-color">
           <span class="lc-color-swatch" id="dot-swatch"></span>
           <span class="lc-color-meta">
             <span class="lc-color-name">Dot Color</span>
-            <span class="lc-color-hex" id="dot-hex">#7F77DD</span>
+            <span class="lc-color-hex" id="dot-hex">#4DABF7</span>
           </span>
           <i class="bi bi-eyedropper lc-color-icon"></i>
-          <input type="color" class="lc-color-input" id="cfg-dot-color" value="#7F77DD">
+          <input type="color" class="lc-color-input" id="cfg-dot-color" value="#4DABF7">
         </label>
       </div>
 
-      <!-- 02 Curve -->
+      <!-- 02 Step Mode -->
       <div class="lc-section-label">
-        <span class="lc-step">02</span> Curve Mode
+        <span class="lc-step">02</span> Step Mode
       </div>
 
       <div class="lc-seg-group">
-        <button class="lc-seg active" id="btn-smooth">
-          <i class="bi bi-bezier2"></i> Smooth
+        <button class="lc-seg active" id="btn-before" data-step="before">
+          <i class="bi bi-skip-start-fill"></i> Before
         </button>
-        <button class="lc-seg" id="btn-linear">
-          <i class="bi bi-slash-lg"></i> Linear
+        <button class="lc-seg" id="btn-middle" data-step="middle">
+          <i class="bi bi-dash-lg"></i> Middle
+        </button>
+        <button class="lc-seg" id="btn-after" data-step="after">
+          <i class="bi bi-skip-end-fill"></i> After
         </button>
       </div>
 
-      <!-- 03 Points -->
+      <!-- 03 Data Points -->
       <div class="lc-section-label">
         <span class="lc-step">03</span> Data Points
       </div>
 
       <button class="lc-toggle-row active" id="btn-pts">
-        <span class="lc-track">
-          <span class="lc-thumb"></span>
-        </span>
+        <span class="lc-track"><span class="lc-thumb"></span></span>
         <span class="lc-toggle-text">Hide Points</span>
       </button>
 
       <!-- Dataset meta -->
       <div class="lc-meta-table">
-        <div class="lc-meta-row"><span>Dataset</span><span>Revenue</span></div>
+        <div class="lc-meta-row"><span>Dataset</span><span>Price Tiers</span></div>
         <div class="lc-meta-row"><span>Interval</span><span>Monthly</span></div>
         <div class="lc-meta-row"><span>Points</span><span>12</span></div>
-        <div class="lc-meta-row"><span>Range</span><span>$185K – $410K</span></div>
+        <div class="lc-meta-row"><span>Step Mode</span><span id="meta-step">before</span></div>
       </div>
 
     </aside>
@@ -168,11 +167,12 @@
       <div class="lc-chart-bar">
         <span class="lc-chart-label">
           <span class="lc-pulse"></span>
-          Revenue &nbsp;·&nbsp; 12 Months
+          Price Tiers &nbsp;·&nbsp; 12 Months
         </span>
         <div class="lc-chip-group">
           <span class="lc-chip">Chart.js</span>
-          <span class="lc-chip">Line</span>
+          <span class="lc-chip">Stepped</span>
+          <span class="lc-chip" id="chip-step">before</span>
         </div>
       </div>
       <div class="lc-canvas-wrap">
@@ -209,12 +209,11 @@
   </div>
 
 </div><!-- /page -->
-
 </div><!-- /row -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="lib/chart.umd.min.js"></script>
-<script type="module" src="js/01-line-basic.js"></script>
+<script type="module" src="js/03-line-stepped-basic.js"></script>
 <script type="module" src="js/global.js"></script>
 
 </body>

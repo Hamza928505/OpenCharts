@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Line Chart Designer — ChartAdmin</title>
+  <title>Multi Stepped Line Chart — ChartAdmin</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/global.css" />
-  <link rel="stylesheet" href="css/01-line-basic.css" />
+  <link rel="stylesheet" href="css/04-line-stepped-multi.css" />
 </head>
 <body>
 
@@ -71,150 +71,110 @@
 <!-- ── /Sidebar ── -->
 
 
-<!-- ── Main Content (redesigned) ── -->
+<!-- ── Main Content ── -->
 <div class="page col-xl-10 col-lg-12">
 
-  <!-- Page Header -->
-  <header class="lc-header">
-    <div class="lc-header-left">
-      <div class="lc-eyebrow">
+  <!-- Header -->
+  <header class="sm-header">
+    <div class="sm-header-left">
+      <div class="sm-eyebrow">
         <i class="bi bi-graph-up"></i>
-        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Basic</span>
+        <span>Chart Library &nbsp;/&nbsp; Line &nbsp;/&nbsp; Stepped &nbsp;/&nbsp; Multi</span>
       </div>
-      <h1 class="lc-title">Line Chart <em>Designer</em></h1>
-      <p class="lc-desc">Configure visual parameters in real‑time and export production‑ready code.</p>
+      <h1 class="sm-title">Multi Stepped <em>Line</em></h1>
+      <p class="sm-desc">Compare stepped series side-by-side. Toggle visibility and adjust the global step mode.</p>
     </div>
-    <div class="lc-header-right">
-      <div class="lc-live-pill">
-        <span class="lc-live-dot"></span>
-        Live Preview
+    <div class="sm-header-right">
+      <div class="sm-badge">
+        <i class="bi bi-bar-chart-steps"></i> 4 Series
+      </div>
+      <div class="sm-live-pill">
+        <span class="sm-live-dot"></span>
+        Stepped
       </div>
     </div>
   </header>
 
-  <!-- Studio: Controls + Chart -->
-  <div class="lc-studio">
+  <!-- Studio -->
+  <div class="sm-studio">
 
-    <!-- Controls Column -->
-    <aside class="lc-controls">
+    <!-- Controls (left) -->
+    <aside class="sm-controls">
 
-      <!-- 01 Colors -->
-      <div class="lc-section-label">
-        <span class="lc-step">01</span> Visual Parameters
+      <!-- 01 Step Mode -->
+      <div class="sm-section-label">
+        <span class="sm-step-badge">01</span> Step Mode
       </div>
 
-      <div class="lc-color-group">
-        <!-- Line Color -->
-        <label class="lc-color-field" for="cfg-line-color">
-          <span class="lc-color-swatch" id="line-swatch"></span>
-          <span class="lc-color-meta">
-            <span class="lc-color-name">Line Color</span>
-            <span class="lc-color-hex" id="line-hex">#7F77DD</span>
-          </span>
-          <i class="bi bi-eyedropper lc-color-icon"></i>
-          <input type="color" class="lc-color-input" id="cfg-line-color" value="#7F77DD">
-        </label>
-
-        <!-- Dot Color -->
-        <label class="lc-color-field" for="cfg-dot-color">
-          <span class="lc-color-swatch" id="dot-swatch"></span>
-          <span class="lc-color-meta">
-            <span class="lc-color-name">Dot Color</span>
-            <span class="lc-color-hex" id="dot-hex">#7F77DD</span>
-          </span>
-          <i class="bi bi-eyedropper lc-color-icon"></i>
-          <input type="color" class="lc-color-input" id="cfg-dot-color" value="#7F77DD">
-        </label>
-      </div>
-
-      <!-- 02 Curve -->
-      <div class="lc-section-label">
-        <span class="lc-step">02</span> Curve Mode
-      </div>
-
-      <div class="lc-seg-group">
-        <button class="lc-seg active" id="btn-smooth">
-          <i class="bi bi-bezier2"></i> Smooth
+      <div class="sm-seg-group">
+        <button class="sm-seg active" id="btn-before" data-step="before">
+          <i class="bi bi-skip-start-fill"></i> Before
         </button>
-        <button class="lc-seg" id="btn-linear">
-          <i class="bi bi-slash-lg"></i> Linear
+        <button class="sm-seg" id="btn-middle" data-step="middle">
+          <i class="bi bi-dash-lg"></i> Middle
+        </button>
+        <button class="sm-seg" id="btn-after" data-step="after">
+          <i class="bi bi-skip-end-fill"></i> After
         </button>
       </div>
 
-      <!-- 03 Points -->
-      <div class="lc-section-label">
-        <span class="lc-step">03</span> Data Points
+      <!-- 02 Data Points -->
+      <div class="sm-section-label">
+        <span class="sm-step-badge">02</span> Data Points
       </div>
 
-      <button class="lc-toggle-row active" id="btn-pts">
-        <span class="lc-track">
-          <span class="lc-thumb"></span>
-        </span>
-        <span class="lc-toggle-text">Hide Points</span>
+      <button class="sm-toggle-row active" id="btn-pts">
+        <span class="sm-track"><span class="sm-thumb"></span></span>
+        <span class="sm-toggle-text">Hide Points</span>
       </button>
 
+      <!-- 03 Series -->
+      <div class="sm-section-label" style="margin-top:1.75rem;">
+        <span class="sm-step-badge">03</span> Series
+      </div>
+
+      <!-- Series cards injected by JS -->
+      <div id="legend" class="sm-legend-list"></div>
+
       <!-- Dataset meta -->
-      <div class="lc-meta-table">
-        <div class="lc-meta-row"><span>Dataset</span><span>Revenue</span></div>
-        <div class="lc-meta-row"><span>Interval</span><span>Monthly</span></div>
-        <div class="lc-meta-row"><span>Points</span><span>12</span></div>
-        <div class="lc-meta-row"><span>Range</span><span>$185K – $410K</span></div>
+      <div class="sm-meta-table">
+        <div class="sm-meta-row"><span>Period</span><span>Jan – Dec</span></div>
+        <div class="sm-meta-row"><span>Interval</span><span>Monthly</span></div>
+        <div class="sm-meta-row"><span>Step Mode</span><span id="meta-step">before</span></div>
+        <div class="sm-meta-row"><span>Series</span><span>4</span></div>
       </div>
 
     </aside>
 
-    <!-- Chart Column -->
-    <div class="lc-chart-panel">
-      <div class="lc-chart-bar">
-        <span class="lc-chart-label">
-          <span class="lc-pulse"></span>
-          Revenue &nbsp;·&nbsp; 12 Months
-        </span>
-        <div class="lc-chip-group">
-          <span class="lc-chip">Chart.js</span>
-          <span class="lc-chip">Line</span>
+    <!-- Chart panel (right) -->
+    <div class="sm-chart-panel">
+      <div class="sm-chart-bar">
+        <div class="sm-chart-label">
+          <span class="sm-pulse"></span>
+          Pricing Tiers by Plan &nbsp;·&nbsp; 2024
+        </div>
+        <div class="sm-chip-group">
+          <span class="sm-chip">Chart.js</span>
+          <span class="sm-chip">Stepped</span>
+          <span class="sm-chip" id="chip-step">before</span>
         </div>
       </div>
-      <div class="lc-canvas-wrap">
+      <div class="sm-canvas-wrap">
         <canvas id="chart"></canvas>
       </div>
     </div>
 
-  </div><!-- /lc-studio -->
+  </div><!-- /sm-studio -->
 
-  <!-- Code Output -->
-  <div class="lc-code-section">
-    <div class="lc-code-bar">
-      <div class="lc-tab-group">
-        <button class="lc-tab active" data-tab="html">
-          <i class="bi bi-filetype-html"></i> HTML
-        </button>
-        <button class="lc-tab" data-tab="js">
-          <i class="bi bi-filetype-js"></i> JavaScript
-        </button>
-        <button class="lc-tab" data-tab="css">
-          <i class="bi bi-filetype-css"></i> CSS
-        </button>
-      </div>
-      <button class="lc-copy-btn" onclick="copyActiveCode()">
-        <i class="bi bi-clipboard" id="copy-icon"></i>
-        <span id="copy-label">Copy</span>
-      </button>
-    </div>
-
-    <div class="lc-terminal">
-      <div class="lc-gutter" id="lc-gutter"></div>
-      <textarea id="code-display" class="lc-textarea" readonly spellcheck="false"></textarea>
-    </div>
-  </div>
+  <!-- Stats bar -->
+  <div class="sm-stats-bar" id="stats-bar"></div>
 
 </div><!-- /page -->
-
 </div><!-- /row -->
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
 <script src="lib/chart.umd.min.js"></script>
-<script type="module" src="js/01-line-basic.js"></script>
+<script type="module" src="js/04-line-stepped-multi.js"></script>
 <script type="module" src="js/global.js"></script>
 
 </body>

@@ -1,14 +1,14 @@
 import * as U from './utils.js';
 
 // ── State ─────────────────────────────────────────
-let lineColor   = '#7F77DD';
-let dotColor    = '#7F77DD';
-let tension     = 0.4;
+let lineColor   = '#4DABF7';
+let dotColor    = '#4DABF7';
+let stepped     = 'before';
 let pointRadius = 5;
 let activeTab   = 'html';
 
-const dataValues = [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410];
-const labels     = U.MO3;
+const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const data   = [29,29,29,39,39,39,49,49,59,59,69,79];
 
 // ── Chart ─────────────────────────────────────────
 const chart = new Chart('chart', {
@@ -16,22 +16,22 @@ const chart = new Chart('chart', {
   data: {
     labels,
     datasets: [{
-      label: 'Revenue',
-      data: dataValues,
+      label: 'Price ($)',
+      data,
       borderColor: lineColor,
       backgroundColor: lineColor + '26',
       pointBackgroundColor: dotColor,
       pointBorderColor: dotColor,
-      fill: true,
-      tension,
+      stepped,
+      fill: false,
       pointRadius,
-      borderWidth: 2.5
+      borderWidth: 2.5,
     }]
   },
   options: U.baseOpts({
     scales: {
       x: U.xAxis(),
-      y: U.yAxis({ ticks: { ...U.TICK, callback: v => '$' + v + 'K' } })
+      y: U.yAxis({ ticks: { ...U.TICK, callback: v => '$' + v }, min: 0, max: 100 }),
     }
   })
 });
@@ -40,8 +40,34 @@ const chart = new Chart('chart', {
 function getCode() {
   return {
     html: `<canvas id="lineChart"></canvas>\n\n<!-- Include Chart.js -->\n<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>`,
-    js: `const ctx = document.getElementById('lineChart');\n\nnew Chart(ctx, {\n  type: 'line',\n  data: {\n    labels: ${JSON.stringify(labels)},\n    datasets: [{\n      label: 'Revenue',\n      data: ${JSON.stringify(dataValues)},\n      borderColor: '${lineColor}',\n      backgroundColor: '${lineColor}26',\n      pointBackgroundColor: '${dotColor}',\n      tension: ${tension},\n      pointRadius: ${pointRadius},\n      fill: true,\n      borderWidth: 2.5\n    }]\n  }\n});`,
-    css: `#lineChart {\n  width: 100%;\n  height: 400px;\n  background: transparent;\n}`
+    js: [
+      `const ctx = document.getElementById('lineChart');`,
+      ``,
+      `new Chart(ctx, {`,
+      `  type: 'line',`,
+      `  data: {`,
+      `    labels: ${JSON.stringify(labels)},`,
+      `    datasets: [{`,
+      `      label: 'Price ($)',`,
+      `      data: ${JSON.stringify(data)},`,
+      `      borderColor: '${lineColor}',`,
+      `      backgroundColor: '${lineColor}26',`,
+      `      pointBackgroundColor: '${dotColor}',`,
+      `      pointBorderColor: '${dotColor}',`,
+      `      stepped: '${stepped}',`,
+      `      fill: false,`,
+      `      pointRadius: ${pointRadius},`,
+      `      borderWidth: 2.5`,
+      `    }]`,
+      `  },`,
+      `  options: {`,
+      `    scales: {`,
+      `      y: { min: 0, max: 100, ticks: { callback: v => '$' + v } }`,
+      `    }`,
+      `  }`,
+      `});`,
+    ].join('\n'),
+    css: `#lineChart {\n  width: 100%;\n  height: 400px;\n  background: transparent;\n}`,
   };
 }
 
@@ -73,6 +99,14 @@ function syncColorUI(swatchId, hexId, color) {
 syncColorUI('line-swatch', 'line-hex', lineColor);
 syncColorUI('dot-swatch',  'dot-hex',  dotColor);
 
+// ── Sync step-related UI ──────────────────────────
+function syncStepUI() {
+  const chipStep = document.getElementById('chip-step');
+  const metaStep = document.getElementById('meta-step');
+  if (chipStep) chipStep.textContent = stepped;
+  if (metaStep) metaStep.textContent = stepped;
+}
+
 // ── Listeners ─────────────────────────────────────
 
 // Line color
@@ -95,24 +129,17 @@ document.getElementById('cfg-dot-color').addEventListener('input', e => {
   updateCodeOutput();
 });
 
-// Smooth curve
-document.getElementById('btn-smooth').addEventListener('click', e => {
-  tension = 0.4;
-  chart.data.datasets[0].tension = tension;
-  chart.update();
-  document.querySelectorAll('.lc-seg').forEach(b => b.classList.remove('active'));
-  e.currentTarget.classList.add('active');
-  updateCodeOutput();
-});
-
-// Linear curve
-document.getElementById('btn-linear').addEventListener('click', e => {
-  tension = 0;
-  chart.data.datasets[0].tension = tension;
-  chart.update();
-  document.querySelectorAll('.lc-seg').forEach(b => b.classList.remove('active'));
-  e.currentTarget.classList.add('active');
-  updateCodeOutput();
+// Step mode buttons
+document.querySelectorAll('.lc-seg[data-step]').forEach(btn => {
+  btn.addEventListener('click', e => {
+    stepped = e.currentTarget.dataset.step;
+    chart.data.datasets[0].stepped = stepped;
+    chart.update();
+    document.querySelectorAll('.lc-seg[data-step]').forEach(b => b.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    syncStepUI();
+    updateCodeOutput();
+  });
 });
 
 // Points toggle
@@ -122,8 +149,8 @@ document.getElementById('btn-pts').addEventListener('click', e => {
   pointRadius  = active ? 5 : 0;
   chart.data.datasets[0].pointRadius = pointRadius;
   chart.update();
-  const label = btn.querySelector('.lc-toggle-text');
-  if (label) label.textContent = active ? 'Hide Points' : 'Show Points';
+  const lbl = btn.querySelector('.lc-toggle-text');
+  if (lbl) lbl.textContent = active ? 'Hide Points' : 'Show Points';
   updateCodeOutput();
 });
 
@@ -149,15 +176,16 @@ window.copyActiveCode = () => {
   document.execCommand('copy');
 
   if (btn)   btn.classList.add('copied');
-  if (icon)  icon.className  = 'bi bi-check2';
+  if (icon)  icon.className   = 'bi bi-check2';
   if (label) label.textContent = 'Copied!';
 
   setTimeout(() => {
     if (btn)   btn.classList.remove('copied');
-    if (icon)  icon.className  = 'bi bi-clipboard';
+    if (icon)  icon.className   = 'bi bi-clipboard';
     if (label) label.textContent = 'Copy';
   }, 2000);
 };
 
 // ── Init ──────────────────────────────────────────
+syncStepUI();
 updateCodeOutput();

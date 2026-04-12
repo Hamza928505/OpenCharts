@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  
+  <style>
+    #lineChart {
+        width: 100%;
+         height: 400px;
+        background: transparent;
+    }
+  </style>
+
+</head>
+<body>
+    <canvas id="lineChart"></canvas>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('lineChart');
+
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    datasets: [{
+      label: 'Revenue',
+      data: [185,210,198,240,275,310,295,330,285,320,355,410],
+      borderColor: '#7F77DD',
+      backgroundColor: '#7F77DD26',
+      pointBackgroundColor: '#7F77DD',
+      tension: 0.4,
+      pointRadius: 5,
+      fill: true,
+      borderWidth: 2.5
+    }]
+  }
+});
+</script>
+</body>
+</html>
+
