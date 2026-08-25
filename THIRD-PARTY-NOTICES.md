@@ -32,17 +32,6 @@ by the charts in the Geo category and is not committed to this repository. The
 underlying geometry derives from [Natural Earth](https://www.naturalearthdata.com/),
 which is released into the public domain.
 
-## Used only by the legacy numbered pages
-
-These remain in `lib/` for the older standalone chart pages. The current
-gallery and studio do not load them.
-
-| Library | Licence | Copyright |
-|---|---|---|
-| [Bootstrap](https://getbootstrap.com/) | MIT | Copyright 2011–2024 The Bootstrap Authors |
-| [Bootstrap Icons](https://icons.getbootstrap.com/) | MIT | Copyright 2019–2024 The Bootstrap Authors |
-| [SweetAlert2](https://sweetalert2.github.io/) | MIT | Copyright (c) 2014 Tristan Edwards & Limon Monte |
-
 ## Fonts
 
 DM Sans, DM Mono and Instrument Serif are loaded from Google Fonts at runtime
@@ -56,8 +45,8 @@ and are **not** redistributed in this repository. They are licensed under the
 ### MIT License
 
 Applies to Chart.js, chartjs-chart-sankey, chartjs-chart-matrix,
-chartjs-chart-treemap, @sgratzl/chartjs-chart-boxplot, Bootstrap, Bootstrap
-Icons and SweetAlert2, each under its own copyright as listed above.
+chartjs-chart-treemap and @sgratzl/chartjs-chart-boxplot, each under its own
+copyright as listed above.
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy

@@ -140,7 +140,7 @@ heading.
 | `highlight.js` | Small syntax highlighter for the code panel |
 | `palette.js` | The one colour source for every chart |
 | `theme.js` | Light/dark, persisted; charts re-render on change |
-| `toast.js` | Transient notices (replaces SweetAlert2) |
+| `toast.js` | Transient notices |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |
 | `SourcesPanel.js` | The studio's per-chart dependency disclosure |
@@ -151,12 +151,6 @@ Unchanged from before and still used by the five `Custom Engine` charts.
 `BaseChart` handles DPR-aware canvas sizing, the animation loop, resize
 observation and three-layer config merging; subclasses implement
 `processData()`, `computeLayout()` and `drawChart()`.
-
-### Legacy pages
-
-The numbered pages (`01-` … `45-`) are the earlier standalone Chart.js versions
-plus `css/styles.css` and `js/NN-*.js`. They still work and are unchanged, but
-are no longer linked from the gallery.
 
 ## Developing
 
@@ -214,9 +208,8 @@ No npm install. The studio pages load:
   (not vendored — these three are the only reason the studio needs a network)
 - Google Fonts: DM Sans, DM Mono, Instrument Serif
 
-Bootstrap and SweetAlert2 are **no longer used** by `index.html` / `studio.html`
-— the design system in `css/studio.css` and `js/studio/toast.js` replaced them.
-The legacy numbered pages still reference them.
+Bootstrap and SweetAlert2 have been **removed from the project entirely** — the
+design system in `css/studio.css` and `js/studio/toast.js` replaced them.
 
 ## File Naming
 
@@ -227,8 +220,6 @@ The legacy numbered pages still reference them.
 | `js/studio/*.js` | Studio framework |
 | `css/studio.css` | The whole design system |
 | `js/charts/LineChart.js` | Custom engine chart class |
-| `01-line-basic.html`, `js/03-line-stepped.js` | Legacy standalone pages |
-| `*-designer-engine.html` | Superseded by `studio.html`; kept, not linked |
 
 ## Adding a Chart
 

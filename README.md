@@ -94,8 +94,3 @@ OpenCharts is MIT licensed — free to use, modify and ship, commercially or
 otherwise. The libraries it builds on carry their own licences (MIT, except D3
 which is ISC); the gallery footer and the studio's Sources panel name them.
 
-## Legacy pages
-
-The numbered pages (`01-line-basic.html` … `45-chord-diagram.html`) are the
-earlier standalone Chart.js versions. They still work and are unchanged, but
-they are no longer linked from the gallery — the studio supersedes them.
