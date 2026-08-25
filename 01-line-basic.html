@@ -76,7 +76,25 @@
       <!-- Controls -->
       <aside class="lc-controls">
 
-        <div class="lc-section-label"><span class="lc-step">01</span> Visual Parameters</div>
+        <div class="lc-section-label"><span class="lc-step">01</span> Curve Mode</div>
+        <div class="lc-seg-group">
+          <button class="lc-seg active" id="btn-smooth"><i class="bi bi-bezier2"></i> Smooth</button>
+          <button class="lc-seg"        id="btn-linear"><i class="bi bi-slash-lg"></i> Linear</button>
+        </div>
+
+        <div class="lc-section-label"><span class="lc-step">02</span> Data Points</div>
+        <button class="lc-toggle-row active" id="btn-pts">
+          <span class="lc-track"><span class="lc-thumb"></span></span>
+          <span class="lc-toggle-text">Hide Points</span>
+        </button>
+
+        <div class="lc-section-label"><span class="lc-step">03</span> Fill Area</div>
+        <button class="lc-toggle-row active" id="btn-fill">
+          <span class="lc-track"><span class="lc-thumb"></span></span>
+          <span class="lc-toggle-text">Show Fill</span>
+        </button>
+
+        <div class="lc-section-label"><span class="lc-step">04</span> Visual Parameters</div>
         <div class="lc-color-group">
           <label class="lc-color-field" for="cfg-line-color">
             <span class="lc-color-swatch" id="line-swatch"></span>
@@ -98,24 +116,6 @@
           </label>
         </div>
 
-        <div class="lc-section-label"><span class="lc-step">02</span> Curve Mode</div>
-        <div class="lc-seg-group">
-          <button class="lc-seg active" id="btn-smooth"><i class="bi bi-bezier2"></i> Smooth</button>
-          <button class="lc-seg"        id="btn-linear"><i class="bi bi-slash-lg"></i> Linear</button>
-        </div>
-
-        <div class="lc-section-label"><span class="lc-step">03</span> Data Points</div>
-        <button class="lc-toggle-row active" id="btn-pts">
-          <span class="lc-track"><span class="lc-thumb"></span></span>
-          <span class="lc-toggle-text">Hide Points</span>
-        </button>
-
-        <div class="lc-meta-table">
-          <div class="lc-meta-row"><span>Dataset</span><span>Revenue</span></div>
-          <div class="lc-meta-row"><span>Interval</span><span>Monthly</span></div>
-          <div class="lc-meta-row"><span>Points</span><span>12</span></div>
-          <div class="lc-meta-row"><span>Range</span><span>$185K – $410K</span></div>
-        </div>
       </aside>
 
       <!-- Chart -->
@@ -268,8 +268,12 @@ document.getElementById('btn-linear').addEventListener('click', function() {
 });
 
 LC.initToggle('btn-pts', 'Hide Points', 'Show Points', true, function(active) {
-  pointRadius = active ? 5 : 0;
-  chart.data.datasets[0].pointRadius = pointRadius;
+  chart.data.datasets[0].fill = active;
+
+  chart.data.datasets[0].backgroundColor = active 
+    ? lineColor + '26' 
+    : 'transparent';
+
   chart.update();
   updateCode();
 });

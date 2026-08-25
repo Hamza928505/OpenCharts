@@ -1,0 +1,44 @@
+{
+  "name": "opencharts",
+  "version": "2.0.0",
+  "description": "96 chart types you can edit live and copy as HTML, CSS and JavaScript. No build step.",
+  "license": "MIT",
+  "author": "Hamza Salameh",
+  "type": "module",
+  "homepage": "https://github.com/Hamza928505/OpenCharts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hamza928505/OpenCharts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hamza928505/OpenCharts/issues"
+  },
+  "keywords": [
+    "charts",
+    "chart-library",
+    "data-visualization",
+    "dataviz",
+    "chartjs",
+    "d3",
+    "canvas",
+    "svg",
+    "code-generator",
+    "no-build",
+    "vanilla-js"
+  ],
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "serve": "python -m http.server 8000",
+    "check": "node --check js/studio/registry.js && node --check js/studio/engines.js"
+  },
+  "files": [
+    "index.html",
+    "studio.html",
+    "css/",
+    "js/",
+    "lib/",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
+    "README.md"
+  ]
+}

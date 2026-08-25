@@ -1,0 +1,19 @@
+# Generated knowledge-graph output — rebuildable, and ~5MB. Not source.
+graphify-out/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# Dependency directories (nothing here uses npm at runtime, but just in case)
+node_modules/
+
+# Local scratch
+*.log
+tmp/
+_standalone_check/

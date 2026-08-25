@@ -1,322 +1,161 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Chart Admin — Dashboard</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenCharts — Chart Library</title>
+<meta name="description" content="A library of chart types you can edit live and copy as HTML, CSS and JavaScript.">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="lib/fonts.googleapis.css" rel="stylesheet"/>
-  <link href="lib/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
-  <link href="lib/sweetalert2.min.css" rel="stylesheet"/>
-  <link href="css/global.css" rel="stylesheet"/>
-  <link href="css/index.css" rel="stylesheet"/>
+<!-- Apply the stored theme before first paint so there is no flash. -->
+<script>
+  try {
+    var t = localStorage.getItem('opencharts.theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* private mode — fall through to the OS preference */ }
+</script>
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/studio.css">
+
+<!-- Rendering engines. Chart.js must load before any of its plugins. -->
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/chartjs-chart-sankey.min.js"></script>
+<script src="https://unpkg.com/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script src="https://unpkg.com/chartjs-chart-treemap@2.3.0/dist/chartjs-chart-treemap.min.js"></script>
+<script src="https://unpkg.com/@sgratzl/chartjs-chart-boxplot@4.2.4/build/index.umd.min.js"></script>
+<script src="lib/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+<style>
+  /* Page-level chrome that only the gallery uses. */
+  .topbar {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 1rem 2.4rem;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .topbar .brand { padding: 0; }
+  .topbar nav { margin-left: auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .hero-kicker { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .hero-copy { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 2.5rem; align-items: end; }
+  .hero-note {
+    border-left: 2px solid var(--accent-line);
+    padding-left: 1.1rem;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .hero-note strong { color: var(--ink); font-weight: 600; }
+  .hero-note code {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--surface-2); border: 1px solid var(--rule);
+    border-radius: 5px; padding: .05rem .3rem;
+  }
+  @media (max-width: 1024px) {
+    .hero-copy { grid-template-columns: 1fr; gap: 1.6rem; }
+    .hero-note { max-width: 62ch; }
+  }
+  @media (max-width: 900px) {
+    .topbar { padding-left: 1.15rem; padding-right: 1.15rem; }
+  }
+  @media (max-width: 640px) {
+    .topbar { padding: .75rem 1.15rem; gap: .6rem; }
+    .topbar .brand-sub { display: none; }
+    .topbar nav { gap: .35rem; }
+    /* "Library" just scrolls to the grid, which is already the next thing. */
+    .topbar nav a[href="#library"] { display: none; }
+    .hero-note { font-size: 13.5px; }
+  }
+  @media (max-width: 380px) {
+    .topbar .brand-name { font-size: 13px; }
+  }
+</style>
 </head>
 <body>
 
-<div class="row">
+<header class="topbar">
+  <a class="brand" href="index.html">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M1.6 12.4l3.6-4.2 2.8 2.6 6.4-7.2"/>
+      </svg>
+    </span>
+    <span>
+      <span class="brand-name">OpenCharts</span>
+      <span class="brand-sub">chart library</span>
+    </span>
+  </a>
+  <nav>
+    <a class="btn btn-sm btn-ghost" href="#library">Library</a>
+    <a class="btn btn-sm btn-primary" href="studio.html">Open studio</a>
+    <span id="theme-mount"></span>
+  </nav>
+</header>
 
-<div class="col-2">
-  <!-- ── Sidebar ── -->
-<nav id="sidebar">
-  <div class="sidebar-logo">
-    <div class="logo-icon">📊</div>
+<section class="gallery-hero">
+  <div class="hero-copy">
     <div>
-      <div class="logo-text">ChartAdmin</div>
-      <div class="logo-sub">chart library · 45</div>
+      <div class="hero-kicker">
+        <span class="eyebrow">Every chart, editable</span>
+        <span class="pill pill-accent">HTML · CSS · JS</span>
+      </div>
+      <h1 class="display">Pick a chart. Change it. <em>Take the code.</em></h1>
+      <p class="lede">
+        Every chart here opens in a studio where the data, the colours and the
+        options are live controls. What you see is generated from the same
+        definition that produces the code below it — so the snippet you copy is
+        the chart you built, not an approximation of it.
+      </p>
     </div>
-    <button class="theme-btn" id="themeBtn" title="Toggle light / dark">
-      <i class="bi bi-moon-fill" id="themeIcon"></i>
-    </button>
-  </div>
-
-  <div class="sidebar-nav">
-    <div class="nav-label">Overview</div>
-    <a href="#top" class="nav-link active" data-c="1" data-tip="Dashboard">
-      <i class="bi bi-grid-1x2-fill"></i> Dashboard
-      <span class="nav-badge">46</span>
-    </a>
-    <a href="#" class="nav-link" data-c="2" data-tip="Visitors" onclick="showVisitorDetail(event)">
-      <i class="bi bi-people-fill"></i> Visitors
-      <span class="nav-badge" id="navVisitors">—</span>
-    </a>
-
-    <div class="nav-label">Chart Library</div>
-    <a href="#sec-line"        class="nav-link" data-c="1" data-tip="Line (3)"><i class="bi bi-graph-up"></i>          Line          <span class="nav-badge">4</span></a>
-    <a href="#sec-area"        class="nav-link" data-c="2" data-tip="Area (3)"><i class="bi bi-triangle-fill"></i>     Area          <span class="nav-badge">3</span></a>
-    <a href="#sec-bar"         class="nav-link" data-c="3" data-tip="Bar (7)"><i class="bi bi-bar-chart-fill"></i>    Bar           <span class="nav-badge">7</span></a>
-    <a href="#sec-circular"    class="nav-link" data-c="4" data-tip="Circular (5)"><i class="bi bi-pie-chart-fill"></i>    Circular      <span class="nav-badge">5</span></a>
-    <a href="#sec-radar"       class="nav-link" data-c="1" data-tip="Radar (3)"><i class="bi bi-star-fill"></i>         Radar         <span class="nav-badge">3</span></a>
-    <a href="#sec-scatter"     class="nav-link" data-c="2" data-tip="Scatter (3)"><i class="bi bi-diagram-3-fill"></i>    Scatter       <span class="nav-badge">3</span></a>
-    <a href="#sec-mixed"       class="nav-link" data-c="4" data-tip="Mixed (2)"><i class="bi bi-layers-fill"></i>       Mixed         <span class="nav-badge">2</span></a>
-    <a href="#sec-statistical" class="nav-link" data-c="3" data-tip="Statistical (6)"><i class="bi bi-distribute-vertical"></i> Statistical <span class="nav-badge">6</span></a>
-    <a href="#sec-hierarchical"class="nav-link" data-c="2" data-tip="Hierarchical (3)"><i class="bi bi-diagram-2-fill"></i>   Hierarchical  <span class="nav-badge">3</span></a>
-    <a href="#sec-specialised" class="nav-link" data-c="1" data-tip="Specialised (3)"><i class="bi bi-grid-3x3-gap-fill"></i> Specialised  <span class="nav-badge">3</span></a>
-    <a href="#sec-flow"        class="nav-link" data-c="4" data-tip="Flow (4)"><i class="bi bi-share-fill"></i>        Flow          <span class="nav-badge">4</span></a>
-    <a href="#sec-financial"   class="nav-link" data-c="2" data-tip="Financial (3)"><i class="bi bi-currency-dollar"></i>   Financial     <span class="nav-badge">3</span></a>
-  </div>
-
-  <!-- tablet icon-only theme toggle -->
-  <div class="sidebar-footer-theme">
-    <button class="theme-btn" id="themeBtnTablet" title="Toggle theme">
-      <i class="bi bi-moon-fill" id="themeIconTablet"></i>
-    </button>
-  </div>
-
-</nav>
-
-<div id="overlay" onclick="closeSidebar()"></div>
-
-<!-- ── Bottom tab bar (mobile only) ── -->
-<nav id="bottom-nav">
-  <button class="bn-tab active" onclick="scrollToTop(this)">
-    <i class="bi bi-grid-1x2-fill"></i>
-    <span>Home</span>
-  </button>
-  <button class="bn-tab bn-visitors" onclick="showVisitorDetail(); setActiveTab(this)">
-    <i class="bi bi-people-fill"></i>
-    <span>Visitors</span>
-  </button>
-  <button class="bn-tab" onclick="focusSearch(this)">
-    <i class="bi bi-search"></i>
-    <span>Search</span>
-  </button>
-  <button class="bn-tab bn-more" onclick="openDrawer(this)">
-    <i class="bi bi-layout-text-sidebar"></i>
-    <span>Sections</span>
-  </button>
-  <button class="bn-tab bn-theme" onclick="toggleThemeMobile(this)" id="themeBtnMobile">
-    <i class="bi bi-moon-fill" id="themeIconMobile"></i>
-    <span id="themeTextMobile">Dark</span>
-  </button>
-</nav>
-
-<!-- ── Bottom drawer ── -->
-<div id="drawer-overlay" onclick="closeDrawer()"></div>
-<div id="bottom-drawer">
-  <div class="drawer-handle"></div>
-  <div class="drawer-header">
-    <span class="drawer-title">Chart Sections</span>
-    <button class="drawer-close" onclick="closeDrawer()"><i class="bi bi-x"></i></button>
-  </div>
-  <div class="drawer-body">
-    <div class="drawer-section-label">Overview</div>
-    <div class="drawer-grid">
-      <a href="#top" class="drawer-item" onclick="closeDrawer()">
-        <i class="bi bi-grid-1x2-fill"></i> Dashboard <span class="di-count">46</span>
-      </a>
-      <a href="#" class="drawer-item" onclick="showVisitorDetail(event);closeDrawer()">
-        <i class="bi bi-people-fill"></i> Visitors
-      </a>
-    </div>
-
-    <div class="drawer-section-label">Chart Library</div>
-    <div class="drawer-grid">
-      <a href="#sec-line"        class="drawer-item" onclick="closeDrawer()"><i class="bi bi-graph-up"           ></i> Line          <span class="di-count">4</span></a>
-      <a href="#sec-area"        class="drawer-item" onclick="closeDrawer()"><i class="bi bi-triangle-fill"      ></i> Area          <span class="di-count">3</span></a>
-      <a href="#sec-bar"         class="drawer-item" onclick="closeDrawer()"><i class="bi bi-bar-chart-fill"     ></i> Bar           <span class="di-count">7</span></a>
-      <a href="#sec-circular"    class="drawer-item" onclick="closeDrawer()"><i class="bi bi-pie-chart-fill"     ></i> Circular      <span class="di-count">5</span></a>
-      <a href="#sec-radar"       class="drawer-item" onclick="closeDrawer()"><i class="bi bi-star-fill"          ></i> Radar         <span class="di-count">3</span></a>
-      <a href="#sec-scatter"     class="drawer-item" onclick="closeDrawer()"><i class="bi bi-diagram-3-fill"     ></i> Scatter       <span class="di-count">3</span></a>
-      <a href="#sec-mixed"       class="drawer-item" onclick="closeDrawer()"><i class="bi bi-layers-fill"        ></i> Mixed         <span class="di-count">2</span></a>
-      <a href="#sec-statistical" class="drawer-item" onclick="closeDrawer()"><i class="bi bi-distribute-vertical"></i> Statistical   <span class="di-count">6</span></a>
-      <a href="#sec-hierarchical"class="drawer-item" onclick="closeDrawer()"><i class="bi bi-diagram-2-fill"     ></i> Hierarchical  <span class="di-count">3</span></a>
-      <a href="#sec-specialised" class="drawer-item" onclick="closeDrawer()"><i class="bi bi-grid-3x3-gap-fill"  ></i> Specialised   <span class="di-count">3</span></a>
-      <a href="#sec-flow"        class="drawer-item" onclick="closeDrawer()"><i class="bi bi-share-fill"         ></i> Flow          <span class="di-count">4</span></a>
-      <a href="#sec-financial"   class="drawer-item" onclick="closeDrawer()"><i class="bi bi-currency-dollar"    ></i> Financial     <span class="di-count">3</span></a>
+    <div class="hero-note">
+      <p><strong>Four ways out.</strong> The studio emits the markup, the stylesheet
+      and the script separately, plus a <code>standalone</code> page that inlines all
+      three and runs the moment you open it.</p>
+      <p style="margin-top:.7rem">Charts run on Chart.js, D3, plain Canvas 2D or the
+      dependency-free OpenCharts engine — the badge on each tile tells you which
+      before you commit to it.</p>
     </div>
   </div>
+  <div class="hero-stats" id="hero-stats"></div>
+</section>
+
+<div class="toolbar" id="library">
+  <label class="search">
+    <span aria-hidden="true" style="color:var(--ink-faint);font-size:13px">⌕</span>
+    <input id="search" type="search" placeholder="Search charts — try “stacked”, “radial”, “flow”…" aria-label="Search charts">
+  </label>
+  <div class="filters" id="filters"></div>
+  <span class="result-count" id="result-count"></span>
 </div>
 
-</div>
+<main class="grid" id="grid"></main>
 
-<!-- ── Main ── -->
-<div class="col-xl-10 col-lg-12">
-  <main id="content">
-    <div id="top"></div>
-
-    <div class="page-heading">
-      <div>
-        <h1>Dashboard</h1>
-        <p>chart-library · 45 charts · JS only</p>
-      </div>
-      <div class="live-badge"><span class="live-dot"></span> tracking</div>
+<footer class="site-foot" id="sources">
+  <div class="foot-inner">
+    <div class="foot-lead">
+      <h2 class="display">Built on other people's work</h2>
+      <p class="lede">
+        OpenCharts is free and open source. So is everything it stands on — here
+        is the full list, with the exact versions this site is pinned to. The
+        studio shows you which of these any individual chart needs before you
+        copy it.
+      </p>
     </div>
+    <div class="foot-libs" id="foot-libs"></div>
+  </div>
+  <div class="foot-bar">
+    <span>OpenCharts — free for everyone, forever.</span>
+    <span class="foot-note" id="foot-tally"></span>
+  </div>
+</footer>
 
-    <!-- KPI Cards -->
-    <div class="kpi-grid">
+<script type="module">
+  import { GalleryApp } from './js/studio/GalleryApp.js';
+  import { renderCredits } from './js/studio/GalleryApp.js';
+  new GalleryApp();
+  renderCredits(document.querySelector('#foot-libs'), document.querySelector('#foot-tally'));
+</script>
 
-      <div class="kpi-card c1" data-click onclick="showVisitorDetail()">
-        <div class="kpi-label"><i class="bi bi-people-fill"></i> Total Visitors</div>
-        <div class="kpi-value" id="kpiTotal">—</div>
-        <div class="kpi-sub">unique sessions · this browser</div>
-        <div class="spark-row" id="visitSpark"></div>
-      </div>
-
-      <div class="kpi-card c2" data-click onclick="showVisitorDetail()">
-        <div class="kpi-label"><i class="bi bi-calendar-check-fill"></i> Today</div>
-        <div class="kpi-value" id="kpiToday">—</div>
-        <div class="kpi-sub">sessions on <span id="todayLabel">—</span></div>
-        <div style="margin-top:11px;">
-          <div style="width:100%;height:4px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-            <div id="todayBar" style="height:100%;background:var(--accent2);border-radius:4px;width:0%;transition:width 1s .3s ease;"></div>
-          </div>
-          <div style="font-size:.6rem;color:var(--hint);font-family:var(--mono);margin-top:4px;">vs peak day this week</div>
-        </div>
-      </div>
-
-      <div class="kpi-card c3">
-        <div class="kpi-label"><i class="bi bi-bar-chart-fill"></i> Chart Files</div>
-        <div class="kpi-value">45</div>
-        <div class="kpi-sub">10 categories · standalone HTML</div>
-        <div style="margin-top:11px;font-size:.62rem;color:var(--hint);font-family:var(--mono);">
-          Last visit: <span id="kpiLastSeen">—</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Tracking notice -->
-    <div class="notice">
-      <i class="bi bi-info-circle-fill"></i>
-      <div>
-        <strong>How visitor tracking works:</strong>
-        Each browser <em>session</em> (new tab open) counts as one visit — refreshing does <em>not</em> increment the counter.
-        Data lives in <code>localStorage</code>.
-        For cross-device unique visitors a backend is required.
-        <a href="#" onclick="showBackendInfo(event)">Learn more →</a>
-      </div>
-    </div>
-
-    <!-- Chart Library -->
-    <div class="section-header">
-      <div class="section-title">Chart Library <small>45 charts</small></div>
-      <button class="btn-ghost" onclick="showExportDialog()">↗ Export list</button>
-    </div>
-
-    <div class="charts-wrapper">
-      <div class="search-wrap">
-        <i class="bi bi-search"></i>
-        <input type="text" id="chartSearch" placeholder="Search charts…" oninput="filterCharts(this.value)"/>
-      </div>
-      <div id="noResults">No charts matched your search.</div>
-
-      <!-- LINE -->
-      <div class="csl" id="sec-line"><i class="bi bi-graph-up" style="color:var(--accent);"></i> Line charts <span class="cnt">4</span></div>
-      <div class="chart-grid">
-        <a href="01-line-basic.html"   class="chart-card" data-tags="line basic single smooth linear"><div class="chart-card-title">Basic line</div><div class="chart-card-desc">Single series, smooth/linear toggle</div></a>
-        <a href="02-line-multi.html"   class="chart-card" data-tags="line multi compare series"><div class="chart-card-title">Multi-line</div><div class="chart-card-desc">Compare more than one series</div></a>
-        <a href="03-line-stepped-basic.html" class="chart-card" data-tags="line stepped discrete state"><div class="chart-card-title">Stepped line</div><div class="chart-card-desc">Discrete state changes</div></a>
-        <a href="04-line-stepped-multi.html" class="chart-card" data-tags="line stepped discrete state"><div class="chart-card-title">Stepped Multi line</div><div class="chart-card-desc">Compare more than one Discrete state</div></a>
-      </div>
-
-      <!-- AREA -->
-      <div class="csl" id="sec-area"><i class="bi bi-triangle-fill" style="color:var(--accent2);"></i> Area charts <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="04-area-basic.html"    class="chart-card" data-tags="area basic fill"><div class="chart-card-title">Area</div><div class="chart-card-desc">Filled area below a line</div></a>
-        <a href="05-area-stacked.html"  class="chart-card" data-tags="area stacked cumulative fill"><div class="chart-card-title">Stacked area</div><div class="chart-card-desc">Cumulative fills</div></a>
-        <a href="06-area-band.html"     class="chart-card" data-tags="area band min max confidence"><div class="chart-card-title">Area band</div><div class="chart-card-desc">Min/max confidence band</div></a>
-      </div>
-
-      <!-- BAR -->
-      <div class="csl" id="sec-bar"><i class="bi bi-bar-chart-fill" style="color:var(--accent3);"></i> Bar charts <span class="cnt">7</span></div>
-      <div class="chart-grid">
-        <a href="07-bar-vertical.html"   class="chart-card" data-tags="bar vertical columns grouped"><div class="chart-card-title">Vertical bar</div><div class="chart-card-desc">Grouped columns</div></a>
-        <a href="08-bar-stacked.html"    class="chart-card" data-tags="bar stacked segmented totals"><div class="chart-card-title">Stacked bar</div><div class="chart-card-desc">Segmented totals</div></a>
-        <a href="09-bar-horizontal.html" class="chart-card" data-tags="bar horizontal ranking labels"><div class="chart-card-title">Horizontal bar</div><div class="chart-card-desc">Ranking / long labels</div></a>
-        <a href="10-bar-100stacked.html" class="chart-card" data-tags="bar 100 stacked proportional"><div class="chart-card-title">100% stacked</div><div class="chart-card-desc">Proportional segments</div></a>
-        <a href="11-bar-diverging.html"  class="chart-card" data-tags="bar diverging positive negative"><div class="chart-card-title">Diverging bar</div><div class="chart-card-desc">Positive & negative values</div></a>
-        <a href="12-bar-floating.html"   class="chart-card" data-tags="bar floating range min max gantt"><div class="chart-card-title">Floating bar</div><div class="chart-card-desc">[min,max] ranges / Gantt</div></a>
-        <a href="13-bar-waterfall.html"  class="chart-card" data-tags="bar waterfall bridge step"><div class="chart-card-title">Waterfall</div><div class="chart-card-desc">Step-by-step bridge</div></a>
-      </div>
-
-      <!-- CIRCULAR -->
-      <div class="csl" id="sec-circular"><i class="bi bi-pie-chart-fill" style="color:var(--accent4);"></i> Circular charts <span class="cnt">5</span></div>
-      <div class="chart-grid">
-        <a href="14-pie.html"               class="chart-card" data-tags="pie circular slices"><div class="chart-card-title">Pie</div><div class="chart-card-desc">Full circle slices</div></a>
-        <a href="15-doughnut.html"          class="chart-card" data-tags="doughnut donut ring hollow"><div class="chart-card-title">Doughnut</div><div class="chart-card-desc">Hollow ring</div></a>
-        <a href="16-doughnut-gauge.html"    class="chart-card" data-tags="gauge doughnut kpi half"><div class="chart-card-title">Gauge</div><div class="chart-card-desc">Half-doughnut KPI</div></a>
-        <a href="17-polar-area.html"        class="chart-card" data-tags="polar area spoke radius"><div class="chart-card-title">Polar area</div><div class="chart-card-desc">Varying-radius spokes</div></a>
-        <a href="42-nightingale-rose.html"  class="chart-card" data-tags="nightingale rose polar bar"><div class="chart-card-title">Nightingale rose</div><div class="chart-card-desc">Polar bars, area = value</div></a>
-      </div>
-
-      <!-- RADAR -->
-      <div class="csl" id="sec-radar"><i class="bi bi-star-fill" style="color:var(--accent);"></i> Radar charts <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="18-radar-single.html" class="chart-card" data-tags="radar single entity axes"><div class="chart-card-title">Radar — single</div><div class="chart-card-desc">One entity, N axes</div></a>
-        <a href="19-radar-multi.html"  class="chart-card" data-tags="radar multi compare entities"><div class="chart-card-title">Radar — multi</div><div class="chart-card-desc">Compare 3 entities</div></a>
-        <a href="20-radar-filled.html" class="chart-card" data-tags="radar filled area web emphasis"><div class="chart-card-title">Radar filled</div><div class="chart-card-desc">Area-emphasis web</div></a>
-      </div>
-
-      <!-- SCATTER -->
-      <div class="csl" id="sec-scatter"><i class="bi bi-diagram-3-fill" style="color:var(--accent2);"></i> Scatter & bubble <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="21-scatter-basic.html"    class="chart-card" data-tags="scatter x y correlation"><div class="chart-card-title">Scatter</div><div class="chart-card-desc">X/Y correlation</div></a>
-        <a href="22-scatter-clusters.html" class="chart-card" data-tags="scatter clusters groups colour"><div class="chart-card-title">Scatter clusters</div><div class="chart-card-desc">Colour-coded groups</div></a>
-        <a href="23-bubble.html"           class="chart-card" data-tags="bubble x y size encoding"><div class="chart-card-title">Bubble</div><div class="chart-card-desc">X/Y/size encoding</div></a>
-      </div>
-
-      <!-- MIXED -->
-      <div class="csl" id="sec-mixed"><i class="bi bi-layers-fill" style="color:var(--accent4);"></i> Mixed / combo <span class="cnt">2</span></div>
-      <div class="chart-grid">
-        <a href="24-mixed-bar-line.html"     class="chart-card" data-tags="mixed bar line dual axis combo"><div class="chart-card-title">Bar + line</div><div class="chart-card-desc">Dual-axis combo</div></a>
-        <a href="25-mixed-stacked-line.html" class="chart-card" data-tags="mixed stacked trend line"><div class="chart-card-title">Stacked + trend</div><div class="chart-card-desc">Composition + trend line</div></a>
-      </div>
-
-      <!-- STATISTICAL -->
-      <div class="csl" id="sec-statistical"><i class="bi bi-distribute-vertical" style="color:var(--accent3);"></i> Statistical <span class="cnt">6</span></div>
-      <div class="chart-grid">
-        <a href="26-histogram.html" class="chart-card" data-tags="histogram frequency distribution bins"><div class="chart-card-title">Histogram</div><div class="chart-card-desc">Frequency distribution in bins</div></a>
-        <a href="27-box-plot.html"  class="chart-card" data-tags="box plot median quartiles outliers"><div class="chart-card-title">Box plot</div><div class="chart-card-desc">Median, quartiles, outliers</div></a>
-        <a href="28-violin.html"    class="chart-card" data-tags="violin distribution shape full"><div class="chart-card-title">Violin</div><div class="chart-card-desc">Full distribution shape</div></a>
-        <a href="29-butterfly.html" class="chart-card" data-tags="butterfly back diverging bars"><div class="chart-card-title">Butterfly</div><div class="chart-card-desc">Back-to-back diverging bars</div></a>
-        <a href="30-lollipop.html"  class="chart-card" data-tags="lollipop dot stem ranked bar"><div class="chart-card-title">Lollipop</div><div class="chart-card-desc">Dot-and-stem ranked bars</div></a>
-        <a href="31-heatmap.html"   class="chart-card" data-tags="heatmap colour grid calendar"><div class="chart-card-title">Heatmap</div><div class="chart-card-desc">Colour-coded grid / calendar</div></a>
-      </div>
-
-      <!-- HIERARCHICAL -->
-      <div class="csl" id="sec-hierarchical"><i class="bi bi-diagram-2-fill" style="color:var(--accent2);"></i> Hierarchical <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="32-treemap.html"    class="chart-card" data-tags="treemap nested rectangles value"><div class="chart-card-title">Treemap</div><div class="chart-card-desc">Nested rectangles by value</div></a>
-        <a href="33-sunburst.html"   class="chart-card" data-tags="sunburst radial hierarchy rings"><div class="chart-card-title">Sunburst</div><div class="chart-card-desc">Radial hierarchy rings</div></a>
-        <a href="34-bubble-pack.html"class="chart-card" data-tags="bubble pack circles value"><div class="chart-card-title">Bubble pack</div><div class="chart-card-desc">Packed circles by value</div></a>
-      </div>
-
-      <!-- SPECIALISED -->
-      <div class="csl" id="sec-specialised"><i class="bi bi-grid-3x3-gap-fill" style="color:var(--accent);"></i> Specialised <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="35-waffle.html"          class="chart-card" data-tags="waffle grid proportional cells"><div class="chart-card-title">Waffle</div><div class="chart-card-desc">Grid of proportional cells</div></a>
-        <a href="36-marimekko.html"       class="chart-card" data-tags="marimekko variable width stacked bar"><div class="chart-card-title">Marimekko</div><div class="chart-card-desc">Variable-width stacked bars</div></a>
-        <a href="44-parallel-coords.html" class="chart-card" data-tags="parallel coordinates multidimensional lines"><div class="chart-card-title">Parallel coords</div><div class="chart-card-desc">Multi-dimensional lines</div></a>
-      </div>
-
-      <!-- FLOW -->
-      <div class="csl" id="sec-flow"><i class="bi bi-share-fill" style="color:var(--accent4);"></i> Flow & relationships <span class="cnt">4</span></div>
-      <div class="chart-grid">
-        <a href="37-sankey.html"       class="chart-card" data-tags="sankey flow quantities nodes"><div class="chart-card-title">Sankey</div><div class="chart-card-desc">Flow quantities between nodes</div></a>
-        <a href="38-funnel.html"       class="chart-card" data-tags="funnel conversion drop off stages"><div class="chart-card-title">Funnel</div><div class="chart-card-desc">Conversion drop-off stages</div></a>
-        <a href="43-stream-graph.html" class="chart-card" data-tags="stream graph flowing stacked areas"><div class="chart-card-title">Stream graph</div><div class="chart-card-desc">Flowing stacked areas</div></a>
-        <a href="45-chord-diagram.html"class="chart-card" data-tags="chord diagram pairwise relationship flows"><div class="chart-card-title">Chord diagram</div><div class="chart-card-desc">Pairwise relationship flows</div></a>
-      </div>
-
-      <!-- FINANCIAL -->
-      <div class="csl" id="sec-financial"><i class="bi bi-currency-dollar" style="color:var(--accent2);"></i> Financial & ranking <span class="cnt">3</span></div>
-      <div class="chart-grid">
-        <a href="39-candlestick.html" class="chart-card" data-tags="candlestick ohlc financial price bars"><div class="chart-card-title">Candlestick</div><div class="chart-card-desc">OHLC financial price bars</div></a>
-        <a href="40-bump-chart.html"  class="chart-card" data-tags="bump chart rank positions time"><div class="chart-card-title">Bump chart</div><div class="chart-card-desc">Rank positions over time</div></a>
-        <a href="41-slope-chart.html" class="chart-card" data-tags="slope chart before after two point"><div class="chart-card-title">Slope chart</div><div class="chart-card-desc">Two-point before/after view</div></a>
-      </div>
-
-    </div><!-- .charts-wrapper -->
-  </main>
-</div>
-
-</div>
-
-<script src="lib/bootstrap.bundle.min.js"></script>
-<script src="lib/sweetalert2.all.min.js"></script>
-<script src="js/global.js"></script>
 </body>
 </html>

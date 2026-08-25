@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenCharts Studio</title>
+<meta name="description" content="Edit any chart in the OpenCharts library and copy the HTML, CSS and JavaScript behind it.">
+
+<!-- Apply the stored theme before first paint so there is no flash. -->
+<script>
+  try {
+    var t = localStorage.getItem('opencharts.theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* private mode — fall through to the OS preference */ }
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/studio.css">
+
+<!-- Rendering engines. Chart.js must load before any of its plugins. -->
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/chartjs-chart-sankey.min.js"></script>
+<script src="https://unpkg.com/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script src="https://unpkg.com/chartjs-chart-treemap@2.3.0/dist/chartjs-chart-treemap.min.js"></script>
+<script src="https://unpkg.com/@sgratzl/chartjs-chart-boxplot@4.2.4/build/index.umd.min.js"></script>
+<script src="lib/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Rail ──────────────────────────────────────────────────────────── -->
+  <nav class="rail" id="rail" aria-label="Chart library">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M1.6 12.4l3.6-4.2 2.8 2.6 6.4-7.2"/>
+        </svg>
+      </span>
+      <span>
+        <span class="brand-name">OpenCharts</span>
+        <span class="brand-sub">studio</span>
+      </span>
+    </a>
+
+    <div class="search" style="max-width:none">
+      <span aria-hidden="true" style="color:var(--ink-faint);font-size:12px">⌕</span>
+      <input id="rail-search" type="search" placeholder="Filter charts…" aria-label="Filter charts">
+    </div>
+
+    <div id="rail-list"></div>
+  </nav>
+  <div class="rail-scrim" id="rail-scrim"></div>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <header class="page-head">
+      <div>
+        <div class="eyebrow" id="chart-crumb"></div>
+        <h1 class="display" id="chart-title"></h1>
+        <p class="lede" id="chart-blurb"></p>
+      </div>
+
+      <div class="head-actions">
+        <button class="btn btn-sm rail-toggle" id="rail-toggle" type="button" aria-label="Show chart list">
+          <span aria-hidden="true">☰</span> Charts
+        </button>
+        <span class="pill chip-engine" id="chart-chip"></span>
+        <span class="live-pill"><span class="live-dot"></span> Live</span>
+        <span class="stepper">
+          <button class="btn btn-sm btn-ghost" id="btn-prev" type="button" aria-label="Previous chart">←</button>
+          <span class="idx tnum" id="chart-idx"></span>
+          <button class="btn btn-sm btn-ghost" id="btn-next" type="button" aria-label="Next chart">→</button>
+        </span>
+        <span id="theme-mount"></span>
+      </div>
+    </header>
+
+    <div class="studio">
+
+      <!-- Controls -->
+      <aside class="controls" id="controls" aria-label="Chart controls"></aside>
+
+      <!-- Stage + code -->
+      <div class="stage-wrap">
+
+        <section class="stage" aria-label="Chart preview">
+          <div class="stage-bar">
+            <span class="stage-title" id="stage-title"></span>
+            <div class="stage-actions">
+              <button class="btn btn-sm" id="btn-reset" type="button">Reset</button>
+              <button class="btn btn-sm" id="btn-png" type="button">Export image</button>
+            </div>
+          </div>
+          <div class="stage-body">
+            <div class="chart-host" id="chart-host"></div>
+          </div>
+          <div class="legend" id="legend"></div>
+          <div class="metrics" id="metrics" style="display:none"></div>
+        </section>
+
+        <!-- What this chart loads, and from where -->
+        <section class="sources" id="sources" aria-label="Third-party sources this chart uses"></section>
+
+        <section class="codepanel" id="codepanel" aria-label="Generated code"></section>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { StudioApp } from './js/studio/StudioApp.js';
+  new StudioApp();
+</script>
+
+</body>
+</html>
