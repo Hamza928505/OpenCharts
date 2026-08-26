@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-OpenCharts is a chart library of **97 chart types**, all reachable through one
+OpenCharts is a chart library of **98 chart types**, all reachable through one
 studio page where they can be edited live and copied as HTML, CSS and JS.
 
 - `index.html` — the gallery. Renders every chart live (lazily, via
@@ -162,6 +162,23 @@ number. `looksNumeric()` in `dataio.js` backs both that highlight and header
 detection, and it is deliberately **narrower** than "strip everything that is
 not a digit": that looser rule makes `Q1` numeric and breaks header detection
 on any table with quarter columns.
+
+### Country focus
+
+`findCountry()` resolves a typed name against the topology — case- and
+punctuation-insensitive, with aliases for the names nobody types in full
+(`USA` → `United States of America`). `makeProjection()` takes that feature as
+its `focus` argument and fits to it; for the globe it rotates to the country's
+centroid instead.
+
+Two rules learned here:
+
+- **Every helper a serialised `mount` calls must be in `helpers: []`.**
+  `findCountry` is used by all six geo mounts, and omitting it would produce
+  the same silent `ReferenceError` in exported maps that `PROJECTIONS` did.
+- **Clipping that removes every point must fall back to showing them all.** A
+  focused map with no matching cities is a blank frame with no explanation,
+  which is worse than showing the points that exist.
 
 ### Geo and the globe
 

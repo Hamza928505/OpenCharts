@@ -4,7 +4,7 @@
 [![Charts](https://img.shields.io/badge/charts-96-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
-A library of **97 chart types**. Every one opens in a studio where the data,
+A library of **98 chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
@@ -77,8 +77,21 @@ treatment: flows want `from,to,value`, networks want `source,target`, and
 hierarchies want a `Parent > Child > Leaf` path per row.
 
 Charts whose sample data is simulated — the distributions, the finance charts,
-the maps — get a **Sample data / My data** switch. Sample mode keeps the
-parameter sliders for exploring; My data replaces them with your observations.
+the maps — open on **My data** with an editable example already in the box.
+**Sample data** is the second tab: parameter sliders for exploring the chart
+type before you have real numbers.
+
+## Maps of one country
+
+Every map takes a **country** — type `Jordan`, `Germany`, `Japan` — and zooms to
+it, fading the neighbours. Short names work too (`USA`, `UK`, `UAE`), and the
+globe turns to face whatever you name.
+
+**City Map** is the chart for the common case where the statistic you have is
+local rather than national: one country, a circle at each city sized by its
+value. Paste `city,lon,lat,value` and it draws. Cities outside the country can
+be hidden, and if that would empty the map it shows them anyway rather than
+leaving you with a blank frame.
 
 ## Knowing what you are loading
 
@@ -112,7 +125,7 @@ Charts are built on whichever engine suits them; the badge on each tile says whi
 |---|---|---|
 | Chart.js | 39 | Plus the sankey, matrix, treemap and boxplot plugins |
 | Canvas 2D | 36 | Hand-drawn, no charting library at all |
-| D3 | 16 | SVG output, including all the maps and the globe |
+| D3 | 17 | SVG output, including all the maps and the globe |
 | OpenCharts | 5 | The dependency-free engine in `js/core` + `js/charts` |
 | DOM / CSS | 1 | The waffle chart is just styled divs |
 

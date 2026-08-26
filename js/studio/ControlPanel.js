@@ -373,8 +373,9 @@ function widgetData(ctrl, spec, notify, def) {
 
   // Seeded charts keep their parameter controls; the switch hides or shows them.
   const switchable = !!desc.generated;
-  let mode = spec.dataMode === 'observations' || spec.dataMode === 'bars'
-    || spec.dataMode === 'regions' || spec.dataMode === 'cells' ? 'mine' : 'sample';
+  // Your data is the default. Generated sample data is a fallback for
+  // exploring the chart type, not what most people came here to do.
+  let mode = 'mine';
 
   if (switchable) {
     const seg = el('div', 'seg');
@@ -396,8 +397,8 @@ function widgetData(ctrl, spec, notify, def) {
       seg.appendChild(b);
       return b;
     };
-    mk('Sample data', 'sample');
     mk('My data', 'mine');
+    mk('Sample data', 'sample');
     host.appendChild(seg);
   }
 
@@ -409,7 +410,7 @@ function widgetData(ctrl, spec, notify, def) {
     body.innerHTML = '';
     if (switchable && mode === 'sample') {
       const note = el('p', 'data-note',
-        desc.sampleNote || 'Data is generated from the settings below. Switch to “My data” to paste your own.');
+        desc.sampleNote || 'Generated from the settings below — a way to explore the chart type before you have real numbers.');
       body.appendChild(note);
       return;
     }
@@ -418,7 +419,10 @@ function widgetData(ctrl, spec, notify, def) {
     area.rows = desc.rows || 7;
     area.spellcheck = false;
     area.placeholder = desc.placeholder || 'label,value\nAlpha,120\nBeta,90';
-    area.value = typeof def.toText === 'function' ? def.toText(spec) : '';
+    const current = typeof def.toText === 'function' ? def.toText(spec) : '';
+    // Never present an empty box: a seeded chart has no user data yet, so show
+    // the example as a concrete starting point to edit.
+    area.value = current && current.trim() ? current : (desc.example || '');
 
     const status = el('div', 'data-status');
     // Carry over the confirmation from the rebuild that this paste triggered.

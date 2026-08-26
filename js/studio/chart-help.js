@@ -381,6 +381,10 @@ export const CHART_HELP = {
     read: 'The same shading on a sphere. Drag to rotate. Countries facing you are the ones being shown.',
     watch: 'Half the world is hidden at any moment, and regions near the edge are foreshortened.',
   },
+  'city-map': {
+    read: 'One country, with a circle at each city sized by its value. Area carries the number, position is the real location.',
+    watch: 'Cities cluster, so circles overlap and hide each other. Longitude comes before latitude in the data — swapping them puts everything in the wrong hemisphere.',
+  },
   'proportional-symbol-map': {
     read: 'Circle area at each location is the value. The right choice for counts, where a choropleth would mislead.',
     watch: 'Symbols overlap in dense areas, hiding smaller ones behind larger.',

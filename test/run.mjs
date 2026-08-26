@@ -379,7 +379,85 @@ check(dialog.dialogClosed, 'applying closes the dialog');
 check(/Q1/.test(dialog.legend), 'applied data reaches the chart', dialog.legend);
 console.log(`  ${green('✓')} help & dialog — guidance for all charts, ${dialog.openedHeight}px editor`);
 
-/* Suite 9 — a shared link round-trips an edited chart. */
+/* Suite 9 — geo country focus and city data. */
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(3500);
+const geoFocus = await page.evaluate(async () => {
+  const app = window.openCharts;
+  const count = () => {
+    const svg = document.querySelector('#chart-host svg');
+    return svg ? svg.querySelectorAll('circle').length : 0;
+  };
+  const jordan = count();
+
+  // Switch country and supply that country's cities.
+  app.spec.opts.country = 'Germany';
+  app.spec.opts.clipToCountry = true;
+  app.spec.places = [
+    { name: 'Berlin', lon: 13.4, lat: 52.52, value: 3600 },
+    { name: 'Hamburg', lon: 9.99, lat: 53.55, value: 1900 },
+    { name: 'Munich', lon: 11.58, lat: 48.14, value: 1500 },
+    { name: 'Amman', lon: 35.93, lat: 31.95, value: 4300 },
+  ];
+  app.rebuild();
+  await new Promise((r) => setTimeout(r, 2200));
+  const germany = count();
+  const labels = [...document.querySelectorAll('#chart-host svg text')].map((t) => t.textContent);
+
+  // An unknown country must say so rather than fail silently.
+  app.spec.opts.country = 'Nowhereland';
+  app.rebuild();
+  await new Promise((r) => setTimeout(r, 2200));
+  const message = document.querySelector('#chart-host').textContent.trim();
+
+  return { jordan, germany, labels, message };
+});
+check(geoFocus.jordan > 0, 'a focused country map renders its cities', String(geoFocus.jordan));
+check(geoFocus.germany === 3, 'cities outside the country are clipped', `${geoFocus.germany} shown`);
+check(!geoFocus.labels.includes('Amman'), 'the clipped city is gone');
+check(/No country matched/.test(geoFocus.message), 'an unknown country explains itself', geoFocus.message.slice(0, 60));
+
+// The globe turns to a named country rather than ignoring it.
+const globeFocus = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:600px;height:460px;position:fixed;left:-9999px;top:0';
+  document.body.appendChild(host);
+  const def = reg.getChart('globe');
+
+  const render = async (country) => {
+    host.innerHTML = '';
+    const spec = reg.newSpec(def);
+    spec.opts.country = country;
+    eng.renderChart(def, host, spec);
+    // The globe fetches boundaries, so wait for real paths rather than a fixed
+    // delay that a slow network would outlast.
+    for (let i = 0; i < 60; i++) {
+      const paths = host.querySelectorAll('svg path');
+      if (paths.length > 5) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    // Fingerprint the country outlines, not the sphere or the graticule: those
+    // are drawn first and the sphere is the same circle whichever way the
+    // globe is turned. The tail of the list is the countries themselves, and
+    // how many are visible changes with the rotation.
+    const paths = [...host.querySelectorAll('svg path')]
+      .map((p) => p.getAttribute('d') || '')
+      .filter((d) => d.length > 40);
+    if (!paths.length) return null;
+    return paths.length + ':' + paths.slice(-6).join('').slice(0, 300);
+  };
+  const japan = await render('Japan');
+  const brazil = await render('Brazil');
+  host.remove();
+  return { differs: japan !== brazil, gotBoth: !!japan && !!brazil };
+});
+check(globeFocus.gotBoth, 'the globe renders when focused on a country');
+check(globeFocus.differs, 'focusing the globe on a different country turns it');
+console.log(`  ${green('✓')} geo focus — country clipping, unknown names, globe rotation`);
+
+/* Suite 10 — a shared link round-trips an edited chart. */
 const shareToken = await page.evaluate(async () => {
   const { encodeSpec, decodeSpec } = await import('/js/studio/share.js');
   // A spec with edits that must survive the trip.
@@ -414,7 +492,7 @@ const restored = await page.evaluate(() => ({
 check(/Mine/.test(restored.legend), 'a shared link restores the edited series');
 console.log(`  ${green('✓')} sharing — round-trip, ${shareToken.compressed ? 'compressed' : 'raw'}, ${shareToken.token.length} chars`);
 
-/* Suite 10 — the exported standalone file genuinely runs. */
+/* Suite 11 — the exported standalone file genuinely runs. */
 const exported = await page.evaluate(async () => {
   const reg = await import('/js/studio/registry.js');
   const eng = await import('/js/studio/engines.js');
@@ -485,7 +563,7 @@ for (const { id, html } of exported) {
 }
 console.log(`  ${green('✓')} exports — ${exportsOk}/${exported.length} standalone files run clean`);
 
-/* Suite 11 — responsive layout produces no horizontal overflow. */
+/* Suite 12 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
   for (const path of ['/index.html', '/studio.html?chart=sankey']) {
@@ -500,7 +578,7 @@ for (const width of [390, 768, 1280]) {
 }
 console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px`);
 
-/* Suite 12 — nothing wrote to the console along the way. */
+/* Suite 13 — nothing wrote to the console along the way. */
 const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);

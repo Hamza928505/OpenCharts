@@ -58,6 +58,39 @@ function valueFor(name, seed, lookup) {
   return (h % 1000) / 10;
 }
 
+/**
+ * Find one country's feature by name.
+ *
+ * Matching ignores case, punctuation and spacing, and also accepts common
+ * short names — Natural Earth writes "United States of America", but nobody
+ * types that. Returns null for the world view.
+ */
+function findCountry(features, name) {
+  if (!name || name === 'World') return null;
+  const key = (s) => String(s).toLowerCase().replace(/[^a-z]/g, '');
+  const aliases = {
+    usa: 'unitedstatesofamerica', us: 'unitedstatesofamerica',
+    unitedstates: 'unitedstatesofamerica', america: 'unitedstatesofamerica',
+    uk: 'unitedkingdom', britain: 'unitedkingdom', greatbritain: 'unitedkingdom',
+    uae: 'unitedarabemirates', drc: 'democraticrepublicofthecongo',
+    southkorea: 'southkorea', czechia: 'czechia', czechrepublic: 'czechia',
+  };
+  const want = aliases[key(name)] || key(name);
+  return features.find((f) => key(f.properties.name) === want)
+    || features.find((f) => key(f.properties.name).startsWith(want))
+    || null;
+}
+
+/**
+ * Fit the projection to one country rather than the whole world, leaving a
+ * margin so coastlines are not flush against the frame.
+ */
+function fitToCountry(projection, feature, W, H, margin) {
+  const m = margin == null ? 18 : margin;
+  projection.fitExtent([[m, m], [W - m, H - m]], feature);
+  return projection;
+}
+
 /** Show a message in place of the map when the fetch fails. */
 function geoMessage(host, text) {
   const p = document.createElement('div');
@@ -68,6 +101,18 @@ function geoMessage(host, text) {
 }
 
 const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
+
+/**
+ * Focus the map on one country.
+ *
+ * Free text rather than a dropdown of 177 entries: typing "Jordan" is faster
+ * than finding it in a list, and the matcher accepts short names.
+ */
+const countryControl = {
+  group: 'Area', type: 'text', key: 'opts.country',
+  label: 'Focus on a country',
+  placeholder: 'World — or type a country name',
+};
 
 const projectionControl = {
   group: 'Projection', type: 'seg', key: 'opts.projection', label: 'Projection',
@@ -108,7 +153,7 @@ function isVisible(projection, lonLat, name) {
  * module-level const: this helper is serialised verbatim into the exported
  * code, and anything it closes over would arrive undefined there.
  */
-function makeProjection(name, geo, W, H, rotate) {
+function makeProjection(name, geo, W, H, rotate, focus) {
   const factories = {
     naturalEarth: () => d3.geoNaturalEarth1(),
     equalEarth: () => d3.geoEqualEarth(),
@@ -116,6 +161,19 @@ function makeProjection(name, geo, W, H, rotate) {
     globe: () => d3.geoOrthographic().clipAngle(90),
   };
   const projection = (factories[name] || factories.naturalEarth)();
+
+  // Focusing on one country: Mercator is the sensible default at national
+  // scale, and the globe is turned to face it rather than being fitted flat.
+  if (focus) {
+    if (name === 'globe') {
+      const c = d3.geoCentroid(focus);
+      projection.rotate([-c[0], -c[1], 0]).fitExtent([[18, 18], [W - 18, H - 18]], { type: 'Sphere' });
+    } else {
+      projection.fitExtent([[18, 18], [W - 18, H - 18]], focus);
+    }
+    return projection;
+  }
+
   if (name === 'globe') {
     if (rotate) projection.rotate(rotate);
     // fitSize on a clipped globe leaves it lopsided; fit the sphere instead.
@@ -161,9 +219,10 @@ export const geoCharts = [
       seed: 21,
       lowColor: '#EDE9FB',
       highColor: C.purple,
-      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
+      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
     },
     controls: [
+      countryControl,
       projectionControl,
       { group: 'Data',   type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Colour', type: 'colors', key: 'scaleColors', label: 'Low / high', names: () => ['Low', 'High'] },
@@ -177,7 +236,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -185,7 +244,8 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate);
+          const focus = findCountry(geo.features, o.country);
+          const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate, focus);
           const path = d3.geoPath(projection);
 
           // Quantise a continuous scale so the key reads as discrete bands.
@@ -208,6 +268,7 @@ export const geoCharts = [
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
             .attr('fill', (d) => {
+              if (focus && d !== focus) return o.neighbourColor;
               const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
               return v == null ? o.noDataColor : colour(v);
             })
@@ -251,6 +312,8 @@ export const geoCharts = [
       lowColor: '#E7F1EC',
       highColor: '#16916A',
       opts: {
+        country: '',
+        neighbourColor: '#E6E3DA',
         projection: 'globe',
         rotate: [-10, -12, 0],
         steps: 6,
@@ -264,6 +327,7 @@ export const geoCharts = [
       },
     },
     controls: [
+      { group: 'Area', type: 'text', key: 'opts.country', label: 'Turn to a country', placeholder: 'World — or type a country name' },
       { group: 'Rotation', type: 'slider', key: 'opts.rotate.0', label: 'Spin (longitude)', min: -180, max: 180, step: 5, format: (v) => v + '°' },
       { group: 'Rotation', type: 'slider', key: 'opts.rotate.1', label: 'Tilt (latitude)', min: -90, max: 90, step: 5, format: (v) => v + '°' },
       { group: 'Sample',   type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
@@ -279,7 +343,7 @@ export const geoCharts = [
     d3: {
       height: 460,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection, attachGlobeDrag],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry, attachGlobeDrag],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -290,7 +354,8 @@ export const geoCharts = [
 
           const draw = () => {
             svg.selectAll('*').remove();
-            const projection = makeProjection('globe', geo, W, H, o.rotate);
+            const focus = findCountry(geo.features, o.country);
+            const projection = makeProjection('globe', geo, W, H, o.rotate, focus);
             const path = d3.geoPath(projection);
 
             const domain = spec.regionValues && Object.keys(spec.regionValues).length
@@ -363,6 +428,128 @@ export const geoCharts = [
   },
 
   {
+    id: 'city-map',
+    title: 'City Map',
+    category: 'Geo',
+    blurb: 'One country, with a value at each city. The common case when the statistic you have is local, not national.',
+    tags: ['city', 'country', 'map', 'geo', 'local', 'regional', 'points', 'd3'],
+    spec: {
+      country: 'Jordan',
+      places: [
+        { name: 'Amman',    lon: 35.93, lat: 31.95, value: 4300 },
+        { name: 'Zarqa',    lon: 36.09, lat: 32.07, value: 1450 },
+        { name: 'Irbid',    lon: 35.85, lat: 32.55, value: 1180 },
+        { name: 'Russeifa', lon: 36.05, lat: 32.02, value: 570 },
+        { name: 'Aqaba',    lon: 35.00, lat: 29.53, value: 190 },
+        { name: 'Madaba',   lon: 35.79, lat: 31.72, value: 110 },
+        { name: 'Karak',    lon: 35.70, lat: 31.18, value: 70 },
+        { name: 'Maan',     lon: 35.73, lat: 30.19, value: 50 },
+      ],
+      color: C.purple,
+      opts: {
+        country: 'Jordan',
+        clipToCountry: false,
+        projection: 'mercator',
+        rotate: [0, -15, 0],
+        maxRadius: 30,
+        alpha: 0.62,
+        landColor: '#F0EEE7',
+        neighbourColor: '#E6E3DA',
+        showLabels: true,
+        labelMin: 8,
+        strokeWidth: 1.3,
+        suffix: 'k',
+      },
+    },
+    controls: [
+      { group: 'Area',    type: 'text',   key: 'opts.country', label: 'Country', placeholder: 'Jordan' },
+      { group: 'Area',    type: 'toggle', key: 'opts.clipToCountry', label: 'Hide cities outside it' },
+      { group: 'Symbols', type: 'colors', key: 'symbolColor', label: 'Symbol colour' },
+      { group: 'Symbols', type: 'slider', key: 'opts.maxRadius', label: 'Largest city', min: 8, max: 70, step: 2, format: (v) => v + 'px' },
+      { group: 'Symbols', type: 'slider', key: 'opts.alpha', label: 'Fill opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
+      { group: 'Labels',  type: 'toggle', key: 'opts.showLabels', label: 'Show city names' },
+      { group: 'Labels',  type: 'slider', key: 'opts.labelMin', label: 'Label threshold', min: 0, max: 100, step: 5, format: (v) => (v ? v + '%+' : 'all') },
+      { group: 'Labels',  type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
+    ],
+    onInit(spec) { spec.symbolColor = [spec.color]; },
+    onChange(spec) {
+      spec.color = spec.symbolColor[0];
+      // The country lives in opts so the shared helpers can see it, but it is
+      // the most important field on this chart, so keep the two in step.
+      if (spec.country && spec.country !== spec.opts.country) spec.opts.country = spec.country;
+      spec.country = spec.opts.country;
+    },
+    d3: {
+      height: 460,
+      libraries: ['topojson', 'worldAtlas'],
+      helpers: [loadTopology, geoMessage, makeProjection, findCountry],
+      mount(host, spec, W, H) {
+        const o = spec.opts;
+        const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
+        const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+
+        loadTopology(url).then((topo) => {
+          const geo = topojson.feature(topo, topo.objects.countries);
+          const focus = findCountry(geo.features, o.country);
+          if (o.country && !focus) {
+            geoMessage(host, `No country matched "${o.country}". Try its English name, for example "Jordan" or "Germany".`);
+            return;
+          }
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const path = d3.geoPath(projection);
+
+          svg.append('g').selectAll('path').data(geo.features).join('path')
+            .attr('d', path)
+            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', (d) => (focus && d === focus ? 1.2 : 0.4));
+
+          const maxV = Math.max(...spec.places.map((p) => p.value), 1);
+          const r = (v) => o.maxRadius * Math.sqrt(v / maxV);
+          const alphaHex = Math.round(o.alpha * 255).toString(16).padStart(2, '0');
+
+          const pts = spec.places
+            .map((p) => ({ ...p, xy: projection([p.lon, p.lat]) }))
+            .filter((p) => p.xy && (!focus || !o.clipToCountry || d3.geoContains(focus, [p.lon, p.lat])))
+            .sort((a, b) => b.value - a.value);
+
+          if (!pts.length) {
+            geoMessage(host, focus
+              ? `None of these places fall inside ${focus.properties.name}. Check that longitude comes before latitude.`
+              : 'No places could be placed. Check the longitude and latitude columns.');
+            return;
+          }
+
+          const g = svg.append('g').selectAll('g').data(pts).join('g')
+            .attr('transform', (d) => `translate(${d.xy[0]},${d.xy[1]})`);
+
+          g.append('circle')
+            .attr('r', (d) => r(d.value))
+            .attr('fill', spec.color + alphaHex)
+            .attr('stroke', spec.color)
+            .attr('stroke-width', o.strokeWidth)
+            .append('title')
+            .text((d) => `${d.name}: ${d.value}${o.suffix}`);
+
+          if (o.showLabels) {
+            // Below the threshold the labels are noise on a crowded map.
+            g.filter((d) => (d.value / maxV) * 100 >= o.labelMin)
+              .append('text')
+              .attr('text-anchor', 'middle')
+              .attr('dy', (d) => -r(d.value) - 5)
+              .attr('font-size', 11)
+              .attr('font-family', '"DM Sans", system-ui, sans-serif')
+              .attr('fill', 'currentColor')
+              .attr('pointer-events', 'none')
+              .text((d) => d.name);
+          }
+        }).catch((err) => geoMessage(host, err.message));
+      },
+    },
+    legend: () => null,
+  },
+
+  {
     id: 'proportional-symbol-map',
     title: 'Proportional Symbol Map',
     category: 'Geo',
@@ -384,9 +571,11 @@ export const geoCharts = [
         { name: 'Sydney',       lon: 151.2, lat: -33.9, value: 5 },
       ],
       color: C.coral,
-      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
+      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
     },
     controls: [
+      countryControl,
+      { group: 'Area', type: 'toggle', key: 'opts.clipToCountry', label: 'Only points inside it' },
       projectionControl,
       { group: 'Symbols', type: 'colors', key: 'symbolColor', label: 'Symbol colour' },
       { group: 'Symbols', type: 'slider', key: 'opts.maxRadius', label: 'Largest radius', min: 8, max: 60, step: 2, format: (v) => v + 'px' },
@@ -398,7 +587,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage, makeProjection, isVisible],
+      helpers: [loadTopology, geoMessage, makeProjection, findCountry, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -406,24 +595,31 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
+          const focus = findCountry(geo.features, o.country);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
           const path = d3.geoPath(projection);
 
+          // Focused: neighbours recede so the country of interest reads first.
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', o.landColor)
+            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', 0.4);
+            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
 
           // Radius scales with the square root of the value, so area encodes it.
           const maxV = Math.max(...spec.places.map((p) => p.value), 1);
           const r = (v) => o.maxRadius * Math.sqrt(v / maxV);
           const alphaHex = Math.round(o.alpha * 255).toString(16).padStart(2, '0');
 
-          const pts = spec.places
+          // A focused map should show that country's cities, not the world's.
+          const onMap = spec.places
             .map((p) => ({ ...p, xy: projection([p.lon, p.lat]) }))
-            .filter((p) => p.xy && isVisible(projection, [p.lon, p.lat], o.projection))
-            .sort((a, b) => b.value - a.value);
+            .filter((p) => p.xy && isVisible(projection, [p.lon, p.lat], o.projection));
+          const inside = onMap.filter((p) => !focus || !o.clipToCountry
+            || d3.geoContains(focus, [p.lon, p.lat]));
+          // Clipping everything away leaves a blank map with no explanation,
+          // which is worse than showing the points that do exist.
+          const pts = (inside.length ? inside : onMap).sort((a, b) => b.value - a.value);
 
           const g = svg.append('g').selectAll('g').data(pts).join('g')
             .attr('transform', (d) => `translate(${d.xy[0]},${d.xy[1]})`);
@@ -460,9 +656,10 @@ export const geoCharts = [
     spec: {
       seed: 17,
       color: C.teal,
-      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
+      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
     },
     controls: [
+      countryControl,
       projectionControl,
       { group: 'Dots',  type: 'slider', key: 'opts.dotsPerRegion', label: 'Dots per region', min: 4, max: 80, step: 2 },
       { group: 'Dots',  type: 'slider', key: 'opts.radius', label: 'Dot size', min: 0.6, max: 5, step: 0.2, format: (v) => v.toFixed(1) + 'px' },
@@ -475,7 +672,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [makeRng, loadTopology, valueFor, geoMessage, makeProjection, isVisible],
+      helpers: [makeRng, loadTopology, valueFor, geoMessage, makeProjection, findCountry, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -483,20 +680,22 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
+          const focus = findCountry(geo.features, o.country);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', o.landColor)
+            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', 0.4);
+            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
 
           // Rejection sampling: throw points at each country's bounding box and
           // keep the ones that land inside it.
           const rnd = makeRng(spec.seed * 7919);
           const dots = [];
-          geo.features.forEach((f) => {
+          const scatterIn = focus ? [focus] : geo.features;
+          scatterIn.forEach((f) => {
             const name = f.properties.name || String(f.id);
             const raw = valueFor(name, spec.seed, spec.regionValues);
             const share = Math.max(0, (raw == null ? 0 : raw)) / 100;
@@ -548,9 +747,10 @@ export const geoCharts = [
       ],
       color: C.purple,
       hubColor: C.coral,
-      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
+      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
     },
     controls: [
+      countryControl,
       projectionControl,
       { group: 'Flows', type: 'colors', key: 'flowColors', label: 'Route / hub', names: () => ['Routes', 'Hub'] },
       { group: 'Flows', type: 'slider', key: 'opts.maxWidth', label: 'Widest route', min: 1, max: 16, step: 0.5, format: (v) => v + 'px' },
@@ -563,7 +763,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage, makeProjection, isVisible],
+      helpers: [loadTopology, geoMessage, makeProjection, findCountry, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -571,14 +771,15 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
+          const focus = findCountry(geo.features, o.country);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', o.landColor)
+            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', 0.4);
+            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
 
           const hub = projection([spec.hub.lon, spec.hub.lat]);
           if (!hub) { geoMessage(host, 'Hub falls outside this projection.'); return; }
@@ -767,9 +968,10 @@ export const geoCharts = [
     spec: {
       seed: 33,
       color: C.purple,
-      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
+      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
     },
     controls: [
+      countryControl,
       projectionControl,
       { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Scale', type: 'slider', key: 'opts.minScale', label: 'Smallest scale', min: 0.02, max: 0.6, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
@@ -782,7 +984,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -790,7 +992,8 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
+          const focus = findCountry(geo.features, o.country);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
           const path = d3.geoPath(projection);
 
           if (o.ghost) {
