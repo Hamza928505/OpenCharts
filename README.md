@@ -8,6 +8,13 @@ A library of **97 chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
+## Sharing a chart
+
+Once you have a chart the way you want it, **Share** copies a link that
+reproduces it exactly — data, colours and options included. The whole spec is
+compressed into the URL, so there is no server, no account and nothing stored:
+the link *is* the document.
+
 ## Running it
 
 The site uses ES modules, so it needs to be served over HTTP.
@@ -94,6 +101,29 @@ Charts are built on whichever engine suits them; the badge on each tile says whi
 Charts are grouped into 15 categories: Line & Area, Bar, Deviation, Part to
 Whole, Radar, Scatter, Distribution, Hierarchy, Network, Flow, Comparison,
 Finance, Geo, KPI & Micro, and Custom Engine.
+
+## Tests
+
+```bash
+npm install          # once — pulls Playwright
+npx playwright install chromium
+npm test             # renders all 97 charts and checks them
+```
+
+The suite runs in a real headless browser, because two thirds of the library
+draws to a canvas or measures real layout — jsdom would report a green run
+while rendering nothing. For each chart it checks that it renders, that the
+canvas is not blank, that the data editor accepts its own example, that the
+chart survives that data, and that the generated code parses and declares its
+dependencies. It also loads seven exported standalone files and confirms they
+actually run.
+
+```bash
+npm test -- --only geo     # just the charts whose id contains "geo"
+npm test -- --headed       # watch it happen
+```
+
+CI runs the same suite on every push and pull request.
 
 ## Adding a chart
 

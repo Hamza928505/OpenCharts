@@ -208,6 +208,31 @@ the three plugins that are not (matrix, treemap, boxplot).
 4. **Testing the export**: Copy the Standalone tab into a file and open it — it should render identically
 5. **Debugging**: Browser devtools; render failures surface in the chart area rather than throwing
 
+## Testing
+
+`npm test` runs `test/run.mjs` — a Playwright suite against a real headless
+Chromium, which is not negotiable here: most of the library draws to canvas or
+measures layout, and jsdom would pass while rendering nothing.
+
+Eleven suites cover the registry, every chart (render + non-blank canvas +
+legend + data round-trip + codegen), the gallery, search, the studio, live
+editing, the data editor, share links, standalone exports, responsive
+breakpoints, and console cleanliness.
+
+**Two lessons already learned the hard way, both encoded as checks:**
+
+- A generated `<script>` block must never contain a literal `</script>` — even
+  inside a comment, HTML closes the element there and dumps the rest as text.
+  `safeForInlineScript()` in `engines.js` escapes it.
+- Anything a serialised helper closes over must live *inside* that helper.
+  `makeProjection` builds its projection table locally for exactly this reason;
+  referencing a module-level const produced a `ReferenceError` in every
+  exported map.
+
+Exports are served over http from the project root during tests rather than
+via `setContent`, so relative imports and CDN scripts resolve the way they
+would for a real user.
+
 ## Development Commands
 
 This project does not use formal build tools, test runners, or linters. All development is done through direct file editing and browser refresh:

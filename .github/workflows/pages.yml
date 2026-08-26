@@ -1,0 +1,47 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow one deployment at a time; a queued run supersedes an older one rather
+# than racing it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # No build step — the site is the repository. Everything except the
+      # tooling is uploaded as-is.
+      - name: Prepare the site
+        run: |
+          mkdir -p _site
+          cp -r index.html studio.html css js lib _site/
+          cp LICENSE README.md THIRD-PARTY-NOTICES.md _site/ 2>/dev/null || true
+          # Pages would otherwise run the upload through Jekyll, which strips
+          # files and folders beginning with an underscore.
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

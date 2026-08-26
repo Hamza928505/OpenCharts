@@ -94,6 +94,9 @@
             <div class="stage-actions">
               <button class="btn btn-sm" id="btn-reset" type="button">Reset</button>
               <button class="btn btn-sm" id="btn-png" type="button">Export image</button>
+              <button class="btn btn-sm btn-primary" id="btn-share" type="button" title="Copy a link that reproduces this exact chart">
+                <span aria-hidden="true">↗</span> Share
+              </button>
             </div>
           </div>
           <div class="stage-body">
@@ -115,7 +118,9 @@
 
 <script type="module">
   import { StudioApp } from './js/studio/StudioApp.js';
-  new StudioApp();
+  // Exposed deliberately: it makes the live chart inspectable from the console
+  // and gives the test suite a handle on real application state.
+  window.openCharts = new StudioApp();
 </script>
 
 </body>

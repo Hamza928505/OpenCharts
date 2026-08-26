@@ -13,6 +13,7 @@ import { CodePanel } from './CodePanel.js';
 import { renderSources } from './SourcesPanel.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
+import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -45,9 +46,21 @@ export class StudioApp {
     this._resizeObserver.observe(this.host);
 
     onThemeChange(() => this.rebuild());
-    window.addEventListener('popstate', () => this.load(this._idFromUrl(), { push: false }));
+    window.addEventListener('popstate', () => this._boot());
 
-    this.load(this._idFromUrl(), { push: false });
+    this._boot();
+  }
+
+  /**
+   * Open whatever the URL asks for. A shared spec has to be decoded before the
+   * first render, so this is separate from the constructor.
+   */
+  async _boot() {
+    const id = this._idFromUrl();
+    const token = new URLSearchParams(location.search).get('s');
+    const shared = token ? await decodeSpec(token) : null;
+    if (token && !shared) toast('That shared link could not be read — showing the default', 'bad');
+    this.load(id, { push: false, shared });
   }
 
   _cacheDom() {
@@ -222,6 +235,7 @@ export class StudioApp {
       toast('Reset to defaults', 'ok');
     });
     $('#btn-png')?.addEventListener('click', () => this._exportPNG());
+    $('#btn-share')?.addEventListener('click', () => this._share());
 
     const railToggle = $('#rail-toggle');
     const rail = $('#rail');
@@ -250,14 +264,18 @@ export class StudioApp {
 
   /* ── Load & render ─────────────────────────────────────────────────────── */
 
-  load(id, { push = true } = {}) {
+  load(id, { push = true, shared = null } = {}) {
     const def = getChart(id);
     if (!def) return;
 
     destroyInstance(this.inst);
     this.inst = null;
     this.def = def;
-    this.spec = newSpec(def);
+    // A shared link carries a whole spec. Merge it over the defaults rather
+    // than replacing them, so a link made before a chart gained a new option
+    // still opens.
+    this.spec = shared ? { ...newSpec(def), ...shared } : newSpec(def);
+    this.isShared = !!shared;
 
     if (push) {
       history.pushState({ id }, '', `studio.html?chart=${encodeURIComponent(id)}`);
@@ -282,7 +300,31 @@ export class StudioApp {
 
   _onEdit() {
     if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
+    // The URL still carries the spec this session opened with; once it is
+    // edited that token is stale, so drop it rather than let Back or a copied
+    // address bar restore the wrong chart.
+    if (this.isShared) {
+      this.isShared = false;
+      const url = new URL(location.href);
+      url.searchParams.delete('s');
+      history.replaceState({ id: this.def.id }, '', url.toString());
+    }
     this.rebuild();
+  }
+
+  /** Copy a link that reproduces exactly what is on screen. */
+  async _share() {
+    try {
+      const url = await buildShareUrl(this.def.id, this.spec);
+      await navigator.clipboard.writeText(url);
+      if (url.length > URL_COMFORTABLE) {
+        toast('Link copied — it is long, so some chat apps may truncate it', 'ok', 4200);
+      } else {
+        toast('Shareable link copied', 'ok');
+      }
+    } catch {
+      toast('Could not copy the link', 'bad');
+    }
   }
 
   rebuild() {

@@ -420,17 +420,26 @@ function widgetData(ctrl, spec, notify, def) {
     area.value = typeof def.toText === 'function' ? def.toText(spec) : '';
 
     const status = el('div', 'data-status');
+    // Carry over the confirmation from the rebuild that this paste triggered.
+    if (spec._dataMessage) {
+      status.textContent = spec._dataMessage;
+      status.className = 'data-status ok';
+      delete spec._dataMessage;
+    }
     const hint = el('p', 'data-note', desc.hint || '');
 
     const apply = () => {
       const res = applyData(def, spec, area.value);
       status.textContent = res.message;
       status.className = 'data-status ' + (res.ok ? 'ok' : 'bad');
-      if (res.ok) {
-        notify();
-        // Re-render the whole panel: new data can mean new series rows.
-        if (typeof host._rebuildAll === 'function') host._rebuildAll();
-      }
+      if (!res.ok) return;
+
+      notify();
+      // A successful paste can change how many series exist, so the whole
+      // panel is rebuilt — which destroys this status line. Stash the message
+      // so the fresh panel can show it, or the confirmation just vanishes.
+      spec._dataMessage = res.message;
+      if (typeof host._rebuildAll === 'function') host._rebuildAll();
     };
 
     const actions = el('div');

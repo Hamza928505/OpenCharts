@@ -79,19 +79,12 @@ const projectionControl = {
   ],
 };
 
-/**
- * Every projection the geo charts offer, including the orthographic globe.
- *
+/*
  * Orthographic is what a sphere actually looks like from far away, so it reads
  * as three-dimensional without any of the distortion an extruded 3D map
- * introduces — no occlusion, and area comparisons stay honest.
+ * introduces — no occlusion, and area comparisons stay honest. The projection
+ * table itself lives inside makeProjection so it survives serialisation.
  */
-const PROJECTIONS = {
-  naturalEarth: () => d3.geoNaturalEarth1(),
-  equalEarth: () => d3.geoEqualEarth(),
-  mercator: () => d3.geoMercator(),
-  globe: () => d3.geoOrthographic().clipAngle(90),
-};
 
 /**
  * Is a lon/lat on the near side of the globe?
@@ -108,9 +101,21 @@ function isVisible(projection, lonLat, name) {
   return d3.geoDistance(lonLat, centre) < Math.PI / 2;
 }
 
-/** Build the projection a spec asks for, fitted to the frame. */
+/**
+ * Build the projection a spec asks for, fitted to the frame.
+ *
+ * The lookup is built inside the function rather than referencing a
+ * module-level const: this helper is serialised verbatim into the exported
+ * code, and anything it closes over would arrive undefined there.
+ */
 function makeProjection(name, geo, W, H, rotate) {
-  const projection = (PROJECTIONS[name] || PROJECTIONS.naturalEarth)();
+  const factories = {
+    naturalEarth: () => d3.geoNaturalEarth1(),
+    equalEarth: () => d3.geoEqualEarth(),
+    mercator: () => d3.geoMercator(),
+    globe: () => d3.geoOrthographic().clipAngle(90),
+  };
+  const projection = (factories[name] || factories.naturalEarth)();
   if (name === 'globe') {
     if (rotate) projection.rotate(rotate);
     // fitSize on a clipped globe leaves it lopsided; fit the sphere instead.

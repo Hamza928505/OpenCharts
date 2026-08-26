@@ -29,7 +29,9 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "python -m http.server 8000",
-    "check": "node --check js/studio/registry.js && node --check js/studio/engines.js"
+    "test": "node test/run.mjs",
+    "test:headed": "node test/run.mjs --headed",
+    "check": "node --check js/studio/registry.js && node --check js/studio/engines.js && node --check js/studio/dataio.js"
   },
   "files": [
     "index.html",
@@ -40,5 +42,8 @@
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
     "README.md"
-  ]
+  ],
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  }
 }

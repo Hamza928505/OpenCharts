@@ -298,6 +298,19 @@ const BASE_CSS = `.chart-card {
 }`;
 
 /**
+ * Make a string safe to sit inside an inline <script> block.
+ *
+ * HTML closes a script element at the first literal `</script`, wherever it
+ * appears — including inside a string or a comment. Escaping the slash is the
+ * standard idiom and stays readable in the emitted source.
+ */
+function safeForInlineScript(text) {
+  // The replacement needs a real backslash in the output, so the literal is
+  // escaped here: '<\\/' produces the two characters `<` and `\` then `/`.
+  return String(text).replace(/<\/(script)/gi, '<\\/$1');
+}
+
+/**
  * Emit the legend as code.
  *
  * The generic "one entry per dataset" legend only suits charts whose series
@@ -404,6 +417,22 @@ function buildCSS(def, spec) {
 }
 
 /** The JavaScript a chart needs. */
+/**
+ * Drop the studio's own bookkeeping before a spec is printed into exported
+ * code. Anything prefixed with `_` is internal — a transient status message, a
+ * parsing scratch field — and has no business in a snippet someone pastes.
+ */
+function publicSpec(spec) {
+  if (!spec || typeof spec !== 'object') return spec;
+  const out = Array.isArray(spec) ? [] : {};
+  for (const key of Object.keys(spec)) {
+    if (key.startsWith('_')) continue;
+    const v = spec[key];
+    out[key] = (v && typeof v === 'object' && !(v instanceof Date)) ? publicSpec(v) : v;
+  }
+  return out;
+}
+
 function buildJS(def, spec) {
   const engine = engineOf(def);
   const legend = def.legend ? def.legend(spec) : null;
@@ -429,7 +458,7 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
-      `const spec = ${serialize(spec, 0)};`,
+      `const spec = ${serialize(publicSpec(spec), 0)};`,
       '',
       helperSource(block).trim(),
       '',
@@ -464,7 +493,7 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
-      `const spec = ${serialize(spec, 0)};`,
+      `const spec = ${serialize(publicSpec(spec), 0)};`,
       '',
       helperSource(block).trim(),
       '',
@@ -496,7 +525,9 @@ function buildJS(def, spec) {
       '',
       `const chart = new ${cls}('chart', { data, ...config });`,
       `chart.enableTooltip();`,
-      hasLegend ? `chart.enableLegend('legend');` : '',
+      // enableLegend takes the element itself, not an id — the studio passes a
+      // node, so the exported code must too or it throws on innerHTML.
+      hasLegend ? `chart.enableLegend(document.getElementById('legend'));` : '',
     ].join('\n'));
   }
 
@@ -505,7 +536,7 @@ function buildJS(def, spec) {
   return tidy([
     ...header,
     '',
-    `const spec = ${serialize(spec, 0)};`,
+    `const spec = ${serialize(publicSpec(spec), 0)};`,
     '',
     helperSource(block).trim(),
     '',
@@ -544,7 +575,10 @@ function dependencyHeader(def, deps) {
   if (scripts.length) {
     lines.push(`// Requires ${scripts.length === 1 ? 'this script' : 'these scripts'} on the page, in this order:`);
     scripts.forEach((lib) => {
-      lines.push(`//   ${scriptTag(lib)}`);
+      // The closing tag is escaped: an unescaped </script> inside this comment
+      // would terminate the enclosing <script> block when the snippet is
+      // embedded in a page, dumping the rest of the code out as visible text.
+      lines.push(`//   ${safeForInlineScript(scriptTag(lib))}`);
       lines.push(`//     ${describe(lib)} — ${lib.homepage}`);
     });
   }
@@ -618,7 +652,7 @@ function buildStandalone(def, spec, html, css, js) {
     indent(html, 0),
     ``,
     isModule ? `<script type="module">` : `<script>`,
-    indent(js, 0),
+    indent(safeForInlineScript(js), 0),
     `</script>`,
     `</body>`,
     `</html>`,
