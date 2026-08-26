@@ -320,7 +320,66 @@ check(/Alpha/.test(paste.legend), 'pasted series reach the legend');
 check(paste.code, 'pasted data reaches the generated code');
 console.log(`  ${green('✓')} data editor — paste → chart → code`);
 
-/* Suite 8 — a shared link round-trips an edited chart. */
+/* Suite 8 — help and the data dialog. */
+const helpAndDialog = await page.evaluate(async () => {
+  const { helpFor } = await import('/js/studio/chart-help.js');
+  const reg = await import('/js/studio/registry.js');
+  const { parseTable } = await import('/js/studio/dataio.js');
+
+  // Every chart must have reading guidance, per-chart or per-category.
+  const missing = reg.CHARTS.filter((c) => {
+    const h = helpFor(c);
+    return !h || !h.read || !h.watch;
+  }).map((c) => c.id);
+  const ownEntry = reg.CHARTS.filter((c) => {
+    const { CHART_HELP } = window.__helpTable || {};
+    return false;
+  });
+
+  // The parser must survive a realistic messy spreadsheet paste.
+  const messy = parseTable(['region\tQ1 sales\tQ2 sales', 'North\t$1,240\t$1,890', 'South\t$980\tn/a'].join('\n'));
+  return {
+    missingHelp: missing,
+    messyHeader: messy.hadHeader,
+    messyHeaders: messy.headers,
+    messyRows: messy.rows.length,
+  };
+});
+check(!helpAndDialog.missingHelp.length, 'every chart has reading guidance', helpAndDialog.missingHelp.slice(0, 5).join(', '));
+check(helpAndDialog.messyHeader, 'a header row is detected despite currency formatting');
+check(helpAndDialog.messyHeaders[0] === 'region', 'header names survive the parse', helpAndDialog.messyHeaders.join('|'));
+
+// The dialog opens, previews, and applies.
+await page.goto(`${base}/studio.html?chart=bar-stacked`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const dialog = await page.evaluate(async () => {
+  document.querySelector('.help-link').click();
+  await new Promise((r) => setTimeout(r, 300));
+  const area = document.querySelector('.dlg-paste');
+  const openedHeight = Math.round(area.getBoundingClientRect().height);
+  area.value = ['region\tQ1\tQ2', 'North\t$1,240\t$1,890', 'South\t$980\tn/a', 'East\t$2,100\t$2,450'].join('\n');
+  area.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  const badCells = document.querySelectorAll('.dlg-table td.bad').length;
+  const headers = [...document.querySelectorAll('.dlg-table th')].map((t) => t.firstChild.textContent);
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => b.textContent.includes('Use this data')).click();
+  await new Promise((r) => setTimeout(r, 600));
+  return {
+    openedHeight,
+    badCells,
+    headers,
+    dialogClosed: !document.querySelector('.dlg'),
+    legend: document.querySelector('#legend').textContent,
+  };
+});
+check(dialog.openedHeight > 250, 'the dialog editor is genuinely large', `${dialog.openedHeight}px`);
+check(dialog.badCells === 1, 'unreadable cells are flagged before applying', `${dialog.badCells} flagged`);
+check(dialog.headers[0] === 'region', 'the dialog preview names the columns');
+check(dialog.dialogClosed, 'applying closes the dialog');
+check(/Q1/.test(dialog.legend), 'applied data reaches the chart', dialog.legend);
+console.log(`  ${green('✓')} help & dialog — guidance for all charts, ${dialog.openedHeight}px editor`);
+
+/* Suite 9 — a shared link round-trips an edited chart. */
 const shareToken = await page.evaluate(async () => {
   const { encodeSpec, decodeSpec } = await import('/js/studio/share.js');
   // A spec with edits that must survive the trip.
@@ -355,7 +414,7 @@ const restored = await page.evaluate(() => ({
 check(/Mine/.test(restored.legend), 'a shared link restores the edited series');
 console.log(`  ${green('✓')} sharing — round-trip, ${shareToken.compressed ? 'compressed' : 'raw'}, ${shareToken.token.length} chars`);
 
-/* Suite 9 — the exported standalone file genuinely runs. */
+/* Suite 10 — the exported standalone file genuinely runs. */
 const exported = await page.evaluate(async () => {
   const reg = await import('/js/studio/registry.js');
   const eng = await import('/js/studio/engines.js');
@@ -426,7 +485,7 @@ for (const { id, html } of exported) {
 }
 console.log(`  ${green('✓')} exports — ${exportsOk}/${exported.length} standalone files run clean`);
 
-/* Suite 10 — responsive layout produces no horizontal overflow. */
+/* Suite 11 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
   for (const path of ['/index.html', '/studio.html?chart=sankey']) {
@@ -441,7 +500,7 @@ for (const width of [390, 768, 1280]) {
 }
 console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px`);
 
-/* Suite 11 — nothing wrote to the console along the way. */
+/* Suite 12 — nothing wrote to the console along the way. */
 const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);

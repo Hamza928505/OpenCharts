@@ -146,6 +146,23 @@ once real data arrives. Their renderers must check for supplied values first —
 generator. `hideGroups` then hides the now-irrelevant parameter sliders, though
 never the data editor itself.
 
+### Help content
+
+`chart-help.js` holds a `read` and a `watch` line per chart, with a
+category-level fallback so nothing is ever blank — the test suite enforces
+that every chart resolves to both. `watch` is the part worth keeping honest:
+it names how that chart type misleads, rather than pretending the choice of
+chart is neutral.
+
+### The data dialog
+
+`DataDialog.js` is the full-size editor. It previews the parse before applying
+— column names, the role of each column, and any cell that will not read as a
+number. `looksNumeric()` in `dataio.js` backs both that highlight and header
+detection, and it is deliberately **narrower** than "strip everything that is
+not a digit": that looser rule makes `Q1` numeric and breaks header detection
+on any table with quarter columns.
+
 ### Geo and the globe
 
 `makeProjection(name, geo, W, H, rotate)` builds all four projections; `globe`

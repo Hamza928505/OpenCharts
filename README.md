@@ -46,12 +46,30 @@ Each chart emits four views:
 - **Standalone** — a complete `<!DOCTYPE html>` page with all three inlined and
   the CDN script tags already in place. Download it and it runs.
 
+## Not sure how to read a chart?
+
+Every chart in the studio has a **How to read this chart** panel above it: what
+the marks actually encode, and — more usefully — the specific way that chart
+type misleads people. A stacked bar warns you that its middle segments float on
+shifting baselines. A pie warns you that angles past five slices are guesswork.
+A treemap warns you that long thin rectangles are hard to compare with square
+ones.
+
+The same panel lays out the three-step loop for changing anything: your data,
+the controls, then take the code.
+
 ## Using your own data
 
 Every chart takes real data. The first control in the studio is a paste box
 that accepts CSV or TSV — copy a range straight out of Excel, Sheets or a
 `.csv` and press **Use this data**. The delimiter is detected, a header row is
 detected, and formatted numbers (`1,234`, `$99`, `42%`) are read correctly.
+
+The sidebar box is fine for a quick edit; **⤢ Bigger** opens a full-size editor
+with a live preview of exactly what the parser read — column names, detected
+roles, and any cell it could not turn into a number highlighted before you
+apply. That preview is the fastest way to see why a paste did not do what you
+expected.
 
 The columns each chart wants are described under the box, and **Example** fills
 it with correctly-shaped rows you can edit. Structured charts take the same

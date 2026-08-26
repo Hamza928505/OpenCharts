@@ -10,6 +10,7 @@
 
 import { SWATCHES, paletteAt } from './palette.js';
 import { applyData } from './dataio.js';
+import { openDataDialog } from './DataDialog.js';
 
 /* ── spec path access ────────────────────────────────────────────────────── */
 
@@ -449,15 +450,19 @@ function widgetData(ctrl, spec, notify, def) {
     applyBtn.style.flex = '1';
     applyBtn.addEventListener('click', apply);
 
-    const sampleBtn = el('button', 'btn btn-sm', 'Example');
-    sampleBtn.type = 'button';
-    sampleBtn.title = 'Fill the box with correctly-shaped example data';
-    sampleBtn.addEventListener('click', () => {
-      area.value = desc.example || area.placeholder;
-      area.focus();
+    // The sidebar box is deliberately small; the dialog is where pasting a
+    // real spreadsheet actually happens.
+    const expandBtn = el('button', 'btn btn-sm', '⤢ Bigger');
+    expandBtn.type = 'button';
+    expandBtn.title = 'Open the full-size editor, with a preview of what will be read';
+    expandBtn.addEventListener('click', () => {
+      openDataDialog(def, spec, () => {
+        notify();
+        if (typeof host._rebuildAll === 'function') host._rebuildAll();
+      });
     });
 
-    actions.append(applyBtn, sampleBtn);
+    actions.append(applyBtn, expandBtn);
 
     // Ctrl/Cmd+Enter applies, which is what anyone pasting a table expects.
     area.addEventListener('keydown', (e) => {

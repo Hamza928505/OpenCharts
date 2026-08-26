@@ -11,6 +11,8 @@ import { renderChart, destroyInstance, resizeInstance, renderLegend, generateCod
 import { buildControls } from './ControlPanel.js';
 import { CodePanel } from './CodePanel.js';
 import { renderSources } from './SourcesPanel.js';
+import { renderHelp } from './HelpPanel.js';
+import { openDataDialog } from './DataDialog.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
@@ -35,6 +37,7 @@ export class StudioApp {
     this.inst = null;
     this.codePanel = new CodePanel($('#codepanel'));
     this.sourcesEl = $('#sources');
+    this.helpEl = $('#help');
 
     this._cacheDom();
     this._buildRail();
@@ -312,6 +315,16 @@ export class StudioApp {
     this.rebuild();
   }
 
+  /** Open the full-size data editor. */
+  editData() {
+    openDataDialog(this.def, this.spec, () => {
+      if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
+      // Rebuild the controls too: new data can mean a different number of series.
+      buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+      this.rebuild();
+    });
+  }
+
   /** Copy a link that reproduces exactly what is on screen. */
   async _share() {
     try {
@@ -339,6 +352,7 @@ export class StudioApp {
     const code = generateCode(this.def, this.spec);
     this.codePanel.setCode(code, this.def.id);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
+    if (this.helpEl) renderHelp(this.helpEl, this.def, this.spec, () => this.editData());
   }
 
   _renderMetrics() {

@@ -56,9 +56,30 @@ function sniffDelimiter(lines) {
   return best || /\s{2,}|\s/.test(lines[0] || '') ? (best || /\s+/) : ',';
 }
 
-/** True when every non-empty cell parses as a number. */
-const allNumeric = (cells) =>
-  cells.length > 0 && cells.every((c) => c === '' || Number.isFinite(Number(c)));
+/**
+ * True when a cell reads as a number to a person.
+ *
+ * Deliberately narrower than "strip everything that is not a digit": that rule
+ * makes `Q1` numeric, which breaks header detection on any table with quarter
+ * or period columns. Currency symbols, thousands separators and a trailing
+ * percent are allowed; stray letters are not.
+ */
+const looksNumeric = (cell) => {
+  if (cell === '' || cell == null) return true;
+  const trimmed = String(cell).trim();
+  if (!trimmed) return true;
+  // Peel off a leading sign and currency, and a trailing percent or currency.
+  const core = trimmed
+    .replace(/^[-+]?\s*[$£€¥₹]?\s*/, '')
+    .replace(/\s*[%$£€¥₹]?$/, '')
+    .trim();
+  if (!core) return false;
+  // What remains must be digits with optional separators and an exponent.
+  return /^\d{1,3}(?:[ ,.]\d{3})*(?:[.,]\d+)?(?:[eE][-+]?\d+)?$/.test(core)
+    || /^\d*[.,]?\d+(?:[eE][-+]?\d+)?$/.test(core);
+};
+
+const allNumeric = (cells) => cells.length > 0 && cells.every(looksNumeric);
 
 const num = (v, fallback = 0) => {
   if (v == null || v === '') return fallback;
@@ -499,4 +520,4 @@ export function applyData(def, spec, text) {
   return { ok: true, message: `Loaded ${n} row${n === 1 ? '' : 's'}.` };
 }
 
-export { num };
+export { num, looksNumeric };
