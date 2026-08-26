@@ -25,6 +25,7 @@ import { geoCharts } from './charts/geo.js';
 import { timeseriesCharts } from './charts/timeseries.js';
 import { engineCharts } from './charts/engine.js';
 import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
+import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
 
 /** Category display order in the gallery and the rail. */
 export const CATEGORY_ORDER = [
@@ -69,6 +70,22 @@ const ALL = [
 
 /* Decorate each definition with what the UI needs, once at module load. */
 ALL.forEach((def) => {
+  // Attach the data editor. A chart can already declare its own `data`
+  // descriptor; the schema table fills in the rest so every chart in the
+  // library accepts pasted input.
+  const schema = DATA_SCHEMAS[def.id];
+  if (schema && !def.data) {
+    const { toText, onData, ...desc } = schema;
+    def.data = desc;
+    if (toText && !def.toText) def.toText = toText;
+    if (onData && !def.onData) def.onData = onData;
+  }
+  if (def.data) {
+    const controls = def.controls || (def.controls = []);
+    const already = controls.some((c) => c.type === 'data');
+    if (!already) controls.unshift({ ...DATA_CONTROL });
+  }
+
   def.engine = engineOf(def);
   def.engineLabel = ENGINE_LABEL[def.engine];
   def.engineChip = ENGINE_CHIP[def.engine];

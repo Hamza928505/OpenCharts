@@ -9,6 +9,7 @@
  */
 
 import { SWATCHES, paletteAt } from './palette.js';
+import { applyData } from './dataio.js';
 
 /* ── spec path access ────────────────────────────────────────────────────── */
 
@@ -20,7 +21,11 @@ export function setPath(obj, path, value) {
   const keys = path.split('.');
   const last = keys.pop();
   const target = keys.reduce((o, k) => {
-    if (o[k] == null || typeof o[k] !== 'object') o[k] = {};
+    if (o[k] == null || typeof o[k] !== 'object') {
+      // A numeric next segment means this level is an array, not an object —
+      // `opts.rotate.0` must not turn [0,-15,0] into {0:…}.
+      o[k] = /^\d+$/.test(keys[keys.indexOf(k) + 1] ?? last) ? [] : {};
+    }
     return o[k];
   }, obj);
   target[last] = value;
@@ -352,7 +357,114 @@ function widgetValues(ctrl, spec, notify) {
   return wrap;
 }
 
+/**
+ * The "Your data" editor.
+ *
+ * One widget serves every chart: the definition's `data` descriptor says what
+ * shape to parse into, and `dataio` does the reading. Charts whose sample data
+ * is generated from parameters get a Sample/Yours switch, so the exploratory
+ * mode survives alongside real input.
+ */
+function widgetData(ctrl, spec, notify, def) {
+  const desc = def.data || {};
+  const host = el('div', 'ctrl-group');
+  host.style.gap = '.5rem';
+
+  // Seeded charts keep their parameter controls; the switch hides or shows them.
+  const switchable = !!desc.generated;
+  let mode = spec.dataMode === 'observations' || spec.dataMode === 'bars'
+    || spec.dataMode === 'regions' || spec.dataMode === 'cells' ? 'mine' : 'sample';
+
+  if (switchable) {
+    const seg = el('div', 'seg');
+    const mk = (label, value) => {
+      const b = el('button', 'seg-btn' + (mode === value ? ' active' : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        mode = value;
+        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        if (value === 'sample') {
+          // Drop back to generated data by clearing the override.
+          delete spec.dataMode;
+          if (desc.clearKeys) desc.clearKeys.forEach((k) => { delete spec[k]; });
+          notify();
+        }
+        paint();
+      });
+      seg.appendChild(b);
+      return b;
+    };
+    mk('Sample data', 'sample');
+    mk('My data', 'mine');
+    host.appendChild(seg);
+  }
+
+  const body = el('div');
+  body.style.cssText = 'display:flex;flex-direction:column;gap:.4rem';
+  host.appendChild(body);
+
+  function paint() {
+    body.innerHTML = '';
+    if (switchable && mode === 'sample') {
+      const note = el('p', 'data-note',
+        desc.sampleNote || 'Data is generated from the settings below. Switch to “My data” to paste your own.');
+      body.appendChild(note);
+      return;
+    }
+
+    const area = el('textarea', 'input mono data-paste');
+    area.rows = desc.rows || 7;
+    area.spellcheck = false;
+    area.placeholder = desc.placeholder || 'label,value\nAlpha,120\nBeta,90';
+    area.value = typeof def.toText === 'function' ? def.toText(spec) : '';
+
+    const status = el('div', 'data-status');
+    const hint = el('p', 'data-note', desc.hint || '');
+
+    const apply = () => {
+      const res = applyData(def, spec, area.value);
+      status.textContent = res.message;
+      status.className = 'data-status ' + (res.ok ? 'ok' : 'bad');
+      if (res.ok) {
+        notify();
+        // Re-render the whole panel: new data can mean new series rows.
+        if (typeof host._rebuildAll === 'function') host._rebuildAll();
+      }
+    };
+
+    const actions = el('div');
+    actions.style.cssText = 'display:flex;gap:.35rem';
+    const applyBtn = el('button', 'btn btn-sm btn-primary', 'Use this data');
+    applyBtn.type = 'button';
+    applyBtn.style.flex = '1';
+    applyBtn.addEventListener('click', apply);
+
+    const sampleBtn = el('button', 'btn btn-sm', 'Example');
+    sampleBtn.type = 'button';
+    sampleBtn.title = 'Fill the box with correctly-shaped example data';
+    sampleBtn.addEventListener('click', () => {
+      area.value = desc.example || area.placeholder;
+      area.focus();
+    });
+
+    actions.append(applyBtn, sampleBtn);
+
+    // Ctrl/Cmd+Enter applies, which is what anyone pasting a table expects.
+    area.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); apply(); }
+    });
+
+    body.append(area, actions, status);
+    if (hint.textContent) body.appendChild(hint);
+  }
+
+  paint();
+  return host;
+}
+
 const WIDGETS = {
+  data:   widgetData,
   toggle: widgetToggle,
   seg:    widgetSeg,
   slider: widgetSlider,
@@ -395,7 +507,18 @@ export function buildControls(container, def, spec, onChange) {
     else groups.push({ name, items: [ctrl] });
   });
 
-  groups.forEach((group, gi) => {
+  // Parameter controls that only drive generated data are irrelevant once the
+  // user has pasted their own. Hide those, but never the data editor itself —
+  // it lives in the same group and must stay reachable to edit or revert.
+  const usingOwnData = !!spec.dataMode;
+  const hiddenGroups = new Set(usingOwnData ? (def.data && def.data.hideGroups) || [] : []);
+  const visible = groups
+    .map((g) => (hiddenGroups.has(g.name)
+      ? { ...g, items: g.items.filter((c) => c.type === 'data') }
+      : g))
+    .filter((g) => g.items.length);
+
+  visible.forEach((group, gi) => {
     if (gi > 0) container.appendChild(el('hr', 'ctrl-divider'));
 
     const block = el('div', 'ctrl-group');
@@ -410,7 +533,11 @@ export function buildControls(container, def, spec, onChange) {
         console.warn(`[ControlPanel] unknown control type "${ctrl.type}"`);
         return;
       }
-      block.appendChild(make(ctrl, spec, onChange));
+      const node = make(ctrl, spec, onChange, def);
+      // The data editor can change how many series exist, so let it ask for a
+      // full panel rebuild rather than leaving stale rows on screen.
+      node._rebuildAll = () => buildControls(container, def, spec, onChange);
+      block.appendChild(node);
     });
 
     container.appendChild(block);

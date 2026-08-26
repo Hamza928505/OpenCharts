@@ -100,9 +100,13 @@ export const distributionExtraCharts = [
         const toX = (v) => pad.l + ((v - o.min) / (o.max - o.min)) * cw;
 
         const curves = spec.groups.map((g, gi) => {
-          const rnd = makeRng((spec.seed + gi) * 2654435761);
-          const data = [];
-          for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, g.mean, g.sd));
+          // Real observations win over the generated sample when supplied.
+          let data = g.values;
+          if (!data || !data.length) {
+            const rnd = makeRng((spec.seed + gi) * 2654435761);
+            data = [];
+            for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, g.mean, g.sd));
+          }
           return { g: g, data: data, pts: kde(data, o.min, o.max, o.bandwidth, 160) };
         });
         const maxD = Math.max(...curves.flatMap((c) => c.pts.map((p) => p.d)), 1e-9);
@@ -204,9 +208,12 @@ export const distributionExtraCharts = [
         const toX = (v) => pad.l + ((v - o.min) / (o.max - o.min)) * cw;
 
         const curves = rows.map((r, ri) => {
-          const rnd = makeRng((spec.seed + ri) * 2654435761);
-          const data = [];
-          for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, r.mean, r.sd));
+          let data = r.values;
+          if (!data || !data.length) {
+            const rnd = makeRng((spec.seed + ri) * 2654435761);
+            data = [];
+            for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, r.mean, r.sd));
+          }
           return kde(data, o.min, o.max, o.bandwidth, 150);
         });
         const maxD = Math.max(...curves.flat().map((p) => p.d), 1e-9);
@@ -307,9 +314,12 @@ export const distributionExtraCharts = [
         }
 
         spec.groups.forEach((g, gi) => {
-          const rnd = makeRng((spec.seed + gi) * 2654435761);
-          const data = [];
-          for (let i = 0; i < spec.sample; i++) data.push(Math.max(0, gaussSample(rnd, g.mean, g.sd)));
+          let data = g.values ? g.values.slice() : null;
+          if (!data || !data.length) {
+            const rnd = makeRng((spec.seed + gi) * 2654435761);
+            data = [];
+            for (let i = 0; i < spec.sample; i++) data.push(Math.max(0, gaussSample(rnd, g.mean, g.sd)));
+          }
           data.sort((a, b) => a - b);
 
           // A true ECDF is a step function — draw it as one, not as a smooth line.
@@ -406,10 +416,13 @@ export const distributionExtraCharts = [
         }
 
         groups.forEach((g, gi) => {
-          const rnd = makeRng((spec.seed + gi) * 2654435761);
-          const values = [];
-          for (let i = 0; i < g.n; i++) {
-            values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, g.mean, g.sd))));
+          let values = g.values;
+          if (!values || !values.length) {
+            const rnd = makeRng((spec.seed + gi) * 2654435761);
+            values = [];
+            for (let i = 0; i < g.n; i++) {
+              values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, g.mean, g.sd))));
+            }
           }
           const cy = pad.t + rowH * gi + rowH / 2;
           const placed = swarm(values, toX, o.radius);
@@ -501,10 +514,13 @@ export const distributionExtraCharts = [
         }
 
         rows.forEach((r, ri) => {
-          const rnd = makeRng((spec.seed + ri) * 2654435761);
-          const values = [];
-          for (let i = 0; i < r.n; i++) {
-            values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, r.mean, r.sd))));
+          let values = r.values;
+          if (!values || !values.length) {
+            const rnd = makeRng((spec.seed + ri) * 2654435761);
+            values = [];
+            for (let i = 0; i < r.n; i++) {
+              values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, r.mean, r.sd))));
+            }
           }
           const cy = pad.t + rowH * ri + rowH / 2;
           const half = o.tickHeight / 2;

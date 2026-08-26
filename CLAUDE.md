@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-OpenCharts is a chart library of **96 chart types**, all reachable through one
+OpenCharts is a chart library of **97 chart types**, all reachable through one
 studio page where they can be edited live and copied as HTML, CSS and JS.
 
 - `index.html` — the gallery. Renders every chart live (lazily, via
@@ -117,6 +117,46 @@ acceptable here: the exported code must redraw the exact chart that was copied.
 The finance charts additionally use a **mean-reverting** walk — a pure random
 walk drifts to a boundary and stops reversing, which leaves Point & Figure,
 Kagi and Renko with nothing to draw.
+
+### The data editor
+
+Every chart accepts pasted CSV/TSV. Three files carry this:
+
+| File | Role |
+|---|---|
+| `dataio.js` | Sniffs the delimiter, detects a header row, and exposes `SHAPES` — one adapter per data layout (`labelSeries`, `rowSeries`, `items`, `pairs`, `observations`, `links`, `edges`, `tree`, `xyGroups`, `places`, `regions`, `ohlc`, `matrix`) |
+| `data-schemas.js` | Maps every chart id to a shape, an example, a hint, and a `toText` writer. Kept in one table rather than in the chart files so the mapping is reviewable in one place |
+| `ControlPanel.js` | The `data` widget, injected as the first control by `registry.js` |
+
+**`labelSeries` vs `rowSeries` is the distinction to get right.** `labelSeries`
+reads each *column* as a series (the usual spreadsheet layout). `rowSeries`
+reads each *row* as one — which is what sparklines, horizon bands, Likert
+scales and parallel coordinates actually want. Choosing the wrong one silently
+transposes the chart.
+
+An `onData(spec, table)` hook runs after the shape writes, for charts whose
+internal layout differs from any generic shape — the butterfly splits rows into
+two named sides, the chord rebuilds a symmetric matrix, the treemap flattens a
+tree. **A hook must read the key its shape actually wrote**, which is `key` from
+the descriptor, not `spec.series` by habit.
+
+Charts with `generated: true` get a Sample/My data switch and set `spec.dataMode`
+once real data arrives. Their renderers must check for supplied values first —
+`g.values`, `spec.bars`, `spec.regionValues` — and only fall back to the seeded
+generator. `hideGroups` then hides the now-irrelevant parameter sliders, though
+never the data editor itself.
+
+### Geo and the globe
+
+`makeProjection(name, geo, W, H, rotate)` builds all four projections; `globe`
+is `d3.geoOrthographic`. Two rules for it:
+
+- **Fit the sphere, not the features.** `fitSize` against a clipped globe
+  leaves it lopsided, so the globe path fits `{ type: 'Sphere' }`.
+- **Cull the far side.** Orthographic projects the far hemisphere onto the same
+  disc as the near one, so any *point* mark (symbols, flow endpoints, density
+  dots) must be filtered through `isVisible()` or Sydney gets drawn on top of
+  the Atlantic. Country *paths* are clipped by `clipAngle(90)` already.
 
 ### Control schema
 

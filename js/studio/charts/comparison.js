@@ -161,9 +161,10 @@ export const comparisonCharts = [
         const rnd = makeRng(spec.seed * 7919);
 
         // Deterministic random walk — the same seed always draws this chart.
+        // Pasted OHLC rows replace it entirely.
         let price = spec.start;
-        const candles = [];
-        for (let i = 0; i < spec.count; i++) {
+        const candles = spec.bars && spec.bars.length ? spec.bars : [];
+        for (let i = 0; candles.length === 0 && i < spec.count; i++) {
           const open = price;
           price = Math.max(o.floor, Math.min(o.ceiling, price + (rnd() - 0.48) * spec.volatility));
           const close = price;

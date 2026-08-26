@@ -26,8 +26,14 @@ export function renderSources(container, deps) {
 
   const head = el('div', 'sources-head');
   head.appendChild(el('span', null, 'Sources'));
-  const count = el('span', 'count',
-    cdn.length ? `${cdn.length} CDN script${cdn.length > 1 ? 's' : ''}` : 'no CDN');
+  // Count scripts and data files separately — calling a boundary file a
+  // "script" would be misleading in the one place meant to be precise.
+  const scripts = cdn.filter((d) => d.kind !== 'data').length;
+  const data = cdn.filter((d) => d.kind === 'data').length;
+  const parts = [];
+  if (scripts) parts.push(`${scripts} script${scripts > 1 ? 's' : ''}`);
+  if (data) parts.push(`${data} data file${data > 1 ? 's' : ''}`);
+  const count = el('span', 'count', parts.length ? parts.join(' + ') : 'no CDN');
   head.appendChild(count);
   container.appendChild(head);
 

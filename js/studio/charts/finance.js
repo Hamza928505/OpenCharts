@@ -26,7 +26,9 @@ function makeRng(seed) {
  * reversion keeps it oscillating, which is both more realistic and the only
  * way those three produce a meaningful picture from default settings.
  */
-function priceWalk(seed, count, start, volatility, floor, ceiling) {
+function priceWalk(seed, count, start, volatility, floor, ceiling, supplied) {
+  // Pasted OHLC rows are used verbatim; the walk is only a stand-in for them.
+  if (supplied && supplied.length) return supplied;
   const rnd = makeRng(seed * 7919);
   const out = [];
   let price = start;
@@ -77,7 +79,7 @@ export const financeCharts = [
       helpers: [makeRng, priceWalk],
       draw(ctx, spec, W, H) {
         const o = spec.opts;
-        const bars = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling);
+        const bars = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
         const vals = bars.flatMap((b) => [b.h, b.l]);
         const minV = Math.min(...vals) - 2;
         const maxV = Math.max(...vals) + 2;
@@ -153,7 +155,7 @@ export const financeCharts = [
       draw(ctx, spec, W, H) {
         const o = spec.opts;
         const size = o.brickSize;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling);
+        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
 
         // Lay a brick each time price closes a full brick beyond the last one.
         const bricks = [];
@@ -229,7 +231,7 @@ export const financeCharts = [
       draw(ctx, spec, W, H) {
         const o = spec.opts;
         const box = o.boxSize;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling);
+        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
 
         // Build columns: extend the current one, or reverse into a new one.
         const columns = [];
@@ -345,7 +347,7 @@ export const financeCharts = [
       helpers: [makeRng, priceWalk],
       draw(ctx, spec, W, H) {
         const o = spec.opts;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling);
+        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
 
         // Turning points: extend while moving with the trend, pivot on a
         // reversal larger than the threshold.

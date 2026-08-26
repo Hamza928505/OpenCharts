@@ -85,16 +85,20 @@ export const distributionCharts = [
     chartjs: {
       build(spec) {
         const rnd = makeRng(spec.seed * 7919);
+        // Pasted observations replace the generated sample.
+        const supplied = (spec.groups && spec.groups[0] && spec.groups[0].values) || null;
         const width = (spec.max - spec.min) / spec.bins;
         const bins = Array.from({ length: spec.bins }, (_, i) => ({
           label: `${Math.round(spec.min + i * width)}–${Math.round(spec.min + (i + 1) * width)}`,
           count: 0,
         }));
-        for (let i = 0; i < spec.sample; i++) {
-          const v = Math.round(gaussSample(rnd, spec.mean, spec.sd));
-          if (v < spec.min || v > spec.max) continue;
+        const feed = supplied || Array.from({ length: spec.sample },
+          () => Math.round(gaussSample(rnd, spec.mean, spec.sd)));
+        feed.forEach((raw) => {
+          const v = Math.round(raw);
+          if (v < spec.min || v > spec.max) return;
           bins[Math.min(Math.floor((v - spec.min) / width), spec.bins - 1)].count++;
-        }
+        });
         return {
           type: 'bar',
           data: {
@@ -166,9 +170,12 @@ export const distributionCharts = [
           data: {
             labels: spec.groups.map((g) => g.label),
             datasets: spec.groups.map((g, gi) => {
+              // Real observations win over the generated sample when supplied.
               const rnd = makeRng((spec.seed + gi) * 2654435761);
-              const values = Array.from({ length: spec.sample }, () =>
-                Math.max(5, Math.round(gaussSample(rnd, g.mean, g.sd))));
+              const values = (g.values && g.values.length)
+                ? g.values
+                : Array.from({ length: spec.sample }, () =>
+                  Math.max(5, Math.round(gaussSample(rnd, g.mean, g.sd))));
               return {
                 label: g.label,
                 // The boxplot controller takes one array of raw values per slot.
@@ -254,10 +261,14 @@ export const distributionCharts = [
         }
 
         spec.groups.forEach((g, gi) => {
-          const rnd = makeRng((spec.seed + gi) * 2654435761);
-          const data = [];
-          for (let i = 0; i < spec.sample; i++) {
-            data.push(Math.max(o.min + 0.2, gaussSample(rnd, g.mean, g.sd)));
+          // Real observations win over the generated sample when supplied.
+          let data = g.values;
+          if (!data || !data.length) {
+            const rnd = makeRng((spec.seed + gi) * 2654435761);
+            data = [];
+            for (let i = 0; i < spec.sample; i++) {
+              data.push(Math.max(o.min + 0.2, gaussSample(rnd, g.mean, g.sd)));
+            }
           }
 
           const cx = pad.l + colW * gi + colW / 2;

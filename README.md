@@ -4,7 +4,7 @@
 [![Charts](https://img.shields.io/badge/charts-96-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
-A library of **96 chart types**. Every one opens in a studio where the data,
+A library of **97 chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
@@ -39,6 +39,22 @@ Each chart emits four views:
 - **Standalone** — a complete `<!DOCTYPE html>` page with all three inlined and
   the CDN script tags already in place. Download it and it runs.
 
+## Using your own data
+
+Every chart takes real data. The first control in the studio is a paste box
+that accepts CSV or TSV — copy a range straight out of Excel, Sheets or a
+`.csv` and press **Use this data**. The delimiter is detected, a header row is
+detected, and formatted numbers (`1,234`, `$99`, `42%`) are read correctly.
+
+The columns each chart wants are described under the box, and **Example** fills
+it with correctly-shaped rows you can edit. Structured charts take the same
+treatment: flows want `from,to,value`, networks want `source,target`, and
+hierarchies want a `Parent > Child > Leaf` path per row.
+
+Charts whose sample data is simulated — the distributions, the finance charts,
+the maps — get a **Sample data / My data** switch. Sample mode keeps the
+parameter sliders for exploring; My data replaces them with your observations.
+
 ## Knowing what you are loading
 
 Nothing here loads a library behind your back.
@@ -71,7 +87,7 @@ Charts are built on whichever engine suits them; the badge on each tile says whi
 |---|---|---|
 | Chart.js | 39 | Plus the sankey, matrix, treemap and boxplot plugins |
 | Canvas 2D | 36 | Hand-drawn, no charting library at all |
-| D3 | 15 | SVG output, including all the maps |
+| D3 | 16 | SVG output, including all the maps and the globe |
 | OpenCharts | 5 | The dependency-free engine in `js/core` + `js/charts` |
 | DOM / CSS | 1 | The waffle chart is just styled divs |
 

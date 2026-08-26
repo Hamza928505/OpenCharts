@@ -665,6 +665,31 @@ input[type="range"]::-moz-range-thumb {
 .series-del { background: none; border: 0; color: var(--ink-faint); cursor: pointer; padding: .1rem .2rem; border-radius: var(--r-xs); line-height: 1; }
 .series-del:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 
+/* data editor */
+.data-paste {
+  font-size: 11.5px;
+  line-height: 1.55;
+  min-height: 96px;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 8;
+}
+.data-note {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+  margin: 0;
+}
+.data-status {
+  font-size: 11.5px;
+  min-height: 1.1em;
+  line-height: 1.4;
+}
+.data-status.ok  { color: var(--ok); }
+.data-status.bad { color: var(--bad); }
+
 /* palette strip */
 .palette { display: flex; gap: .3rem; flex-wrap: wrap; }
 .palette-dot {

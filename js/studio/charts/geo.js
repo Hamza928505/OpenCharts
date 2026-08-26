@@ -36,8 +36,23 @@ function loadTopology(url) {
   return window.__ocTopoCache[url];
 }
 
-/** A deterministic pseudo-value per country, so the maps have something to show. */
-function valueFor(name, seed) {
+/**
+ * The value for one region.
+ *
+ * A pasted lookup wins outright. Falling back to a hash of the name keeps the
+ * sample map deterministic without shipping a table of made-up figures.
+ * Matching is case- and punctuation-insensitive because nobody should have to
+ * guess whether Natural Earth writes "United States" or "United States of
+ * America".
+ */
+function valueFor(name, seed, lookup) {
+  if (lookup) {
+    const key = String(name).toLowerCase().replace(/[^a-z]/g, '');
+    for (const k in lookup) {
+      if (String(k).toLowerCase().replace(/[^a-z]/g, '') === key) return lookup[k];
+    }
+    return null;
+  }
   let h = seed >>> 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return (h % 1000) / 10;
@@ -57,11 +72,78 @@ const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m
 const projectionControl = {
   group: 'Projection', type: 'seg', key: 'opts.projection', label: 'Projection',
   options: [
-    { value: 'naturalEarth', label: 'Natural Earth' },
-    { value: 'equalEarth', label: 'Equal Earth' },
+    { value: 'naturalEarth', label: 'Flat' },
+    { value: 'equalEarth', label: 'Equal area' },
     { value: 'mercator', label: 'Mercator' },
+    { value: 'globe', label: '3D globe' },
   ],
 };
+
+/**
+ * Every projection the geo charts offer, including the orthographic globe.
+ *
+ * Orthographic is what a sphere actually looks like from far away, so it reads
+ * as three-dimensional without any of the distortion an extruded 3D map
+ * introduces — no occlusion, and area comparisons stay honest.
+ */
+const PROJECTIONS = {
+  naturalEarth: () => d3.geoNaturalEarth1(),
+  equalEarth: () => d3.geoEqualEarth(),
+  mercator: () => d3.geoMercator(),
+  globe: () => d3.geoOrthographic().clipAngle(90),
+};
+
+/**
+ * Is a lon/lat on the near side of the globe?
+ *
+ * Orthographic projects the far hemisphere onto the same disc as the near one,
+ * so without this test Sydney would be drawn on top of the Atlantic. Any
+ * projection that is not a globe shows everything.
+ */
+function isVisible(projection, lonLat, name) {
+  if (name !== 'globe') return true;
+  const r = projection.rotate();
+  // The centre of the visible hemisphere is the inverse of the rotation.
+  const centre = [-r[0], -r[1]];
+  return d3.geoDistance(lonLat, centre) < Math.PI / 2;
+}
+
+/** Build the projection a spec asks for, fitted to the frame. */
+function makeProjection(name, geo, W, H, rotate) {
+  const projection = (PROJECTIONS[name] || PROJECTIONS.naturalEarth)();
+  if (name === 'globe') {
+    if (rotate) projection.rotate(rotate);
+    // fitSize on a clipped globe leaves it lopsided; fit the sphere instead.
+    projection.fitSize([W, H], { type: 'Sphere' });
+  } else {
+    projection.fitSize([W, H], geo);
+  }
+  return projection;
+}
+
+/**
+ * Give a globe drag-to-rotate. Returns nothing; the caller re-renders.
+ * Kept separate so it can be serialised into the exported code intact.
+ */
+function attachGlobeDrag(svg, spec, redraw) {
+  let last = null;
+  const onDown = (e) => { last = [e.clientX, e.clientY]; e.preventDefault(); };
+  const onMove = (e) => {
+    if (!last) return;
+    const dx = e.clientX - last[0];
+    const dy = e.clientY - last[1];
+    last = [e.clientX, e.clientY];
+    const r = spec.opts.rotate || [0, -15, 0];
+    // Vertical drag is clamped so the globe cannot tumble past the poles.
+    spec.opts.rotate = [r[0] + dx * 0.4, Math.max(-90, Math.min(90, r[1] - dy * 0.4)), r[2]];
+    redraw();
+  };
+  const onUp = () => { last = null; };
+  svg.style.cursor = 'grab';
+  svg.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
 
 export const geoCharts = [
   {
@@ -74,7 +156,7 @@ export const geoCharts = [
       seed: 21,
       lowColor: '#EDE9FB',
       highColor: C.purple,
-      opts: { projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
+      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
     },
     controls: [
       projectionControl,
@@ -90,7 +172,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -98,18 +180,15 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projections = {
-            naturalEarth: d3.geoNaturalEarth1,
-            equalEarth: d3.geoEqualEarth,
-            mercator: d3.geoMercator,
-          };
-          const projection = (projections[o.projection] || d3.geoNaturalEarth1)()
-            .fitSize([W, H - (o.showLegend ? 30 : 0)], geo);
+          const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate);
           const path = d3.geoPath(projection);
 
           // Quantise a continuous scale so the key reads as discrete bands.
+          const domain = spec.regionValues && Object.keys(spec.regionValues).length
+            ? d3.extent(Object.values(spec.regionValues))
+            : [0, 100];
           const colour = d3.scaleQuantize()
-            .domain([0, 100])
+            .domain(domain[0] === domain[1] ? [domain[0], domain[0] + 1] : domain)
             .range(d3.quantize(d3.interpolateRgb(spec.lowColor, spec.highColor), o.steps));
 
           if (o.showGraticule) {
@@ -124,13 +203,16 @@ export const geoCharts = [
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
             .attr('fill', (d) => {
-              const v = valueFor(d.properties.name || String(d.id), spec.seed);
+              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
               return v == null ? o.noDataColor : colour(v);
             })
             .attr('stroke', '#ffffff')
             .attr('stroke-width', o.strokeWidth)
             .append('title')
-            .text((d) => `${d.properties.name}: ${valueFor(d.properties.name || String(d.id), spec.seed).toFixed(1)}${o.suffix}`);
+            .text((d) => {
+              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
+            });
 
           if (o.showLegend) {
             const swatch = 26;
@@ -144,13 +226,135 @@ export const geoCharts = [
                 .attr('font-size', 9)
                 .attr('font-family', '"DM Sans", system-ui, sans-serif')
                 .attr('fill', 'currentColor')
-                .text(Math.round((100 / o.steps) * i));
+                .text(Math.round(domain[0] + ((domain[1] - domain[0]) / o.steps) * i));
             });
           }
         }).catch((err) => geoMessage(host, err.message));
       },
     },
     legend: () => null,
+  },
+
+  {
+    id: 'globe',
+    title: 'Globe',
+    category: 'Geo',
+    blurb: 'The world as a sphere, shaded by value. Drag to spin it. Honest 3D — no extrusion, no occlusion, no distorted areas.',
+    tags: ['globe', '3d', 'orthographic', 'sphere', 'world', 'rotate', 'earth', 'map'],
+    spec: {
+      seed: 21,
+      lowColor: '#E7F1EC',
+      highColor: '#16916A',
+      opts: {
+        projection: 'globe',
+        rotate: [-10, -12, 0],
+        steps: 6,
+        strokeWidth: 0.4,
+        showGraticule: true,
+        showOcean: true,
+        oceanColor: '#DCE9F2',
+        showHalo: true,
+        noDataColor: '#E6E3DA',
+        suffix: '%',
+      },
+    },
+    controls: [
+      { group: 'Rotation', type: 'slider', key: 'opts.rotate.0', label: 'Spin (longitude)', min: -180, max: 180, step: 5, format: (v) => v + '°' },
+      { group: 'Rotation', type: 'slider', key: 'opts.rotate.1', label: 'Tilt (latitude)', min: -90, max: 90, step: 5, format: (v) => v + '°' },
+      { group: 'Sample',   type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
+      { group: 'Colour', type: 'colors', key: 'scaleColors', label: 'Low / high', names: () => ['Low', 'High'] },
+      { group: 'Colour', type: 'slider', key: 'opts.steps', label: 'Colour steps', min: 3, max: 9, step: 1 },
+      { group: 'Style',  type: 'toggle', key: 'opts.showOcean', label: 'Fill the ocean' },
+      { group: 'Style',  type: 'toggle', key: 'opts.showGraticule', label: 'Show graticule' },
+      { group: 'Style',  type: 'toggle', key: 'opts.showHalo', label: 'Atmospheric halo' },
+      { group: 'Style',  type: 'slider', key: 'opts.strokeWidth', label: 'Border width', min: 0, max: 2, step: 0.1, format: (v) => v.toFixed(1) + 'px' },
+    ],
+    onInit(spec) { spec.scaleColors = [spec.lowColor, spec.highColor]; },
+    onChange(spec) { [spec.lowColor, spec.highColor] = spec.scaleColors; },
+    d3: {
+      height: 460,
+      libraries: ['topojson', 'worldAtlas'],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection, attachGlobeDrag],
+      mount(host, spec, W, H) {
+        const o = spec.opts;
+        const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
+        const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+
+        loadTopology(url).then((topo) => {
+          const geo = topojson.feature(topo, topo.objects.countries);
+
+          const draw = () => {
+            svg.selectAll('*').remove();
+            const projection = makeProjection('globe', geo, W, H, o.rotate);
+            const path = d3.geoPath(projection);
+
+            const domain = spec.regionValues && Object.keys(spec.regionValues).length
+              ? d3.extent(Object.values(spec.regionValues))
+              : [0, 100];
+            const colour = d3.scaleQuantize()
+              .domain(domain[0] === domain[1] ? [domain[0], domain[0] + 1] : domain)
+              .range(d3.quantize(d3.interpolateRgb(spec.lowColor, spec.highColor), o.steps));
+
+            if (o.showHalo) {
+              // A soft rim outside the sphere reads as atmosphere.
+              const id = 'globe-halo';
+              const grad = svg.append('defs').append('radialGradient').attr('id', id);
+              grad.append('stop').attr('offset', '82%').attr('stop-color', o.oceanColor).attr('stop-opacity', 0);
+              grad.append('stop').attr('offset', '100%').attr('stop-color', o.oceanColor).attr('stop-opacity', 0.75);
+              svg.append('circle')
+                .attr('cx', W / 2).attr('cy', H / 2)
+                .attr('r', Math.min(W, H) / 2)
+                .attr('fill', 'url(#' + id + ')');
+            }
+
+            if (o.showOcean) {
+              svg.append('path')
+                .datum({ type: 'Sphere' })
+                .attr('d', path)
+                .attr('fill', o.oceanColor);
+            }
+
+            if (o.showGraticule) {
+              svg.append('path')
+                .datum(d3.geoGraticule10())
+                .attr('d', path)
+                .attr('fill', 'none')
+                .attr('stroke', 'currentColor')
+                .attr('stroke-opacity', 0.16);
+            }
+
+            svg.append('g').selectAll('path').data(geo.features).join('path')
+              .attr('d', path)
+              .attr('fill', (d) => {
+                const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+                return v == null ? o.noDataColor : colour(v);
+              })
+              .attr('stroke', '#ffffff')
+              .attr('stroke-width', o.strokeWidth)
+              .append('title')
+              .text((d) => {
+                const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+                return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
+              });
+
+            // The sphere outline sits on top so the edge stays crisp.
+            svg.append('path')
+              .datum({ type: 'Sphere' })
+              .attr('d', path)
+              .attr('fill', 'none')
+              .attr('stroke', 'currentColor')
+              .attr('stroke-opacity', 0.25);
+          };
+
+          draw();
+          attachGlobeDrag(svg.node(), spec, draw);
+        }).catch((err) => geoMessage(host, err.message));
+      },
+    },
+    legend: (spec) => [
+      { label: 'Low', color: spec.lowColor, toggleable: false },
+      { label: 'High', color: spec.highColor, toggleable: false },
+    ],
   },
 
   {
@@ -175,7 +379,7 @@ export const geoCharts = [
         { name: 'Sydney',       lon: 151.2, lat: -33.9, value: 5 },
       ],
       color: C.coral,
-      opts: { projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
+      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
     },
     controls: [
       projectionControl,
@@ -189,7 +393,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage],
+      helpers: [loadTopology, geoMessage, makeProjection, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -197,12 +401,7 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projections = {
-            naturalEarth: d3.geoNaturalEarth1,
-            equalEarth: d3.geoEqualEarth,
-            mercator: d3.geoMercator,
-          };
-          const projection = (projections[o.projection] || d3.geoNaturalEarth1)().fitSize([W, H], geo);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
@@ -218,7 +417,7 @@ export const geoCharts = [
 
           const pts = spec.places
             .map((p) => ({ ...p, xy: projection([p.lon, p.lat]) }))
-            .filter((p) => p.xy)
+            .filter((p) => p.xy && isVisible(projection, [p.lon, p.lat], o.projection))
             .sort((a, b) => b.value - a.value);
 
           const g = svg.append('g').selectAll('g').data(pts).join('g')
@@ -256,7 +455,7 @@ export const geoCharts = [
     spec: {
       seed: 17,
       color: C.teal,
-      opts: { projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
+      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
     },
     controls: [
       projectionControl,
@@ -271,7 +470,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [makeRng, loadTopology, valueFor, geoMessage],
+      helpers: [makeRng, loadTopology, valueFor, geoMessage, makeProjection, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -279,12 +478,7 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projections = {
-            naturalEarth: d3.geoNaturalEarth1,
-            equalEarth: d3.geoEqualEarth,
-            mercator: d3.geoMercator,
-          };
-          const projection = (projections[o.projection] || d3.geoNaturalEarth1)().fitSize([W, H], geo);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
@@ -299,7 +493,8 @@ export const geoCharts = [
           const dots = [];
           geo.features.forEach((f) => {
             const name = f.properties.name || String(f.id);
-            const share = valueFor(name, spec.seed) / 100;
+            const raw = valueFor(name, spec.seed, spec.regionValues);
+            const share = Math.max(0, (raw == null ? 0 : raw)) / 100;
             const want = Math.round(o.dotsPerRegion * share);
             if (want < 1) return;
             const b = d3.geoBounds(f);
@@ -309,7 +504,7 @@ export const geoCharts = [
               const lat = b[0][1] + rnd() * (b[1][1] - b[0][1]);
               if (!d3.geoContains(f, [lon, lat])) continue;
               const xy = projection([lon, lat]);
-              if (!xy) continue;
+              if (!xy || !isVisible(projection, [lon, lat], o.projection)) continue;
               dots.push(xy);
               placed++;
             }
@@ -348,7 +543,7 @@ export const geoCharts = [
       ],
       color: C.purple,
       hubColor: C.coral,
-      opts: { projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
+      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
     },
     controls: [
       projectionControl,
@@ -363,7 +558,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage],
+      helpers: [loadTopology, geoMessage, makeProjection, isVisible],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -371,12 +566,7 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projections = {
-            naturalEarth: d3.geoNaturalEarth1,
-            equalEarth: d3.geoEqualEarth,
-            mercator: d3.geoMercator,
-          };
-          const projection = (projections[o.projection] || d3.geoNaturalEarth1)().fitSize([W, H], geo);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
@@ -390,9 +580,10 @@ export const geoCharts = [
           const maxV = Math.max(...spec.routes.map((r) => r.value), 1);
           const alphaHex = Math.round(o.alpha * 255).toString(16).padStart(2, '0');
 
+          const hubVisible = isVisible(projection, [spec.hub.lon, spec.hub.lat], o.projection);
           const targets = spec.routes
             .map((r) => ({ ...r, xy: projection([r.lon, r.lat]) }))
-            .filter((r) => r.xy)
+            .filter((r) => r.xy && isVisible(projection, [r.lon, r.lat], o.projection))
             .sort((a, b) => b.value - a.value);
 
           // A quadratic arc bowed perpendicular to the great-circle chord.
@@ -427,10 +618,12 @@ export const geoCharts = [
               .text((d) => d.name);
           }
 
-          svg.append('circle')
-            .attr('cx', hub[0]).attr('cy', hub[1]).attr('r', o.dotRadius + 2.5)
-            .attr('fill', spec.hubColor)
-            .attr('stroke', '#ffffff').attr('stroke-width', 1.5);
+          if (hubVisible) {
+            svg.append('circle')
+              .attr('cx', hub[0]).attr('cy', hub[1]).attr('r', o.dotRadius + 2.5)
+              .attr('fill', spec.hubColor)
+              .attr('stroke', '#ffffff').attr('stroke-width', 1.5);
+          }
         }).catch((err) => geoMessage(host, err.message));
       },
     },
@@ -569,7 +762,7 @@ export const geoCharts = [
     spec: {
       seed: 33,
       color: C.purple,
-      opts: { projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
+      opts: { rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
     },
     controls: [
       projectionControl,
@@ -584,7 +777,7 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage],
+      helpers: [loadTopology, valueFor, geoMessage, makeProjection],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -592,12 +785,7 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const projections = {
-            naturalEarth: d3.geoNaturalEarth1,
-            equalEarth: d3.geoEqualEarth,
-            mercator: d3.geoMercator,
-          };
-          const projection = (projections[o.projection] || d3.geoNaturalEarth1)().fitSize([W, H], geo);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate);
           const path = d3.geoPath(projection);
 
           if (o.ghost) {
@@ -616,7 +804,8 @@ export const geoCharts = [
             .attr('transform', (d) => {
               const c = path.centroid(d);
               if (!c || Number.isNaN(c[0])) return null;
-              const v = valueFor(d.properties.name || String(d.id), spec.seed) / 100;
+              const raw = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              const v = Math.max(0, (raw == null ? 0 : raw)) / 100;
               const k = o.minScale + Math.sqrt(v) * (1 - o.minScale);
               return `translate(${c[0]},${c[1]}) scale(${k.toFixed(3)}) translate(${-c[0]},${-c[1]})`;
             })
@@ -624,7 +813,10 @@ export const geoCharts = [
             .attr('stroke', '#ffffff')
             .attr('stroke-width', o.strokeWidth)
             .append('title')
-            .text((d) => `${d.properties.name}: ${valueFor(d.properties.name || String(d.id), spec.seed).toFixed(1)}`);
+            .text((d) => {
+              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1));
+            });
         }).catch((err) => geoMessage(host, err.message));
       },
     },
