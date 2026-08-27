@@ -164,14 +164,10 @@ function parseXml(text, what) {
   if (/<!DOCTYPE/i.test(text.slice(0, 2048))) {
     throw new Error(`that .xlsx has a DOCTYPE in its ${what}, which a spreadsheet should not`);
   }
-  const escaped = text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-  const doc = new DOMParser().parseFromString(escaped, 'application/xml');
-  if (doc.querySelector('parsererror')) throw new Error(`that .xlsx has unreadable ${what}`);
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror') || !doc.documentElement) {
+    throw new Error(`that .xlsx has unreadable ${what}`);
+  }
   return doc;
 }
 
