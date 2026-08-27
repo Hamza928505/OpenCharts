@@ -165,7 +165,9 @@ function parseXml(text, what) {
     throw new Error(`that .xlsx has a DOCTYPE in its ${what}, which a spreadsheet should not`);
   }
   const doc = new DOMParser().parseFromString(text, 'application/xml');
-  if (doc.querySelector('parsererror')) throw new Error(`that .xlsx has unreadable ${what}`);
+  if (doc.querySelector('parsererror') || !doc.documentElement) {
+    throw new Error(`that .xlsx has unreadable ${what}`);
+  }
   return doc;
 }
 
