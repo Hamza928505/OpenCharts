@@ -26,6 +26,25 @@ function inkColor(color, alpha) {
   return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
+const JS_UNSAFE_CHAR_MAP = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+
+function escapeUnsafeJsChars(str) {
+  return String(str).replace(/[<>\/\\\b\f\n\r\t\0\u2028\u2029]/g, (x) => JS_UNSAFE_CHAR_MAP[x]);
+}
+
 export const flowCharts = [
   {
     id: 'sankey',
@@ -59,7 +78,7 @@ export const flowCharts = [
       build(spec) {
         const lookup = {};
         spec.nodes.forEach((n, i) => { lookup[n] = spec.colors[i % spec.colors.length]; });
-        const json = JSON.stringify(lookup);
+        const json = escapeUnsafeJsChars(JSON.stringify(lookup));
         return {
           type: 'sankey',
           data: {
