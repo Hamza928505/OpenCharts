@@ -335,7 +335,7 @@ export function src(value, indent = 2) {
     if (flat && body.join(', ').length < 72) return `{ ${body.join(', ')} }`;
     return '{\n' + body.map((b) => pad + '  ' + b).join(',\n') + '\n' + pad + '}';
   }
-  return typeof value === 'string' ? `'${value.replace(/'/g, "\\'")}'` : String(value);
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 if (process.argv[1] && process.argv[1].endsWith('bake-data.mjs')) {
