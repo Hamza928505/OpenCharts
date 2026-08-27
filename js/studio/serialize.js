@@ -176,7 +176,7 @@ export function indent(block, spaces) {
 export function tidy(src) {
   return String(src)
     .split('\n')
-    .map((l) => l.replace(/\s+$/, ''))
+    .map((l) => l.trimEnd())
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim() + '\n';

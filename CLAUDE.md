@@ -377,6 +377,31 @@ are fine only because nothing site-wide claims them; check before adding one.
 The suite measures both symptoms — header alignment, and that a chip is one
 line tall — because neither throws.
 
+### Cities in the sidebar
+
+`type: 'cities'` puts the focused country's own city list under the country
+control — search, tick, and the mark is on the map. Picking places used to mean
+opening the data editor, finding the right tab and choosing a country a second
+time; the map already knew which country, so the list belongs where the choice
+was made. Three charts carry it: `city-map` and `proportional-symbol-map`
+(`key: 'places'`) and `flow-map` (`key: 'routes'`).
+
+Three rules it follows:
+
+- **A ticked city keeps the value it already had.** New ones arrive at `1`,
+  which is what a blank fourth column parses to anyway. Inventing a plausible
+  number would put figures on the map that are nobody's — the same rule as
+  "no chart generates its own data".
+- **The list only removes what it is showing.** A place typed by hand, or one
+  the gazetteer spells differently (`Russeifa`, `Maan`), is not this list's to
+  delete — the same set-membership rule the pickers in the dialog use.
+- **`Add every city` asks first above 400.** The US has 12,348. It will draw,
+  and it will be unreadable, so the number is said out loud before it happens.
+
+`CheckList` is reused as-is, including its 300-row visible cap. Note that its
+`Select all` means *all shown*, so it cannot silently select twelve thousand;
+`Add every city` is the deliberate way to do that.
+
 ### Country focus and the place pickers
 
 `findCountry()` resolves a name against the topology — case- and
@@ -458,8 +483,16 @@ is `d3.geoOrthographic`. Two rules for it:
 `js/studio/ControlPanel.js` renders widgets from `controls: []`. Each entry has
 a `group` (heading), a `type`, and a dot-path `key` into the spec. Types:
 `series`, `colors`, `values`, `labels`, `toggle`, `seg`, `slider`, `select`,
-`text`, `country`, `color`. Consecutive entries sharing a `group` are drawn under one numbered
-heading.
+`text`, `countries`, `cities`, `color`. Consecutive entries sharing a `group`
+are drawn under one numbered heading.
+
+**Two widgets, one subject.** `countries` and `cities` are siblings: the map is
+focused on a country, and that country's cities are what the `cities` list
+offers. They talk through a document event (`oc:countries`) because only the
+panel knows they are siblings — and the listener is registered against an
+`AbortController` that `buildControls` replaces on every rebuild, so a panel's
+listeners die with the panel. Without that, a map's city list would rebuild
+itself over whatever chart you opened next; the suite checks exactly that.
 
 ### Studio modules (`js/studio/`)
 
@@ -474,7 +507,7 @@ heading.
 | `DataGrid.js` | The editable table, with per-cell validation |
 | `DataMatch.js` | "I have this table — what draws it?" and the handoff to the studio |
 | `Combobox.js` | Searchable dropdown — one choice |
-| `CheckList.js` | Searchable list — many choices, for the place pickers |
+| `CheckList.js` | Searchable list — many choices, for the place pickers and the sidebar city list |
 | `geodata.js` | Loads `data/countries.json` and `data/cities/<ISO2>.json` |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
 | `CodePanel.js` | HTML/CSS/JS/Standalone tabs, copy, download |

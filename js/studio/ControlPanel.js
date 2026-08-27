@@ -15,7 +15,29 @@ import { ask } from './confirm.js';
 import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
 import { createCombobox } from './Combobox.js';
-import { loadCountries, countryItems, findCountryEntry } from './geodata.js';
+import { createCheckList } from './CheckList.js';
+import { loadCountries, loadCities, countryItems, findCountryEntry } from './geodata.js';
+
+/* ── panel-scoped events ─────────────────────────────────────────────────── */
+
+/**
+ * Widgets that need to hear about each other.
+ *
+ * The country control and the city list are two widgets with one subject
+ * between them, and only the panel knows they are siblings. Listeners are tied
+ * to an AbortController that `buildControls` replaces on every rebuild, so a
+ * panel's listeners die with the panel — the same discipline the geo charts
+ * learned when five maps leaked a pair of window listeners per redraw.
+ */
+const COUNTRY_EVENT = 'oc:countries';
+let panelScope = null;
+
+function onPanelEvent(name, fn) {
+  if (!panelScope) return;
+  document.addEventListener(name, fn, { signal: panelScope.signal });
+}
+
+const emitPanelEvent = (name) => document.dispatchEvent(new CustomEvent(name));
 
 /* ── spec path access ────────────────────────────────────────────────────── */
 
@@ -590,6 +612,7 @@ function widgetCountries(ctrl, spec, notify) {
         setPath(spec, ctrl.key, [...list, value]);
         paint();
         notify();
+        emitPanelEvent(COUNTRY_EVENT);
       }
       // Clear the box so the next one can be typed straight away.
       box.setValue('');
@@ -616,6 +639,7 @@ function widgetCountries(ctrl, spec, notify) {
         setPath(spec, ctrl.key, next);
         paint();
         notify();
+        emitPanelEvent(COUNTRY_EVENT);
       });
       chip.appendChild(x);
       chips.appendChild(chip);
@@ -646,6 +670,135 @@ function widgetCountries(ctrl, spec, notify) {
   return wrap;
 }
 
+/* ── cities ──────────────────────────────────────────────────────────────── */
+
+/**
+ * The country's own cities, ticked straight onto the map.
+ *
+ * Picking places used to mean opening the data editor, finding the right tab,
+ * choosing a country a second time and coming back. But a map is already
+ * focused on a country, and that country already knows its cities — so the
+ * list belongs under the country control, where the choice was made.
+ *
+ * A ticked city keeps whatever value it already had. New ones arrive at 1,
+ * which is what a blank fourth column parses to anyway; inventing a plausible
+ * number instead would put figures on the map that are nobody's.
+ */
+function widgetCities(ctrl, spec, notify) {
+  const key = ctrl.key || 'places';
+  const from = ctrl.from || 'opts.countries';
+  const valueField = ctrl.valueField || 'value';
+  const BULK_CONFIRM = 400;
+
+  const wrap = field(ctrl.label || 'Cities');
+  const note = el('p', 'cities-note', 'Loading…');
+  wrap.appendChild(note);
+
+  const list = createCheckList({
+    placeholder: 'Search cities…',
+    emptyText: 'Choose a country above and its cities appear here.',
+    onChange: (picked) => apply(picked),
+  });
+  wrap.appendChild(list.el);
+
+  const actions = el('div', 'cities-actions');
+  const allBtn = el('button', 'btn btn-sm', 'Add every city');
+  allBtn.type = 'button';
+  allBtn.disabled = true;
+  actions.appendChild(allBtn);
+  wrap.appendChild(actions);
+
+  /** Every city of the focused countries, by name. Empty until they load. */
+  let universe = new Map();
+  let countryNames = [];
+
+  const places = () => getPath(spec, key) || [];
+
+  function apply(picked) {
+    const chosen = new Set(picked);
+    const existing = new Map(places().map((p) => [String(p.name), p]));
+
+    // Places the reader typed themselves, or that came from another country,
+    // are not this list's to remove — only the ones it is showing.
+    const kept = places().filter((p) => !universe.has(String(p.name)));
+    const added = picked.map((name) => {
+      const had = existing.get(name);
+      if (had) return had;
+      const city = universe.get(name);
+      return { name, lon: city.lon, lat: city.lat, [valueField]: 1 };
+    });
+
+    setPath(spec, key, kept.concat(added));
+    paintNote(chosen.size);
+    notify();
+  }
+
+  function paintNote(n) {
+    if (!universe.size) return;
+    const where = countryNames.length === 1 ? ` in ${countryNames[0]}`
+      : countryNames.length ? ` across ${countryNames.length} countries` : '';
+    note.textContent = `${n} of ${universe.size.toLocaleString()} cities${where} are on the map.`
+      + (n ? ' Values live in the data editor.' : '');
+  }
+
+  allBtn.addEventListener('click', async () => {
+    const names = [...universe.keys()];
+    if (names.length > BULK_CONFIRM) {
+      const yes = await ask({
+        title: `Add all ${names.length.toLocaleString()} cities?`,
+        text: `That is a lot of marks for one map, and every one of them starts at the `
+          + `same value. It will draw, but it may be slow and hard to read.`,
+        tone: 'warn',
+        confirm: 'Add them all',
+        cancel: 'Never mind',
+      });
+      if (!yes) return;
+    }
+    list.setSelected(names);
+    apply(names);
+  });
+
+  /* ── load ─────────────────────────────────────────────────────────────── */
+
+  loadCountries().then(async (all) => {
+    const wanted = [].concat(getPath(spec, from) || []).filter(Boolean);
+    const entries = wanted.map((n) => findCountryEntry(all, n)).filter((c) => c && c.iso2);
+    countryNames = entries.map((c) => c.name);
+
+    if (!entries.length) {
+      note.textContent = 'Focus on a country above, and its cities are listed here to tick.';
+      return;
+    }
+
+    const lists = await Promise.all(entries.map((c) => loadCities(c.iso2)));
+    universe = new Map();
+    lists.forEach((cities, i) => cities.forEach((c) => {
+      // Two countries can share a city name; the first one focused wins, which
+      // is the same rule the map itself uses for overlapping marks.
+      if (!universe.has(c.name)) universe.set(c.name, { ...c, country: entries[i].name });
+    }));
+
+    list.setItems([...universe.values()].map((c) => ({
+      value: c.name,
+      label: c.name,
+      note: entries.length > 1 ? c.country : '',
+    })), true);
+
+    const on = places().map((p) => String(p.name)).filter((n) => universe.has(n));
+    list.setSelected(on);
+    allBtn.disabled = !universe.size;
+    paintNote(on.length);
+  }).catch(() => {
+    note.textContent = 'The city list could not be loaded. The data editor still works.';
+  });
+
+  // The country control is a separate widget, so the list has to be told when
+  // the focus changes rather than noticing on its own.
+  onPanelEvent(COUNTRY_EVENT, () => wrap._rebuildAll && wrap._rebuildAll());
+
+  return wrap;
+}
+
 const WIDGETS = {
   data:    widgetData,
   toggle:  widgetToggle,
@@ -654,6 +807,7 @@ const WIDGETS = {
   select:  widgetSelect,
   text:    widgetText,
   countries: widgetCountries,
+  cities:  widgetCities,
   labels:  widgetLabels,
   series:  widgetSeries,
   color:   widgetColor,
@@ -672,6 +826,10 @@ const WIDGETS = {
  * @param {Function} onChange  called after any edit
  */
 export function buildControls(container, def, spec, onChange) {
+  // Anything the previous panel was listening for goes with it.
+  if (panelScope) panelScope.abort();
+  panelScope = new AbortController();
+
   container.innerHTML = '';
   const controls = def.controls || [];
 

@@ -1207,13 +1207,17 @@ const pickers = await page.evaluate(async () => {
     return label;
   };
 
-  /* Tick a named row in a CheckList. */
+  /* Tick a named row in the *dialog's* CheckList.
+   *
+   * Scoped to `.dlg` deliberately: the map sidebar now carries a CheckList of
+   * its own, so a bare `.clist-row` query reaches the wrong list and ticks a
+   * city into the chart instead of into the dialog. */
   const tick = async (name) => {
-    const search = document.querySelector('.clist-search');
+    const search = document.querySelector('.dlg .clist-search');
     search.value = name;
     search.dispatchEvent(new Event('input', { bubbles: true }));
     await sleep(120);
-    const row = [...document.querySelectorAll('.clist-row')]
+    const row = [...document.querySelectorAll('.dlg .clist-row')]
       .find((r) => r.querySelector('.clist-label').textContent === name);
     if (!row) return false;
     const cb = row.querySelector('.clist-check');
@@ -1257,7 +1261,7 @@ const pickers = await page.evaluate(async () => {
   // already listed — nobody should have to say which country twice.
   const prefilled = document.querySelector('.pick-country .cbx-input').value;
   const listLabel = document.querySelector('.pick-list-label').textContent;
-  const listedBefore = document.querySelectorAll('.clist-row').length;
+  const listedBefore = document.querySelectorAll('.dlg .clist-row').length;
 
   // Take several in one pass.
   const ticked = [];
@@ -1406,6 +1410,107 @@ check(names.congo === 'CG' && names.drc === 'CD',
 check(names.matches.every(Boolean), 'every spelling of a country resolves to one key',
   names.matches.join(','));
 check(names.distinct, 'and a country whose name contains another stays distinct');
+
+/* The country's cities, ticked straight onto the map from the sidebar. */
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1600);
+const sidebarCities = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const note = () => (document.querySelector('.cities-note') || {}).textContent || '';
+  const rowFor = (on) => [...document.querySelectorAll('.field .clist-row')]
+    .find((r) => r.classList.contains('on') === on);
+
+  const listed = document.querySelectorAll('.field .clist-row').length;
+  const tickedAtStart = document.querySelectorAll('.field .clist-row.on').length;
+  const startNote = note();
+  const before = window.openCharts.spec.places.slice();
+
+  // Tick a city that is not on the map yet.
+  const row = rowFor(false);
+  const name = row.querySelector('.clist-label').textContent;
+  row.querySelector('input').click();
+  await sleep(400);
+  const added = window.openCharts.spec.places.find((p) => p.name === name);
+
+  // ...and take it off again.
+  row.querySelector('input').click();
+  await sleep(400);
+  const afterUntick = window.openCharts.spec.places.length;
+
+  // A place the gazetteer spells differently is not this list's to remove.
+  const survivors = window.openCharts.spec.places.map((p) => p.name);
+
+  // The search bar has to fit the rail it is in.
+  const bar = document.querySelector('.field .clist-bar').getBoundingClientRect();
+  const panel = document.querySelector('.controls').getBoundingClientRect();
+
+  // Change the country, and the list under it must follow.
+  const root = document.querySelector('.field .cbx');
+  const input = root.querySelector('.cbx-input');
+  input.focus();
+  input.value = 'Germany';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(220);
+  root.querySelector('.cbx-item').dispatchEvent(
+    new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  await sleep(1600);
+
+  return {
+    listed, tickedAtStart, startNote, name, added,
+    beforeCount: before.length,
+    afterUntick,
+    survivors,
+    barFits: bar.right <= panel.right + 1,
+    twoCountries: note(),
+    stillListed: document.querySelectorAll('.field .clist-row').length,
+  };
+});
+
+check(sidebarCities.listed > 20, 'the focused country lists its cities in the sidebar',
+  `${sidebarCities.listed} rows`);
+check(sidebarCities.tickedAtStart > 0, 'the cities already on the map start ticked',
+  `${sidebarCities.tickedAtStart} ticked`);
+check(/on the map/.test(sidebarCities.startNote), 'and the count says how many',
+  sidebarCities.startNote);
+check(sidebarCities.added && Number.isFinite(sidebarCities.added.lon)
+  && Number.isFinite(sidebarCities.added.lat),
+  'ticking a city puts it on the map with real coordinates',
+  JSON.stringify(sidebarCities.added));
+check(sidebarCities.added && sidebarCities.added.value === 1,
+  'a new city starts at 1 rather than at an invented number',
+  JSON.stringify(sidebarCities.added));
+check(sidebarCities.afterUntick === sidebarCities.beforeCount,
+  'unticking takes it off again', `${sidebarCities.afterUntick} vs ${sidebarCities.beforeCount}`);
+check(sidebarCities.survivors.includes('Russeifa'),
+  'a place the gazetteer spells differently is left alone',
+  sidebarCities.survivors.join(','));
+check(sidebarCities.barFits, 'the city search fits the 260px rail');
+check(/2 countries/.test(sidebarCities.twoCountries),
+  'adding a country adds its cities to the list', sidebarCities.twoCountries);
+check(sidebarCities.stillListed > 0, 'and the list is rebuilt, not emptied',
+  `${sidebarCities.stillListed} rows`);
+
+/* A panel's listeners must die with the panel. The country control talks to the
+ * city list through a document event, and a stale listener from a map would
+ * rebuild geo controls over whatever chart is open now. */
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1400);
+const stale = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  window.openCharts.load('bar-vertical');
+  await sleep(700);
+  const beforeEvent = document.querySelectorAll('.cities-note').length;
+  document.dispatchEvent(new CustomEvent('oc:countries'));
+  await sleep(400);
+  return {
+    beforeEvent,
+    afterEvent: document.querySelectorAll('.cities-note').length,
+    controls: document.querySelector('.ctrl-head') ? document.querySelector('.ctrl-head').textContent : '',
+  };
+});
+check(stale.beforeEvent === 0 && stale.afterEvent === 0,
+  'a map\'s city list does not follow you to the next chart',
+  `${stale.beforeEvent} → ${stale.afterEvent}`);
 
 console.log(`  ${green('✓')} pickers — ${geoLists.countries} countries, multi-select cities in ${geoLists.jordanIso}`);
 

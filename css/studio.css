@@ -1451,6 +1451,23 @@ input[type="range"]::-moz-range-thumb {
 .country-empty { font-size: 11.5px; color: var(--ink-faint); }
 /* ── Check list ──────────────────────────────────────────────────────────── */
 .clist { display: flex; flex-direction: column; min-height: 0; }
+/* The country's cities, ticked straight onto the map. */
+.cities-note {
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-faint);
+  margin: -.15rem 0 .45rem;
+}
+.field .clist { margin-top: 0; }
+/* The rail is 260px. The dialog can afford search and both buttons on one
+ * line; here the buttons drop to their own row rather than pushing Clear off
+ * the edge of the panel. */
+.field .clist-bar { flex-wrap: wrap; }
+.field .clist-search { flex: 1 1 100%; }
+.field .clist-bar .btn { flex: 1; justify-content: center; }
+/* Short enough to leave the options below it reachable in a 260px rail, tall
+ * enough that scrolling is not the first thing a reader has to do. */
+.field .clist-box { max-height: 190px; }
+.cities-actions { display: flex; gap: .4rem; margin-top: .5rem; }
+.cities-actions .btn { flex: 1; justify-content: center; }
 .clist-bar { display: flex; gap: .4rem; align-items: center; margin-bottom: .5rem; }
 .clist-search {
   flex: 1;
