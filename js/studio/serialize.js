@@ -152,7 +152,7 @@ export function srcFn(source) {
  */
 export function tickFormat({ prefix = '', suffix = '', separator = false, decimals = null } = {}) {
   if (!prefix && !suffix && !separator && decimals == null) return undefined;
-  const q = (s) => `'${String(s).replace(/'/g, "\\'")}'`;
+  const q = (s) => quote(s);
   let value = 'v';
   if (decimals != null) value = `v.toFixed(${decimals})`;
   else if (separator) value = 'v.toLocaleString()';
