@@ -1,0 +1,57 @@
+name: Release
+
+# A tag is the whole trigger, so cutting a release is `git tag v2.1.0` and
+# `git push --tags`, nothing else. The Release is created by the gh CLI, which
+# is preinstalled on the runner and authenticates with the token Actions hands
+# out automatically — no third-party action in the supply chain, and no secret
+# for anyone to create or rotate.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # creating a Release writes to the repository
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # release notes are generated from the history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Check syntax
+        run: npm run check
+
+      # A tag that cannot pass the suite is not a release. Same 277 checks the
+      # Test workflow runs on every pull request.
+      - name: Run the suite
+        run: npm test
+
+      # The site, packed the way npm would: the paths in package.json `files`
+      # and nothing else. Unzip it, serve the folder over HTTP, and the gallery
+      # runs — which is the whole promise, so the download should keep it.
+      - name: Build the download
+        run: |
+          PATHS=$(node -e "process.stdout.write(require('./package.json').files.join(' '))")
+          zip -qr "opencharts-${GITHUB_REF_NAME}.zip" $PATHS
+          unzip -l "opencharts-${GITHUB_REF_NAME}.zip" | tail -1
+
+      - name: Create the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes "opencharts-${GITHUB_REF_NAME}.zip"

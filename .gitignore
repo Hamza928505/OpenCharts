@@ -1,0 +1,35 @@
+# Dependencies. Restored with `npm ci` from package-lock.json, which stays
+# tracked — CI needs it to install the exact versions this suite was run on.
+node_modules/
+
+# Playwright: the browsers it downloads, and what a run leaves behind.
+playwright/.cache/
+test-results/
+playwright-report/
+blob-report/
+test/screenshots/
+
+# Local tool output. Neither is part of the site.
+.cache/
+graphify-out/
+
+# Secrets. Nothing in this project needs them today — the file reader makes no
+# network request and there is no server. This is so that stays true by default.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
