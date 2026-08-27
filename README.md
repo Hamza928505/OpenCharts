@@ -102,6 +102,15 @@ from a "Sample seed" slider and had no way to accept anyone's actual numbers.
 The datasets are deliberately small enough to edit: a histogram of 140 ages
 rather than 2,400 simulated ones.
 
+## Cities without leaving the chart
+
+On the city map, the symbol map and the flow map, the country you focus on
+brings its own city list with it — search it in the sidebar, tick the places
+you want, and they appear on the map with their real coordinates. A city
+already on the map keeps its value; a new one starts at 1 for you to fill in.
+**Add every city** takes the lot, and says how many that is first when the
+answer runs to thousands.
+
 ## Maps of one country
 
 Every map takes **as many countries as you want**, from a searchable list of

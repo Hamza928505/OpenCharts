@@ -509,6 +509,7 @@ export const geoCharts = [
     },
     controls: [
       { group: 'Area',    type: 'countries', key: 'opts.countries', label: 'Countries', placeholder: 'Add a country…', onlyWithCities: true },
+      { group: 'Area',    type: 'cities', key: 'places', from: 'opts.countries', label: 'Cities on the map' },
       { group: 'Area',    type: 'toggle', key: 'opts.clipToCountry', label: 'Hide cities outside it' },
       { group: 'Symbols', type: 'colors', key: 'symbolColor', label: 'Symbol colour' },
       { group: 'Symbols', type: 'slider', key: 'opts.maxRadius', label: 'Largest city', min: 8, max: 70, step: 2, format: (v) => v + 'px' },
@@ -624,6 +625,7 @@ export const geoCharts = [
     },
     controls: [
       countryControl,
+      { group: 'Area', type: 'cities', key: 'places', from: 'opts.countries', label: 'Cities on the map' },
       { group: 'Area', type: 'toggle', key: 'opts.clipToCountry', label: 'Only points inside it' },
       projectionControl,
       { group: 'Symbols', type: 'colors', key: 'symbolColor', label: 'Symbol colour' },
@@ -815,6 +817,7 @@ export const geoCharts = [
     },
     controls: [
       countryControl,
+      { group: 'Area', type: 'cities', key: 'routes', from: 'opts.countries', label: 'Destinations' },
       projectionControl,
       { group: 'Flows', type: 'colors', key: 'flowColors', label: 'Route / hub', names: () => ['Routes', 'Hub'] },
       { group: 'Flows', type: 'slider', key: 'opts.maxWidth', label: 'Widest route', min: 1, max: 16, step: 0.5, format: (v) => v + 'px' },
