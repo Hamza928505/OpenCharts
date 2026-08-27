@@ -7,6 +7,25 @@ import { C } from '../palette.js';
 import { baseOpts } from '../chartjs-base.js';
 import { srcFn } from '../serialize.js';
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const flowCharts = [
   {
     id: 'sankey',
@@ -118,8 +137,7 @@ export const flowCharts = [
           .attr('fill', (d) => colourAt(d.index))
           .attr('stroke', 'rgba(255,255,255,.4)')
           .attr('stroke-width', 1)
-          .append('title')
-          .text((d) => spec.names[d.index]);
+          .attr('data-tip', (d) => spec.names[d.index]);
 
         g.append('g').selectAll('path').data(chords).join('path')
           .attr('d', ribbon)
@@ -127,8 +145,7 @@ export const flowCharts = [
           .attr('fill-opacity', o.ribbonAlpha)
           .attr('stroke', (d) => colourAt(d.source.index))
           .attr('stroke-width', 0.5)
-          .append('title')
-          .text((d) => `${spec.names[d.source.index]} ↔ ${spec.names[d.target.index]}: ${d.source.value.toLocaleString()}`);
+          .attr('data-tip', (d) => `${spec.names[d.source.index]} ↔ ${spec.names[d.target.index]}: ${d.source.value.toLocaleString()}`);
 
         if (o.showLabels) {
           g.append('g').selectAll('text').data(chords.groups).join('text')
@@ -163,7 +180,7 @@ export const flowCharts = [
         { label: 'Started checkout', value: 3200,  color: C.amber  },
         { label: 'Purchased',        value: 1950,  color: C.coral  },
       ],
-      opts: { alpha: 0.82, gap: 6, showStats: true, statsWidth: 170, dropColor: C.coral },
+      opts: { textColor: '#808080', alpha: 0.82, gap: 6, showStats: true, statsWidth: 170, dropColor: C.coral },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'stages', data: false, max: 8, min: 2 },
@@ -171,6 +188,7 @@ export const flowCharts = [
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Stage gap', min: 0, max: 20, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showStats', label: 'Show conversion column' },
       { group: 'Style', type: 'slider', key: 'opts.statsWidth', label: 'Column width', min: 100, max: 260, step: 10, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.stages.forEach((s, i) => {
@@ -178,8 +196,11 @@ export const flowCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 380,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const stages = spec.stages;
         if (!stages.length) return;
@@ -197,6 +218,15 @@ export const flowCharts = [
           const x = pad.l + (cw - w) / 2;
           const y = pad.t + i * rowH + o.gap / 2;
           const h = rowH - o.gap;
+          // Drop-off is what a funnel is read for, and it is the one number
+          // the picture never states.
+          const prev = i ? stages[i - 1].value : null;
+          tip(0, pad.t + i * rowH, W, rowH, [
+            s.label + ': ' + s.value.toLocaleString(),
+            Math.round((s.value / maxV) * 100) + '% of the top',
+            prev == null ? null : (prev - s.value).toLocaleString() + ' lost from '
+              + stages[i - 1].label + ' (' + Math.round((1 - s.value / prev) * 100) + '%)',
+          ].filter(Boolean).join('\n'));
 
           ctx.beginPath();
           if (i < stages.length - 1) {
@@ -224,7 +254,7 @@ export const flowCharts = [
           if (o.showStats) {
             const pct = i === 0 ? 100 : (s.value / stages[0].value) * 100;
             ctx.textAlign = 'left';
-            ctx.fillStyle = 'rgba(128,128,128,.95)';
+            ctx.fillStyle = ink(0.95);
             ctx.font = '500 13px "DM Sans", system-ui, sans-serif';
             ctx.fillText(pct.toFixed(1) + '%', W - pad.r + 18, y + h / 2 - 3);
             if (i > 0) {
@@ -252,7 +282,7 @@ export const flowCharts = [
         { name: 'Men',    share: 0.33, color: C.teal,   segments: [{ name: 'Premium', pct: 0.38 }, { name: 'Mid', pct: 0.40 }, { name: 'Value', pct: 0.22 }] },
         { name: 'Living', share: 0.25, color: C.coral,  segments: [{ name: 'Premium', pct: 0.55 }, { name: 'Mid', pct: 0.30 }, { name: 'Value', pct: 0.15 }] },
       ],
-      opts: { gap: 2, showLabels: true, minLabelHeight: 22, radius: 3 },
+      opts: { textColor: '#808080', gap: 2, showLabels: true, minLabelHeight: 22, radius: 3 },
     },
     controls: [
       { group: 'Data',   type: 'series', key: 'columns', data: false, max: 6, min: 1 },
@@ -260,6 +290,7 @@ export const flowCharts = [
       { group: 'Style',  type: 'slider', key: 'opts.radius', label: 'Corner radius', min: 0, max: 10, step: 1, format: (v) => v + 'px' },
       { group: 'Labels', type: 'toggle', key: 'opts.showLabels', label: 'Show segment labels' },
       { group: 'Labels', type: 'slider', key: 'opts.minLabelHeight', label: 'Label threshold', min: 10, max: 60, step: 2, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.columns.forEach((c) => {
@@ -273,8 +304,11 @@ export const flowCharts = [
       spec.columns.forEach((c) => { c._w = c.share / total; });
     },
     canvas: {
+      helpers: [inkColor],
       height: 380,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 20, r: 16, b: 44, l: 16 };
         const cw = W - pad.l - pad.r;
@@ -289,6 +323,13 @@ export const flowCharts = [
 
           col.segments.forEach((seg, si) => {
             const segH = (seg.pct / segTotal) * ch;
+            // Both dimensions carry meaning here, so both are spelled out —
+            // a Marimekko is routinely misread as a plain stacked bar.
+            tip(x, y, colW, segH, [
+              col.name + ' · ' + seg.name,
+              'share of column: ' + Math.round((seg.pct / segTotal) * 100) + '%',
+              'column width: ' + Math.round((col.share / total) * 100) + '% of total',
+            ].join('\n'));
             // Fade successive segments of the same column so the mix reads.
             const fade = ['', 'bb', '77', '55', '3a'][si] || '2a';
             ctx.beginPath();
@@ -306,11 +347,11 @@ export const flowCharts = [
             y += segH;
           });
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.textAlign = 'center';
           ctx.font = '500 12px "DM Sans", system-ui, sans-serif';
           ctx.fillText(col.name, x + colW / 2, H - pad.b + 20);
-          ctx.fillStyle = 'rgba(128,128,128,.7)';
+          ctx.fillStyle = ink(0.7);
           ctx.font = '10px "DM Sans", system-ui, sans-serif';
           ctx.fillText(Math.round((col.share / total) * 100) + '%', x + colW / 2, H - pad.b + 33);
 
@@ -384,8 +425,7 @@ export const flowCharts = [
           .attr('fill', (_, i) => spec.series[i].color + alphaHex)
           .attr('stroke', (_, i) => spec.series[i].color)
           .attr('stroke-width', o.strokeWidth)
-          .append('title')
-          .text((_, i) => spec.series[i].label);
+          .attr('data-tip', (_, i) => spec.series[i].label);
 
         svg.append('g')
           .attr('transform', `translate(0,${H - pad.b})`)

@@ -9,8 +9,13 @@
  */
 
 import { SWATCHES, paletteAt } from './palette.js';
-import { applyData } from './dataio.js';
+import { parseTable, applyData, expectedFormat, checkTableShape } from './dataio.js';
+import { chooseDataFile } from './fileimport.js';
+import { ask } from './confirm.js';
+import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
+import { createCombobox } from './Combobox.js';
+import { loadCountries, countryItems, findCountryEntry } from './geodata.js';
 
 /* ── spec path access ────────────────────────────────────────────────────── */
 
@@ -314,6 +319,31 @@ function widgetSeries(ctrl, spec, notify) {
 }
 
 /** A flat list of colours driving a single multi-coloured dataset. */
+/**
+ * One colour, written straight to its dot-path.
+ *
+ * The plural `colors` widget needs an array at its key, which forces a chart to
+ * keep a mirror field and sync it in onChange. For a single swatch — the text
+ * colour on thirty charts — that ceremony buys nothing.
+ */
+function widgetColor(ctrl, spec, notify) {
+  const wrap = field(ctrl.label || 'Colour');
+  const strip = el('div', 'palette');
+  const dot = el('span', 'palette-dot');
+  const current = getPath(spec, ctrl.key) || ctrl.fallback || '#808080';
+  dot.style.background = current;
+  dot.title = current;
+  attachColourPicker(dot, current, (next) => {
+    setPath(spec, ctrl.key, next);
+    dot.style.background = next;
+    dot.title = next;
+    notify();
+  });
+  strip.appendChild(dot);
+  wrap.appendChild(strip);
+  return wrap;
+}
+
 function widgetColors(ctrl, spec, notify) {
   const key = ctrl.key || 'colors';
   const wrap = field(ctrl.label || 'Colours');
@@ -362,118 +392,170 @@ function widgetValues(ctrl, spec, notify) {
  * The "Your data" editor.
  *
  * One widget serves every chart: the definition's `data` descriptor says what
- * shape to parse into, and `dataio` does the reading. Charts whose sample data
- * is generated from parameters get a Sample/Yours switch, so the exploratory
- * mode survives alongside real input.
+ * shape to parse into, and `dataio` does the reading.
+ *
+ * The sidebar shows the data rather than asking anyone to type it here. A
+ * 260px-wide textarea is a bad place to write a table — no structure, no
+ * feedback until you commit, and one missing comma shifts a whole row — so
+ * editing happens in the grid, and this stays a readable summary of it.
  */
 function widgetData(ctrl, spec, notify, def) {
   const desc = def.data || {};
   const host = el('div', 'ctrl-group');
   host.style.gap = '.5rem';
 
-  // Seeded charts keep their parameter controls; the switch hides or shows them.
-  const switchable = !!desc.generated;
-  // Your data is the default. Generated sample data is a fallback for
-  // exploring the chart type, not what most people came here to do.
-  let mode = 'mine';
-
-  if (switchable) {
-    const seg = el('div', 'seg');
-    const mk = (label, value) => {
-      const b = el('button', 'seg-btn' + (mode === value ? ' active' : ''), label);
-      b.type = 'button';
-      b.addEventListener('click', () => {
-        mode = value;
-        seg.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
-        if (value === 'sample') {
-          // Drop back to generated data by clearing the override.
-          delete spec.dataMode;
-          if (desc.clearKeys) desc.clearKeys.forEach((k) => { delete spec[k]; });
-          notify();
-        }
-        paint();
-      });
-      seg.appendChild(b);
-      return b;
-    };
-    mk('My data', 'mine');
-    mk('Sample data', 'sample');
-    host.appendChild(seg);
-  }
-
   const body = el('div');
   body.style.cssText = 'display:flex;flex-direction:column;gap:.4rem';
   host.appendChild(body);
 
-  function paint() {
-    body.innerHTML = '';
-    if (switchable && mode === 'sample') {
-      const note = el('p', 'data-note',
-        desc.sampleNote || 'Generated from the settings below — a way to explore the chart type before you have real numbers.');
-      body.appendChild(note);
+  /**
+   * Take a file straight from the sidebar.
+   *
+   * A file arrives in whatever shape its author chose, which is rarely the one
+   * this chart reads. So it is checked against the chart's own format before
+   * anything is applied, and a mismatch offers the editor rather than drawing
+   * something wrong and leaving the reader to work out why.
+   */
+  const uploadFile = async () => {
+    const res = await chooseDataFile();
+    if (!res) return;                       // dialog dismissed
+
+    if (!res.ok) {
+      await ask({ title: 'That file could not be read', text: res.message, tone: 'stop', confirm: 'OK' });
       return;
     }
 
-    const area = el('textarea', 'input mono data-paste');
-    area.rows = desc.rows || 7;
-    area.spellcheck = false;
-    area.placeholder = desc.placeholder || 'label,value\nAlpha,120\nBeta,90';
+    const table = parseTable(res.text, expectedFormat(def).columns);
+    const fit = checkTableShape(def, table);
+    if (!fit.ok) {
+      const open = await ask({
+        title: `${res.name} does not match this chart`,
+        text: fit.message,
+        list: [
+          `This chart reads: ${fit.expected.columns.join(', ') || fit.expected.hint}`,
+          `Your file has: ${table.headers.join(', ')}`,
+          fit.expected.grows ? `Note: ${fit.expected.grows}` : null,
+        ].filter(Boolean),
+        tone: 'stop',
+        confirm: 'Open the editor',
+        cancel: 'Cancel',
+      });
+      // The grid is where a near miss gets fixed — renaming a column or
+      // deleting a stray one — rather than being refused outright.
+      if (open) openDataDialog(def, spec, afterApply, res.text);
+      return;
+    }
+
+    const applied = applyData(def, spec, res.text);
+    if (!applied.ok) {
+      await ask({ title: 'That file could not be used', text: applied.message, tone: 'stop', confirm: 'OK' });
+      return;
+    }
+    toast(`${res.name} — ${applied.message}`, 'ok');
+    afterApply(applied.message);
+  };
+
+  const afterApply = (message) => {
+    notify();
+    spec._dataMessage = message;
+    if (typeof host._rebuildAll === 'function') host._rebuildAll();
+  };
+
+  const openEditor = () => {
+    openDataDialog(def, spec, (message) => {
+      notify();
+      // Applying can change how many series exist, so the whole panel is
+      // rebuilt — which destroys this widget. Stash the confirmation so the
+      // fresh panel can show it instead of it vanishing.
+      spec._dataMessage = message;
+      if (typeof host._rebuildAll === 'function') host._rebuildAll();
+    });
+  };
+
+  function paint() {
+    body.innerHTML = '';
+
     const current = typeof def.toText === 'function' ? def.toText(spec) : '';
-    // Never present an empty box: a seeded chart has no user data yet, so show
-    // the example as a concrete starting point to edit.
-    area.value = current && current.trim() ? current : (desc.example || '');
+    // Both of these are written by this project, so their header row is not
+    // in doubt — which matters for the charts whose columns are years.
+    const table = parseTable(current && current.trim() ? current : (desc.example || ''), true);
+
+    const card = el('div', 'data-card');
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.title = 'Open the data editor';
+
+    if (table.rows.length) {
+      // Four columns and four rows is enough to recognise your own data at a
+      // glance; anything more is unreadable at sidebar width anyway.
+      const shownCols = Math.min(table.headers.length, 4);
+      const shownRows = Math.min(table.rows.length, 4);
+      const t = el('table', 'data-mini');
+      const thead = el('thead');
+      const hr = el('tr');
+      for (let c = 0; c < shownCols; c++) hr.appendChild(el('th', null, table.headers[c]));
+      if (table.headers.length > shownCols) hr.appendChild(el('th', 'more', '…'));
+      thead.appendChild(hr);
+      t.appendChild(thead);
+
+      const tbody = el('tbody');
+      for (let r = 0; r < shownRows; r++) {
+        const tr = el('tr');
+        for (let c = 0; c < shownCols; c++) tr.appendChild(el('td', null, table.rows[r][c] ?? ''));
+        if (table.headers.length > shownCols) tr.appendChild(el('td', 'more', '…'));
+        tbody.appendChild(tr);
+      }
+      t.appendChild(tbody);
+      card.appendChild(t);
+
+      const count = el('p', 'data-count',
+        `${table.rows.length} row${table.rows.length === 1 ? '' : 's'} · ${table.headers.length} column${table.headers.length === 1 ? '' : 's'}`
+        + (table.rows.length > shownRows ? ` — showing the first ${shownRows}` : ''));
+      card.appendChild(count);
+    } else {
+      card.appendChild(el('p', 'data-note', 'No data yet. Open the editor to add some.'));
+    }
+
+    card.addEventListener('click', openEditor);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEditor(); }
+    });
 
     const status = el('div', 'data-status');
-    // Carry over the confirmation from the rebuild that this paste triggered.
+    // Carry over the confirmation from the rebuild that applying triggered.
     if (spec._dataMessage) {
       status.textContent = spec._dataMessage;
       status.className = 'data-status ok';
       delete spec._dataMessage;
     }
+
+    const editBtn = el('button', 'btn btn-sm btn-primary', 'Edit data');
+    editBtn.type = 'button';
+    editBtn.style.width = '100%';
+    editBtn.addEventListener('click', openEditor);
+
+    const uploadBtn = el('button', 'btn btn-sm', 'Upload a file');
+    uploadBtn.type = 'button';
+    uploadBtn.style.width = '100%';
+    uploadBtn.title = 'Open a .xlsx, .csv, .tsv or .txt — nothing is uploaded anywhere';
+    uploadBtn.addEventListener('click', uploadFile);
+
+    body.append(card, editBtn, uploadBtn, status);
+
+    // What this chart actually reads, in the columns' own words. Stated before
+    // a file is chosen, not after it fails — the whole point is that a reader
+    // should know the shape in advance.
+    const fmt = expectedFormat(def);
+    if (fmt.columns.length) {
+      const spec2 = el('p', 'data-format');
+      spec2.append(el('span', 'data-format-label', 'Expects'));
+      spec2.append(el('code', null, fmt.columns.join(', ')));
+      // `grows` is deliberately not repeated here — the hint below already
+      // says how further columns are read, on every chart that has one.
+      body.appendChild(spec2);
+    }
+
     const hint = el('p', 'data-note', desc.hint || '');
-
-    const apply = () => {
-      const res = applyData(def, spec, area.value);
-      status.textContent = res.message;
-      status.className = 'data-status ' + (res.ok ? 'ok' : 'bad');
-      if (!res.ok) return;
-
-      notify();
-      // A successful paste can change how many series exist, so the whole
-      // panel is rebuilt — which destroys this status line. Stash the message
-      // so the fresh panel can show it, or the confirmation just vanishes.
-      spec._dataMessage = res.message;
-      if (typeof host._rebuildAll === 'function') host._rebuildAll();
-    };
-
-    const actions = el('div');
-    actions.style.cssText = 'display:flex;gap:.35rem';
-    const applyBtn = el('button', 'btn btn-sm btn-primary', 'Use this data');
-    applyBtn.type = 'button';
-    applyBtn.style.flex = '1';
-    applyBtn.addEventListener('click', apply);
-
-    // The sidebar box is deliberately small; the dialog is where pasting a
-    // real spreadsheet actually happens.
-    const expandBtn = el('button', 'btn btn-sm', '⤢ Bigger');
-    expandBtn.type = 'button';
-    expandBtn.title = 'Open the full-size editor, with a preview of what will be read';
-    expandBtn.addEventListener('click', () => {
-      openDataDialog(def, spec, () => {
-        notify();
-        if (typeof host._rebuildAll === 'function') host._rebuildAll();
-      });
-    });
-
-    actions.append(applyBtn, expandBtn);
-
-    // Ctrl/Cmd+Enter applies, which is what anyone pasting a table expects.
-    area.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); apply(); }
-    });
-
-    body.append(area, actions, status);
     if (hint.textContent) body.appendChild(hint);
   }
 
@@ -481,17 +563,102 @@ function widgetData(ctrl, spec, notify, def) {
   return host;
 }
 
+/**
+ * Countries chosen from the map's own list, as many as you like.
+ *
+ * Chips plus a search box rather than a long checklist: the sidebar is 260px
+ * wide, and the common case is two or three countries, not fifty. The full
+ * ticked list lives in the data editor, where there is room for it.
+ *
+ * Free text was wrong here from the start: the atlas spells countries its own
+ * way ("Bosnia and Herz.", "Dem. Rep. Congo"), so a reasonable guess matched
+ * nothing and the map stayed silently on the world.
+ */
+function widgetCountries(ctrl, spec, notify) {
+  const wrap = field(ctrl.label || 'Countries');
+  const chips = el('div', 'country-chips');
+  wrap.appendChild(chips);
+
+  const box = createCombobox({
+    items: [],
+    placeholder: ctrl.placeholder || 'Loading countries…',
+    emptyText: 'No country by that name',
+    onSelect: (value) => {
+      if (!value) return;
+      const list = getPath(spec, ctrl.key) || [];
+      if (list.indexOf(value) < 0) {
+        setPath(spec, ctrl.key, [...list, value]);
+        paint();
+        notify();
+      }
+      // Clear the box so the next one can be typed straight away.
+      box.setValue('');
+      box.focus();
+    },
+  });
+  wrap.appendChild(box.el);
+
+  function paint() {
+    chips.innerHTML = '';
+    const list = getPath(spec, ctrl.key) || [];
+    if (!list.length) {
+      chips.appendChild(el('span', 'country-empty', ctrl.emptyLabel || 'Whole world'));
+      return;
+    }
+    list.forEach((name, i) => {
+      const chip = el('span', 'country-chip');
+      chip.appendChild(el('span', null, name));
+      const x = el('button', 'country-chip-x', '✕');
+      x.type = 'button';
+      x.title = `Remove ${name}`;
+      x.addEventListener('click', () => {
+        const next = (getPath(spec, ctrl.key) || []).filter((_, k) => k !== i);
+        setPath(spec, ctrl.key, next);
+        paint();
+        notify();
+      });
+      chip.appendChild(x);
+      chips.appendChild(chip);
+    });
+  }
+
+  loadCountries().then((all) => {
+    box.setItems(countryItems(all, { onlyWithCities: !!ctrl.onlyWithCities }));
+    // Normalise whatever the spec held to the atlas's own spelling, so a saved
+    // config that said "USA" now shows — and matches — the real feature.
+    const list = getPath(spec, ctrl.key) || [];
+    const fixed = list
+      .map((name) => { const hit = findCountryEntry(all, name); return hit ? hit.name : name; })
+      .filter((name, i, a) => a.indexOf(name) === i);
+    if (fixed.length !== list.length || fixed.some((n, i) => n !== list[i])) {
+      setPath(spec, ctrl.key, fixed);
+      paint();
+      notify();
+    }
+    const input = box.el.querySelector('.cbx-input');
+    if (input) input.placeholder = ctrl.placeholder || 'Add a country…';
+  }).catch(() => {
+    const input = box.el.querySelector('.cbx-input');
+    if (input) input.placeholder = 'Country list unavailable';
+  });
+
+  paint();
+  return wrap;
+}
+
 const WIDGETS = {
-  data:   widgetData,
-  toggle: widgetToggle,
-  seg:    widgetSeg,
-  slider: widgetSlider,
-  select: widgetSelect,
-  text:   widgetText,
-  labels: widgetLabels,
-  series: widgetSeries,
-  colors: widgetColors,
-  values: widgetValues,
+  data:    widgetData,
+  toggle:  widgetToggle,
+  seg:     widgetSeg,
+  slider:  widgetSlider,
+  select:  widgetSelect,
+  text:    widgetText,
+  countries: widgetCountries,
+  labels:  widgetLabels,
+  series:  widgetSeries,
+  color:   widgetColor,
+  colors:  widgetColors,
+  values:  widgetValues,
 };
 
 /* ── panel ───────────────────────────────────────────────────────────────── */
@@ -525,16 +692,7 @@ export function buildControls(container, def, spec, onChange) {
     else groups.push({ name, items: [ctrl] });
   });
 
-  // Parameter controls that only drive generated data are irrelevant once the
-  // user has pasted their own. Hide those, but never the data editor itself —
-  // it lives in the same group and must stay reachable to edit or revert.
-  const usingOwnData = !!spec.dataMode;
-  const hiddenGroups = new Set(usingOwnData ? (def.data && def.data.hideGroups) || [] : []);
-  const visible = groups
-    .map((g) => (hiddenGroups.has(g.name)
-      ? { ...g, items: g.items.filter((c) => c.type === 'data') }
-      : g))
-    .filter((g) => g.items.length);
+  const visible = groups.filter((g) => g.items.length);
 
   visible.forEach((group, gi) => {
     if (gi > 0) container.appendChild(el('hr', 'ctrl-divider'));

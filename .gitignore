@@ -17,3 +17,6 @@ node_modules/
 *.log
 tmp/
 _standalone_check/
+
+# Generated/downloaded data-build scratch — see tools/README.md to rebuild
+.cache/

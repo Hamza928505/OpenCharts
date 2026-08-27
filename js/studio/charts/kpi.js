@@ -7,6 +7,25 @@
 
 import { C, withAlpha } from '../palette.js';
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const kpiCharts = [
   {
     id: 'bullet-chart',
@@ -22,7 +41,7 @@ export const kpiCharts = [
         { label: 'NPS',          value: 52, target: 45, max: 80, color: C.blue, unit: '' },
         { label: 'Uptime',       value: 99.94, target: 99.9, max: 100, color: C.olive, unit: '%' },
       ],
-      opts: { rowHeight: 52, barHeight: 14, labelWidth: 116, bands: 3, showTarget: true, showValue: true, bandTint: 0.1 },
+      opts: { textColor: '#808080', rowHeight: 52, barHeight: 14, labelWidth: 116, bands: 3, showTarget: true, showValue: true, bandTint: 0.1 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 10, min: 1 },
@@ -32,6 +51,7 @@ export const kpiCharts = [
       { group: 'Bands', type: 'slider', key: 'opts.bandTint', label: 'Band contrast', min: 0.03, max: 0.3, step: 0.01, format: (v) => v.toFixed(2) },
       { group: 'Marks', type: 'toggle', key: 'opts.showTarget', label: 'Show target marker' },
       { group: 'Marks', type: 'toggle', key: 'opts.showValue', label: 'Show value' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.rows.forEach((r, i) => {
@@ -39,8 +59,11 @@ export const kpiCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 300,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -53,6 +76,13 @@ export const kpiCharts = [
           const top = i * o.rowHeight;
           const cy = top + o.rowHeight / 2;
           const toX = (v) => plotL + (v / r.max) * plotW;
+          // Measure against target is the entire claim a bullet chart makes.
+          tip(0, top, W, o.rowHeight, [
+            r.label + ': ' + r.value,
+            'target ' + r.target,
+            (r.value >= r.target ? 'ahead by ' : 'short by ')
+              + Math.abs(r.value - r.target).toFixed(1),
+          ].join('\n'));
 
           // Qualitative bands: progressively lighter greys behind the bar.
           for (let b = 0; b < o.bands; b++) {
@@ -81,7 +111,7 @@ export const kpiCharts = [
             ctx.globalAlpha = 1;
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(r.label, plotL - 12, cy + 4);
@@ -116,7 +146,7 @@ export const kpiCharts = [
         { label: 'Watch',   value: 27, color: C.blue },
         { label: 'TV',      value: 14, color: C.amber },
       ],
-      opts: { max: 100, innerRadius: 42, thickness: 20, gap: 7, startAngle: -90, sweep: 300, rounded: true, trackAlpha: 0.12, showLabels: true, showValues: true },
+      opts: { textColor: '#808080', max: 100, innerRadius: 42, thickness: 20, gap: 7, startAngle: -90, sweep: 300, rounded: true, trackAlpha: 0.12, showLabels: true, showValues: true },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'items', data: false, max: 8, min: 1 },
@@ -129,13 +159,17 @@ export const kpiCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.rounded', label: 'Rounded ends' },
       { group: 'Style', type: 'toggle', key: 'opts.showLabels', label: 'Show labels' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.items.forEach((it, i) => { if (typeof it.value !== 'number') it.value = 50 - i * 5; });
     },
     canvas: {
+      helpers: [inkColor],
       height: 420,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const items = spec.items;
         if (!items.length) return;
@@ -149,6 +183,13 @@ export const kpiCharts = [
         items.forEach((it, i) => {
           const r = o.innerRadius + i * step + o.thickness / 2;
           const frac = Math.max(0, Math.min(1, it.value / o.max));
+          // The whole ring, not just the filled arc: the empty part of a track
+          // is still that item, and is where a reader looks to judge the gap.
+          tip({
+            cx: cx, cy: cy, r0: r - o.thickness / 2, r1: r + o.thickness / 2,
+            a0: start, a1: start + sweep,
+            text: it.label + ': ' + it.value + '  (' + Math.round(frac * 100) + '% of ' + o.max + ')',
+          });
 
           ctx.lineCap = o.rounded ? 'round' : 'butt';
           ctx.lineWidth = o.thickness;
@@ -165,7 +206,7 @@ export const kpiCharts = [
           ctx.stroke();
 
           if (o.showLabels) {
-            ctx.fillStyle = 'rgba(128,128,128,.95)';
+            ctx.fillStyle = ink(0.95);
             ctx.font = '11px "DM Sans", system-ui, sans-serif';
             ctx.textAlign = 'right';
             const lx = cx + Math.cos(start) * r;
@@ -201,7 +242,7 @@ export const kpiCharts = [
         { label: 'Drive',       value: 24, color: C.coral,  icon: 'person' },
         { label: 'Walk',        value: 14, color: C.amber,  icon: 'person' },
       ],
-      opts: { unit: 2, iconSize: 20, gap: 5, perRow: 20, labelWidth: 130, showValues: true, shape: 'person' },
+      opts: { textColor: '#808080', unit: 2, iconSize: 20, gap: 5, perRow: 20, labelWidth: 130, showValues: true, shape: 'person' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 8, min: 1 },
@@ -211,13 +252,17 @@ export const kpiCharts = [
       { group: 'Style', type: 'slider', key: 'opts.iconSize', label: 'Icon size', min: 10, max: 36, step: 2, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Icon gap', min: 1, max: 14, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.rows.forEach((r, i) => { if (typeof r.value !== 'number') r.value = 20 - i * 3; });
     },
     canvas: {
+      helpers: [inkColor],
       height: 320,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -265,8 +310,12 @@ export const kpiCharts = [
           const icons = r.value / o.unit;
           const whole = Math.floor(icons);
           const rest = icons - whole;
+          // Counting icons is the slow way to read this; say the number.
+          tip(0, ri * rowH, W, rowH,
+            r.label + ': ' + r.value + '\n'
+            + icons.toFixed(1) + ' icons at ' + o.unit + ' each');
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(r.label, left - 14, top + o.iconSize / 2 + 4);
@@ -288,7 +337,7 @@ export const kpiCharts = [
           }
         });
 
-        ctx.fillStyle = 'rgba(128,128,128,.6)';
+        ctx.fillStyle = ink(0.6);
         ctx.font = '10px "DM Sans", system-ui, sans-serif';
         ctx.textAlign = 'left';
         ctx.fillText(`Each icon = ${o.unit}%`, left, rows.length * rowH + 18);

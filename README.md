@@ -1,12 +1,23 @@
 # OpenCharts
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-6C63D8.svg)](LICENSE)
-[![Charts](https://img.shields.io/badge/charts-96-16916A.svg)](#the-two-pages)
+[![Charts](https://img.shields.io/badge/charts-98-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
 A library of **98 chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
+
+## Start from your data
+
+The gallery asks the question the other way round too. **Match my data** at the
+top of the index takes a pasted table or a spreadsheet and narrows the 98
+charts to the ones that can actually read it — a `from, to, value` table finds
+the Sankey and the chord diagram, a label and three numeric columns finds
+seventy. Open any of them and your table is already in it.
+
+Nothing is uploaded. The file is read in the browser, and the table travels to
+the studio in session storage rather than over a network.
 
 ## Sharing a chart
 
@@ -14,6 +25,10 @@ Once you have a chart the way you want it, **Share** copies a link that
 reproduces it exactly — data, colours and options included. The whole spec is
 compressed into the URL, so there is no server, no account and nothing stored:
 the link *is* the document.
+
+**Embed** copies the same thing as an `<iframe>`, pointing at the chart with
+the studio stripped away — no rail, no controls, no code panel, just the chart
+and its title. It is the same page and the same renderer, one URL flag apart.
 
 ## Running it
 
@@ -60,38 +75,112 @@ the controls, then take the code.
 
 ## Using your own data
 
-Every chart takes real data. The first control in the studio is a paste box
-that accepts CSV or TSV — copy a range straight out of Excel, Sheets or a
-`.csv` and press **Use this data**. The delimiter is detected, a header row is
-detected, and formatted numbers (`1,234`, `$99`, `42%`) are read correctly.
+Every chart takes real data, and the first control in the studio shows the data
+it is currently drawing. Click it, or **Edit data**, and a spreadsheet opens:
+click a cell and type, <kbd>Tab</kbd> across, <kbd>Enter</kbd> down, **+ Row**
+to grow it. The button beside it says what a column means on this chart —
+**+ Stage** on a Sankey, **+ Level** on a treemap, **+ Dimension** on parallel
+sets — and is simply absent where the chart reads a fixed set of columns. A cell that is not a number is flagged the moment
+you type it, rather than quietly becoming a zero after you apply.
 
-The sidebar box is fine for a quick edit; **⤢ Bigger** opens a full-size editor
-with a live preview of exactly what the parser read — column names, detected
-roles, and any cell it could not turn into a number highlighted before you
-apply. That preview is the fastest way to see why a paste did not do what you
+You never have to type a table you already have. Paste a block from Excel or
+Sheets into any cell and it fills from there, or use the **Paste text** tab for
+a whole CSV or TSV at once — the delimiter is detected, a header row is
+detected, and formatted numbers (`1,234`, `$99`, `42%`) are read correctly.
+That tab previews exactly what the parser read, with any unreadable cell
+highlighted, which is the fastest way to see why a paste did not do what you
 expected.
 
-The columns each chart wants are described under the box, and **Example** fills
-it with correctly-shaped rows you can edit. Structured charts take the same
+The columns each chart wants are described under the table, and **Load example**
+fills it with correctly-shaped rows to edit. Structured charts take the same
 treatment: flows want `from,to,value`, networks want `source,target`, and
 hierarchies want a `Parent > Child > Leaf` path per row.
 
-Charts whose sample data is simulated — the distributions, the finance charts,
-the maps — open on **My data** with an editable example already in the box.
-**Sample data** is the second tab: parameter sliders for exploring the chart
-type before you have real numbers.
+Every chart opens on real data you can read and replace — including the
+distributions, the finance charts and the maps, which used to draw a simulation
+from a "Sample seed" slider and had no way to accept anyone's actual numbers.
+The datasets are deliberately small enough to edit: a histogram of 140 ages
+rather than 2,400 simulated ones.
 
 ## Maps of one country
 
-Every map takes a **country** — type `Jordan`, `Germany`, `Japan` — and zooms to
-it, fading the neighbours. Short names work too (`USA`, `UK`, `UAE`), and the
-globe turns to face whatever you name.
+Every map takes **as many countries as you want**, from a searchable list of
+all 177 on the map — type a few letters, pick, repeat. Each one becomes a chip
+you can remove. The map zooms to fit all of them together, fades the
+neighbours, and the globe turns to face the middle of them.
+
+It is a list rather than a text box on purpose: the atlas spells things its own
+way (`Bosnia and Herz.`, `Dem. Rep. Congo`), so a reasonable guess used to
+match nothing and leave the map silently on the world.
 
 **City Map** is the chart for the common case where the statistic you have is
-local rather than national: one country, a circle at each city sized by its
-value. Paste `city,lon,lat,value` and it draws. Cities outside the country can
-be hidden, and if that would empty the map it shows them anyway rather than
-leaving you with a blank frame.
+local rather than national: a circle at each city sized by its value. Its
+editor has a **Pick cities** tab, and it opens on whatever country the chart is
+already focused on with **that country's cities already listed** — 145 of them
+for Jordan, 7,250 for Germany. Tick as many as you want and add them in one go;
+search to narrow the list first if it is a big one.
+
+Coordinates are filled in for you, so the only thing you ever type is the
+number you actually have. Cities already in your table start ticked, so the
+list reads as the state of the chart rather than a blank form — and unticking
+one removes it.
+
+The maps that colour whole countries have the same list as a **Pick
+countries** tab, which is also how you stop guessing at Natural Earth
+spellings. Cities
+outside the focused country can be hidden, and if that would empty the map it
+shows them anyway rather than leaving you with a blank frame.
+
+Those lists are committed to the repository, not fetched from anyone: 177
+countries and 156,576 cities across 246 of them, split one file per country so
+only the country you pick is ever downloaded. See `tools/README.md` for where
+they come from and how to rebuild them.
+
+## Opening a file
+
+**Upload a file** sits directly under **Edit data** in the sidebar, and the
+data editor has an **Open a file** tab with the same thing plus drag-and-drop.
+Either takes an `.xlsx`, `.csv`, `.tsv` or `.txt`. The first sheet of a
+workbook is read using each cell's stored value — formulas are never run.
+
+Under the buttons, the sidebar states the columns *this* chart reads —
+`city, lon, lat, value` for a city map, `from, to, value` for a Sankey — so
+you know the shape before you go looking for a file rather than after.
+
+A file that is not a table at all is turned away by name. A .sql, a .py or a
+JSON dump saved as .txt is still text, so no magic number can catch it — the
+content is read instead, and the message says what it looks like: SQL, PHP,
+Python, YAML, a Dockerfile, a diff, a log, prose. Thirty-odd of them are in
+the test suite, alongside twenty-two awkward-but-real tables that must keep
+working — a glossary of SQL keywords and a report of SQL queries among them,
+because a check that rejects a valid CSV is worse than no check at all. (Nothing in
+such a file is ever run, sent anywhere, or inserted as markup; the point is
+simply not to draw a chart out of something that was never data.)
+
+A file that is a table but does not match this chart is not quietly drawn wrong. It says what the chart
+reads, what your file has, and offers to open the editor with your data already
+in the grid, where a column can be renamed or dropped. Words in a value column
+are caught the same way, because they would otherwise be drawn as zero.
+
+**Nothing is uploaded.** The file is read in your browser and no request is
+made while reading it. The format is decided by the file's actual bytes rather
+than its name, so a ZIP renamed `sales.csv` is refused rather than guessed at;
+so are old `.xls` files, anything binary, anything over 10MB, and any workbook
+carrying a `DOCTYPE`. Archive size and entry count are capped, so a malicious
+spreadsheet cannot expand until the tab dies.
+
+## Reading a chart by hovering it
+
+Every chart says what it is showing when you point at it — all 98, not just the
+39 that Chart.js gives tooltips to for free. A canvas chart reports the shapes
+it painted so they can be hit-tested; an SVG chart tags its marks. Radial charts
+test the actual wedge rather than a bounding box, so pointing at a slice gives
+you that slice.
+
+The readouts say the thing the picture leaves out: a funnel names the drop-off
+between stages, a dumbbell names the gap, a bullet chart says how far short of
+target it is, and a distribution gives the five-number summary its silhouette
+only implies.
 
 ## Knowing what you are loading
 
@@ -138,7 +227,7 @@ Finance, Geo, KPI & Micro, and Custom Engine.
 ```bash
 npm install          # once — pulls Playwright
 npx playwright install chromium
-npm test             # renders all 97 charts and checks them
+npm test             # renders all 98 charts and checks them
 ```
 
 The suite runs in a real headless browser, because two thirds of the library

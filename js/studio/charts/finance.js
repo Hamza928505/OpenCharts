@@ -8,51 +8,37 @@
  */
 
 import { C } from '../palette.js';
+import { OHLC_BARS, REVERSAL_BARS } from './_data.js';
 
-function makeRng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
+/*
+ * All four read their bars straight from the spec. There is nothing left to
+ * parameterise: "Sessions", "Volatility" and "Sample seed" described a
+ * simulation, not a price. What remains is how the marks are drawn — brick
+ * size, box size, reversal threshold — which are real analytical choices.
+ *
+ * Renko, Point & Figure and Kagi share a longer, choppier series than the OHLC
+ * chart. They only lay a mark where price *reverses*, so a short or one-sided
+ * series leaves them with a single column and nothing to read.
+ */
 
 /**
- * A deterministic price walk shared by all four charts.
+ * Chart text at a given opacity, in whatever colour the spec asks for.
  *
- * The small pull back toward `start` matters: a pure random walk drifts to a
- * boundary and sits there, which starves the reversal-driven charts (Point &
- * Figure, Kagi, Renko) of the direction changes they exist to show. Mean
- * reversion keeps it oscillating, which is both more realistic and the only
- * way those three produce a meaningful picture from default settings.
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
  */
-function priceWalk(seed, count, start, volatility, floor, ceiling, supplied) {
-  // Pasted OHLC rows are used verbatim; the walk is only a stand-in for them.
-  if (supplied && supplied.length) return supplied;
-  const rnd = makeRng(seed * 7919);
-  const out = [];
-  let price = start;
-  for (let i = 0; i < count; i++) {
-    const open = price;
-    const drift = (start - price) * 0.03;
-    price = Math.max(floor, Math.min(ceiling, price + (rnd() - 0.5) * volatility + drift));
-    const close = price;
-    out.push({
-      o: +open.toFixed(2),
-      c: +close.toFixed(2),
-      h: +(Math.max(open, close) + rnd() * volatility * 0.5).toFixed(2),
-      l: +(Math.min(open, close) - rnd() * volatility * 0.5).toFixed(2),
-    });
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
   }
-  return out;
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
-
-const priceControls = [
-  { group: 'Data', type: 'slider', key: 'count',      label: 'Sessions',      min: 20, max: 240, step: 10 },
-  { group: 'Data', type: 'slider', key: 'seed',       label: 'Sample seed',   min: 1, max: 60, step: 1 },
-  { group: 'Data', type: 'slider', key: 'start',      label: 'Opening price', min: 40, max: 300, step: 5 },
-  { group: 'Data', type: 'slider', key: 'volatility', label: 'Volatility',    min: 0.5, max: 14, step: 0.5, format: (v) => v.toFixed(1) },
-];
 
 export const financeCharts = [
   {
@@ -62,24 +48,26 @@ export const financeCharts = [
     blurb: 'The candlestick’s older sibling: a vertical range with ticks left for open and right for close.',
     tags: ['ohlc', 'bar chart', 'finance', 'stock', 'trading', 'price'],
     spec: {
-      count: 60, seed: 4, start: 148, volatility: 4,
+      bars: [...OHLC_BARS],
       upColor: C.teal, downColor: C.coral,
-      opts: { floor: 110, ceiling: 210, tickLength: 5, lineWidth: 1.6, prefix: '$' },
+      opts: { textColor: '#808080', tickLength: 5, lineWidth: 1.6, prefix: '$' },
     },
     controls: [
-      ...priceControls,
       { group: 'Style', type: 'colors', key: 'ohlcColors', label: 'Up / down', names: () => ['Rising', 'Falling'] },
       { group: 'Style', type: 'slider', key: 'opts.tickLength', label: 'Tick length', min: 2, max: 14, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.lineWidth', label: 'Line width', min: 1, max: 5, step: 0.5, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.ohlcColors = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.ohlcColors; },
     canvas: {
       height: 360,
-      helpers: [makeRng, priceWalk],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const bars = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
+        const bars = spec.bars;
         const vals = bars.flatMap((b) => [b.h, b.l]);
         const minV = Math.min(...vals) - 2;
         const maxV = Math.max(...vals) + 2;
@@ -99,13 +87,21 @@ export const financeCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + Math.round(v), pad.l - 6, y + 4);
         }
 
         bars.forEach((b, i) => {
           const x = pad.l + i * slot + slot / 2;
+          // The whole column: an OHLC bar is a line a couple of pixels wide.
+          tip(pad.l + i * slot, pad.t, slot, H - pad.t - pad.b, [
+            'Session ' + (i + 1),
+            'open  ' + o.prefix + b.o,
+            'high  ' + o.prefix + b.h,
+            'low   ' + o.prefix + b.l,
+            'close ' + o.prefix + b.c,
+          ].join('\n'));
           ctx.strokeStyle = b.c >= b.o ? spec.upColor : spec.downColor;
           ctx.lineWidth = o.lineWidth;
 
@@ -137,25 +133,27 @@ export const financeCharts = [
     blurb: 'A brick is laid only when price moves a fixed amount. Time disappears; noise goes with it.',
     tags: ['renko', 'bricks', 'finance', 'price action', 'noise filter', 'trend'],
     spec: {
-      count: 220, seed: 6, start: 148, volatility: 6,
+      bars: [...REVERSAL_BARS],
       upColor: C.teal, downColor: C.coral,
-      opts: { floor: 90, ceiling: 230, brickSize: 3, gap: 1, prefix: '$' },
+      opts: { textColor: '#808080', brickSize: 3, gap: 1, prefix: '$' },
     },
     controls: [
-      ...priceControls,
       { group: 'Bricks', type: 'slider', key: 'opts.brickSize', label: 'Brick size', min: 1, max: 20, step: 0.5, format: (v) => v.toFixed(1) },
       { group: 'Bricks', type: 'slider', key: 'opts.gap', label: 'Brick gap', min: 0, max: 6, step: 1, format: (v) => v + 'px' },
       { group: 'Style',  type: 'colors', key: 'renkoColors', label: 'Up / down', names: () => ['Up brick', 'Down brick'] },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.renkoColors = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.renkoColors; },
     canvas: {
       height: 360,
-      helpers: [makeRng, priceWalk],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const size = o.brickSize;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
+        const walk = spec.bars;
 
         // Lay a brick each time price closes a full brick beyond the last one.
         const bricks = [];
@@ -185,7 +183,7 @@ export const financeCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + Math.round(v), pad.l - 6, y + 4);
         }
@@ -194,6 +192,11 @@ export const financeCharts = [
           const x = pad.l + i * colW;
           const yTop = toY(b.low + size);
           const h = Math.max(1, toY(b.low) - yTop);
+          // Time is not the x axis here, so the readout names the price band
+          // rather than a session number that would mean nothing.
+          tip(x, yTop, Math.max(1, colW), h,
+            (b.up ? 'Up' : 'Down') + ' brick\n'
+            + o.prefix + b.low.toFixed(2) + ' – ' + o.prefix + (b.low + size).toFixed(2));
           ctx.fillStyle = (b.up ? spec.upColor : spec.downColor) + 'dd';
           ctx.fillRect(x + o.gap / 2, yTop + o.gap / 2, Math.max(1, colW - o.gap), Math.max(1, h - o.gap));
         });
@@ -212,26 +215,28 @@ export const financeCharts = [
     blurb: 'Columns of X and O. A new column starts only when price reverses by a set number of boxes.',
     tags: ['point and figure', 'pnf', 'x o', 'reversal', 'finance', 'price action'],
     spec: {
-      count: 300, seed: 9, start: 148, volatility: 7,
+      bars: [...REVERSAL_BARS],
       upColor: C.teal, downColor: C.coral,
-      opts: { floor: 90, ceiling: 230, boxSize: 2, reversal: 3, markSize: 0.72, lineWidth: 1.8, prefix: '$' },
+      opts: { textColor: '#808080', boxSize: 2, reversal: 3, markSize: 0.72, lineWidth: 1.8, prefix: '$' },
     },
     controls: [
-      ...priceControls,
       { group: 'Boxes', type: 'slider', key: 'opts.boxSize',  label: 'Box size', min: 1, max: 12, step: 0.5, format: (v) => v.toFixed(1) },
       { group: 'Boxes', type: 'slider', key: 'opts.reversal', label: 'Reversal boxes', min: 1, max: 6, step: 1 },
       { group: 'Style', type: 'colors', key: 'pnfColors', label: 'X / O', names: () => ['X (rising)', 'O (falling)'] },
       { group: 'Style', type: 'slider', key: 'opts.markSize', label: 'Mark size', min: 0.4, max: 1, step: 0.04, format: (v) => Math.round(v * 100) + '%' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.pnfColors = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.pnfColors; },
     canvas: {
       height: 380,
-      helpers: [makeRng, priceWalk],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const box = o.boxSize;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
+        const walk = spec.bars;
 
         // Build columns: extend the current one, or reverse into a new one.
         const columns = [];
@@ -285,7 +290,7 @@ export const financeCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + Math.round(v), pad.l - 6, y + 4);
         }
@@ -295,6 +300,12 @@ export const financeCharts = [
           const cx = pad.l + ci * cellW + cellW / 2;
           const lo = Math.min(col.from, col.to);
           const hi = Math.max(col.from, col.to);
+          // A column is one uninterrupted move, which is the unit this chart
+          // is built out of — hovering a single X would say less.
+          tip(pad.l + ci * cellW, toY(hi) - cellH, cellW, Math.max(cellH, toY(lo) - toY(hi) + cellH),
+            (col.up ? 'X — rising' : 'O — falling') + '\n'
+            + o.prefix + lo.toFixed(2) + ' – ' + o.prefix + hi.toFixed(2) + '\n'
+            + Math.max(1, Math.round((hi - lo) / box)) + ' boxes');
           ctx.strokeStyle = col.up ? spec.upColor : spec.downColor;
           ctx.lineWidth = o.lineWidth;
 
@@ -329,25 +340,27 @@ export const financeCharts = [
     blurb: 'A line that thickens on a break to a new high and thins on a break to a new low. Direction, not duration.',
     tags: ['kagi', 'finance', 'reversal', 'yin yang', 'price action', 'trend'],
     spec: {
-      count: 260, seed: 11, start: 148, volatility: 6,
+      bars: [...REVERSAL_BARS],
       upColor: C.teal, downColor: C.coral,
-      opts: { floor: 90, ceiling: 230, reversal: 5, thickWidth: 3.6, thinWidth: 1.4, prefix: '$' },
+      opts: { textColor: '#808080', reversal: 5, thickWidth: 3.6, thinWidth: 1.4, prefix: '$' },
     },
     controls: [
-      ...priceControls,
       { group: 'Lines', type: 'slider', key: 'opts.reversal', label: 'Reversal amount', min: 1, max: 20, step: 0.5, format: (v) => v.toFixed(1) },
       { group: 'Style', type: 'colors', key: 'kagiColors', label: 'Yang / yin', names: () => ['Thick (yang)', 'Thin (yin)'] },
       { group: 'Style', type: 'slider', key: 'opts.thickWidth', label: 'Thick width', min: 2, max: 8, step: 0.2, format: (v) => v.toFixed(1) + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.thinWidth', label: 'Thin width', min: 0.5, max: 4, step: 0.2, format: (v) => v.toFixed(1) + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.kagiColors = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.kagiColors; },
     canvas: {
       height: 360,
-      helpers: [makeRng, priceWalk],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const walk = priceWalk(spec.seed, spec.count, spec.start, spec.volatility, o.floor, o.ceiling, spec.bars);
+        const walk = spec.bars;
 
         // Turning points: extend while moving with the trend, pivot on a
         // reversal larger than the threshold.
@@ -386,7 +399,7 @@ export const financeCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + Math.round(v), pad.l - 6, y + 4);
         }
@@ -402,6 +415,10 @@ export const financeCharts = [
           const y0 = toY(pivots[i - 1]);
           const y1 = toY(pivots[i]);
           const rising = pivots[i] > pivots[i - 1];
+          // One target per leg, spanning the vertical move it represents.
+          tip(x0, Math.min(y0, y1), Math.max(2, stepX), Math.max(2, Math.abs(y1 - y0)),
+            (rising ? 'Rising leg' : 'Falling leg') + '\n'
+            + o.prefix + pivots[i - 1].toFixed(2) + ' → ' + o.prefix + pivots[i].toFixed(2));
 
           if (rising && pivots[i] > shoulder) thick = true;
           if (!rising && pivots[i] < shoulder) thick = false;

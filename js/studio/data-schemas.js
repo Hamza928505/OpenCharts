@@ -10,9 +10,7 @@
  *   shape        which SHAPES adapter in dataio.js to use
  *   example      correctly-shaped text for the "Example" button
  *   hint         one line under the box explaining the columns
- *   generated    true when the chart's sample data comes from parameters,
- *                which turns on the Sample/My data switch
- *   hideGroups   control groups to hide once real data is in use
+ *   picker       'cities' or 'countries' to offer a place picker in the editor
  *   toText       serialise the live spec back to CSV
  */
 
@@ -20,11 +18,11 @@ const csv = (rows) => rows.map((r) => r.join(',')).join('\n');
 
 /* ── writers ─────────────────────────────────────────────────────────────── */
 
-const writeLabelSeries = (spec) => {
+const writeLabelSeries = (spec, labelsKey = 'labels') => {
   const series = spec.series || [];
   if (!series.length) return '';
   const head = ['label', ...series.map((s) => s.label)];
-  const rows = (spec.labels || []).map((l, i) => [l, ...series.map((s) => (s.data || [])[i] ?? '')]);
+  const rows = (spec[labelsKey] || []).map((l, i) => [l, ...series.map((s) => (s.data || [])[i] ?? '')]);
   return csv([head, ...rows]);
 };
 
@@ -107,7 +105,7 @@ export const DATA_SCHEMAS = {
     'line-basic', 'line-multi', 'line-stepped', 'line-stepped-multi',
     'area-basic', 'area-stacked', 'area-100stacked', 'step-area',
     'bar-vertical', 'bar-stacked', 'bar-100stacked',
-    'bump-chart', 'stream-graph', 'mixed-stacked-line',
+    'bump-chart', 'mixed-stacked-line',
     'engine-line', 'engine-area', 'engine-bar',
   ].map((id) => [id, {
     shape: 'labelSeries',
@@ -125,6 +123,13 @@ export const DATA_SCHEMAS = {
     hint: 'Two columns: a label and its value. Negative values are allowed where the chart supports them.',
     toText: (spec) => writeLabelValue(spec),
   }])),
+
+  'stream-graph': {
+    shape: 'labelSeries', labelsKey: 'periods',
+    example: EX.labelSeries,
+    hint: 'First column is the period label; each further column becomes a band.',
+    toText: (s) => writeLabelSeries(s, 'periods'),
+  },
 
   'radar-single':  { shape: 'labelSeries', example: 'axis,Score\nQuality,82\nSpeed,74\nValue,68', hint: 'First column names each axis; further columns are series.', toText: writeLabelSeries },
   'radar-multi':   { shape: 'labelSeries', example: 'axis,Us,Them\nQuality,82,70\nSpeed,74,80', hint: 'First column names each axis; further columns are series.', toText: writeLabelSeries },
@@ -211,28 +216,43 @@ export const DATA_SCHEMAS = {
 
   /* Distributions — raw observations ---------------------------------------- */
   ...Object.fromEntries([
-    ['histogram', 'values'], ['box-plot', 'groups'], ['violin', 'groups'],
+    ['histogram', 'groups'], ['box-plot', 'groups'], ['violin', 'groups'],
     ['density-plot', 'groups'], ['ridgeline', 'rows'], ['ecdf', 'groups'],
     ['beeswarm', 'groups'], ['barcode-plot', 'rows'],
   ].map(([id, key]) => [id, {
     shape: 'observations', key,
-    generated: true,
     example: EX.observations,
     hint: 'Either one column per group, or two columns of group and value.',
-    sampleNote: 'Sampled from the distribution settings below — a way to explore the shape before you have real observations.',
-    hideGroups: ['Data'],
-    clearKeys: [],
     toText: (s) => writeObservations(s, key),
   }])),
 
   /* Flows and networks ------------------------------------------------------- */
-  'sankey':         { shape: 'links', key: 'flows', nodesKey: 'nodes', example: EX.links, hint: 'Three columns: from, to, and the amount flowing.', toText: (s) => writeLinks(s, 'flows') },
-  'parallel-sets':  { shape: 'links', key: 'records', example: 'channel,device,value\nOrganic,Desktop,320\nPaid,Mobile,180', hint: 'One row per group, with the amount last.', toText: (s) => csv([['from', 'to', 'value'], ...(s.records || []).map((r) => [r[s.dimensions[0]], r[s.dimensions[1]], r.value])]) },
+  'sankey': {
+    shape: 'links', key: 'flows', nodesKey: 'nodes', example: EX.links,
+    hint: 'From, to, and the amount flowing. Add a column for a longer path — '
+      + 'Ad, Visit, Checkout, 320 is 320 flowing Ad → Visit → Checkout.',
+    toText: (s) => writeLinks(s, 'flows'),
+  },
+  // Not `links`: this chart reads `record[dimensionName]`, so the column
+  // headers are the data. Writing {from, to, flow} into it — which the links
+  // shape did — left every category undefined.
+  'parallel-sets': {
+    shape: 'dimensions', key: 'records', dimensionsKey: 'dimensions', colorByKey: 'colorBy',
+    example: 'Channel,Device,Outcome,value\nOrganic,Desktop,Purchase,320\n'
+      + 'Organic,Mobile,Bounce,480\nPaid,Mobile,Purchase,180\nEmail,Desktop,Purchase,160',
+    hint: 'One column per dimension, then the count. Add a column for another '
+      + 'dimension — its heading becomes the name on the chart.',
+    toText: (s) => {
+      const dims = s.dimensions || [];
+      return csv([[...dims, 'value'], ...(s.records || []).map((r) => [...dims.map((d) => r[d]), r.value])]);
+    },
+  },
   'network':        { shape: 'edges', example: EX.edges, hint: 'Two columns: source and target. Nodes are derived from the edges.', toText: writeEdges },
   'arc-diagram':    { shape: 'edges', example: EX.edges, hint: 'Two columns: source and target.', toText: writeEdges },
   'adjacency-matrix': { shape: 'edges', example: EX.edges, hint: 'Two columns: source and target.', toText: writeEdges },
   'chord': {
-    shape: 'links', key: 'chordLinks', example: 'from,to,value\nWomen,Men,1200\nWomen,Living,800', hint: 'Three columns: the two groups and the volume between them.',
+    shape: 'links', key: 'chordLinks', example: 'from,to,value\nWomen,Men,1200\nWomen,Living,800', hint: 'The two groups and the volume between them. A longer row is a chain — '
+      + 'A, B, C, 40 links A to B and B to C.',
     toText: (s) => {
       const out = [['from', 'to', 'value']];
       (s.matrix || []).forEach((row, i) => row.forEach((v, j) => { if (j > i && v) out.push([s.names[i], s.names[j], v]); }));
@@ -259,7 +279,9 @@ export const DATA_SCHEMAS = {
 
   /* Hierarchies -------------------------------------------------------------- */
   'treemap': {
-    shape: 'tree', key: 'treeInput', example: EX.tree, hint: 'One row per leaf: a “Parent > Child > Leaf” path and its value.',
+    shape: 'tree', key: 'treeInput', example: EX.tree,
+    hint: 'One row per leaf: a “Parent > Child > Leaf” path and its value — '
+      + 'or one column per level, with the value last.',
     toText: (s) => csv([['path', 'value'], ...(s.items || []).map((it) => [`${it.g} > ${it.label}`, it.value])]),
     onData(spec) {
       // The Chart.js treemap wants a flat list with a group column.
@@ -281,7 +303,8 @@ export const DATA_SCHEMAS = {
   ...Object.fromEntries([['sunburst', 'tree'], ['icicle', 'tree'], ['dendrogram', 'tree']].map(([id, key]) => [id, {
     shape: 'tree', key, groupsKey: 'groups',
     example: EX.tree,
-    hint: 'One row per leaf: a “Parent > Child > Leaf” path and its value.',
+    hint: 'One row per leaf: a “Parent > Child > Leaf” path and its value — '
+      + 'or one column per level, with the value last.',
     toText: (s) => writeTree(s, key),
   }])),
   'bubble-pack': {
@@ -303,12 +326,9 @@ export const DATA_SCHEMAS = {
   /* Scatter families --------------------------------------------------------- */
   'scatter-basic': {
     shape: 'labelValue', labelsKey: '_xs', valuesKey: '_ys',
-    generated: true,
     example: 'x,y\n120,3.4\n210,4.1\n64,2.8',
     hint: 'Two numeric columns: x and y.',
-    sampleNote: 'Generated from the settings below — a way to explore the chart before you have real x,y pairs.',
-    hideGroups: ['Data'],
-    toText: (s) => (s.points ? csv([['x', 'y'], ...s.points.map((p) => [p.x, p.y])]) : 'x,y'),
+    toText: (s) => csv([['x', 'y'], ...(s.points || []).map((p) => [p.x, p.y])]),
     onData(spec) {
       spec.points = (spec._xs || []).map((x, i) => ({
         x: Number(x) || 0, y: (spec._ys || [])[i] || 0,
@@ -345,15 +365,11 @@ export const DATA_SCHEMAS = {
   /* Finance ------------------------------------------------------------------ */
   ...Object.fromEntries(['ohlc', 'candlestick', 'renko', 'point-figure', 'kagi'].map((id) => [id, {
     shape: 'ohlc',
-    generated: true,
     example: EX.ohlc,
     hint: 'Four numeric columns: open, high, low, close. A leading date column is ignored.',
-    sampleNote: 'Simulated from the settings below — a way to explore the chart before you have real OHLC rows.',
-    hideGroups: ['Data'],
-    clearKeys: ['bars'],
-    toText: (s) => (s.bars
-      ? csv([['open', 'high', 'low', 'close'], ...s.bars.map((b) => [b.o, b.h, b.l, b.c])])
-      : EX.ohlc),
+    toText: (s) => csv([
+      ['open', 'high', 'low', 'close'], ...(s.bars || []).map((b) => [b.o, b.h, b.l, b.c]),
+    ]),
   }])),
 
   /* Deviation ---------------------------------------------------------------- */
@@ -425,12 +441,8 @@ export const DATA_SCHEMAS = {
   },
   'horizon-chart': {
     shape: 'rowSeries', key: 'series', labelsKey: false,
-    generated: true,
     example: 'metric,t1,t2,t3,t4,t5\nCPU,0.2,0.5,-0.3,0.8,0.1\nMemory,0.4,0.2,0.6,-0.1,0.3',
     hint: 'One row per band; each further column is a point in time.',
-    sampleNote: 'Generated per row — a way to explore the chart before you have real series.',
-    hideGroups: ['Data'],
-    clearKeys: [],
     toText: (s) => csv([['metric'], ...(s.series || []).map((r) => [r.label, ...(r.data || r.values || [])])]),
     onData(spec) {
       // The renderer reads `values`; keep both so the round-trip survives.
@@ -439,25 +451,17 @@ export const DATA_SCHEMAS = {
   },
   'spiral-plot': {
     shape: 'labelValue',
-    generated: true,
     example: 'period,value\nW1,0.4\nW2,0.6\nW3,0.9',
     hint: 'Two columns: a period label and its value.',
-    sampleNote: 'Generated from the settings below — a way to explore the chart before you have a real series.',
-    hideGroups: ['Data'],
-    clearKeys: ['values'],
-    toText: (s) => (s.values ? csv([['period', 'value'], ...s.values.map((v, i) => ['P' + (i + 1), v])]) : 'period,value'),
+    toText: (s) => csv([['period', 'value'], ...(s.values || []).map((v, i) => ['P' + (i + 1), v])]),
   },
   'calendar-heatmap': {
     shape: 'labelValue',
-    generated: true,
     example: 'date,count\n2025-01-04,3\n2025-01-05,7\n2025-01-06,2',
     hint: 'Two columns: an ISO date and a count.',
-    sampleNote: 'Daily counts are generated — a placeholder until you paste real dates.',
-    hideGroups: ['Data'],
-    clearKeys: ['dayValues'],
-    toText: (s) => (s.dayValues
-      ? csv([['date', 'count'], ...Object.entries(s.dayValues).map(([d, v]) => [d, v])])
-      : 'date,count'),
+    toText: (s) => csv([
+      ['date', 'count'], ...Object.entries(s.dayValues || {}).map(([d, v]) => [d, v]),
+    ]),
     onData(spec) {
       const map = {};
       (spec.labels || []).forEach((d, i) => { map[d] = (spec.values || [])[i] || 0; });
@@ -467,27 +471,30 @@ export const DATA_SCHEMAS = {
   },
   'radial-histogram': {
     shape: 'labelValue',
-    generated: true,
     example: 'direction,count\nN,120\nNE,86\nE,45',
     hint: 'Two columns: a direction label and its count.',
-    sampleNote: 'Generated from the settings below — a placeholder until you paste real bins.',
-    hideGroups: ['Data'],
-    clearKeys: ['binCounts'],
-    toText: (s) => (s.binCounts ? csv([['bin', 'count'], ...s.binCounts.map((v, i) => ['B' + (i + 1), v])]) : 'bin,count'),
+    toText: (s) => csv([
+      ['direction', 'count'],
+      ...(s.binCounts || []).map((v, i) => [(s.labels || [])[i] || 'B' + (i + 1), v]),
+    ]),
     onData(spec) {
       spec.binCounts = spec.values || [];
-      spec.bins = Math.max(1, spec.binCounts.length);
+      // The shape already wrote spec.labels; keep them as the ring's names.
     },
   },
   'heatmap': {
     shape: 'matrix',
-    generated: true,
     example: 'day,0,1,2,3\nMon,4,8,12,6\nTue,3,9,14,7',
     hint: 'First column is the row label; each further column is a cell.',
-    sampleNote: 'Generated from the settings below — a placeholder until you paste a real grid.',
-    hideGroups: ['Data'],
-    clearKeys: ['cells'],
-    toText: (s) => (s.cells ? '' : 'day,0,1,2,3\nMon,4,8,12,6'),
+    toText: (s) => {
+      const rows = s.rows || [];
+      const cols = s.cols || [];
+      const at = new Map((s.cells || []).map((c) => [c.y + ':' + c.x, c.v]));
+      return csv([
+        ['day', ...cols],
+        ...rows.map((label, y) => [label, ...cols.map((_, x) => at.get(y + ':' + x) ?? '')]),
+      ]);
+    },
   },
   'voronoi': {
     shape: 'places', key: 'seeds',
@@ -502,20 +509,17 @@ export const DATA_SCHEMAS = {
   },
   'parallel-coords': {
     shape: 'rowSeries', key: 'rowItems', labelsKey: false,
-    generated: true,
     example: 'item,Price,Rating,Reviews\nA,120,4.2,300\nB,64,3.8,120',
     hint: 'First column names each item; every further column becomes an axis.',
-    sampleNote: 'Items are generated — a placeholder until you paste a real table.',
-    hideGroups: ['Data'],
-    clearKeys: ['records'],
-    toText: (s) => (s.records
-      ? csv([['item', ...s.dims], ...s.records.map((r, i) => ['Item ' + (i + 1), ...s.dims.map((d) => r[d])])])
-      : 'item,Price,Rating\nA,120,4.2'),
+    toText: (s) => csv([
+      ['item', ...s.dims],
+      ...(s.records || []).map((r, i) => [r.name || 'Item ' + (i + 1), ...s.dims.map((d) => r[d])]),
+    ]),
     onData(spec, table) {
       spec.dims = table.headers.slice(1);
       const groupCount = Math.max(1, (spec.groups || []).length);
       spec.records = spec.rowItems.map((row, i) => {
-        const rec = { group: i % groupCount };
+        const rec = { name: row.label, group: i % groupCount };
         spec.dims.forEach((d, k) => { rec[d] = row.data[k]; });
         return rec;
       });
@@ -525,40 +529,32 @@ export const DATA_SCHEMAS = {
 
   /* Geo ----------------------------------------------------------------------- */
   ...Object.fromEntries(['choropleth', 'cartogram', 'dot-density-map'].map((id) => [id, {
-    shape: 'regions',
-    generated: true,
+    shape: 'regions', picker: 'countries',
     example: EX.regions,
     hint: 'Two columns: a country name and its value. Names must match Natural Earth spellings.',
-    sampleNote: 'Generated per country — a placeholder until you paste real figures.',
-    hideGroups: ['Data'],
-    clearKeys: ['regionValues'],
-    toText: (s) => (s.regionValues
-      ? csv([['country', 'value'], ...Object.entries(s.regionValues).map(([k, v]) => [k, v])])
-      : EX.regions),
+    toText: (s) => csv([
+      ['country', 'value'], ...Object.entries(s.regionValues || {}).map(([k, v]) => [k, v]),
+    ]),
   }])),
   globe: {
-    shape: 'regions',
-    generated: true,
+    shape: 'regions', picker: 'countries',
     example: EX.regions,
     hint: 'Two columns: a country name and its value. Matching ignores case and punctuation.',
-    sampleNote: 'Generated per country — a placeholder until you paste real figures.',
-    hideGroups: ['Sample'],
-    clearKeys: ['regionValues'],
-    toText: (s) => (s.regionValues
-      ? csv([['country', 'value'], ...Object.entries(s.regionValues).map(([k, v]) => [k, v])])
-      : EX.regions),
+    toText: (s) => csv([
+      ['country', 'value'], ...Object.entries(s.regionValues || {}).map(([k, v]) => [k, v]),
+    ]),
   },
 
   'city-map': {
-    shape: 'places', key: 'places',
+    shape: 'places', key: 'places', picker: 'cities',
     example: 'city,lon,lat,value\nAmman,35.93,31.95,4300\nZarqa,36.09,32.07,1450\nIrbid,35.85,32.55,1180\nAqaba,35.00,29.53,190',
     hint: 'Four columns: city name, longitude, latitude, value. Longitude comes before latitude.',
     toText: (s) => writePlaces(s, 'places'),
   },
 
-  'proportional-symbol-map': { shape: 'places', key: 'places', example: EX.places, hint: 'Four columns: name, longitude, latitude, value.', toText: (s) => writePlaces(s, 'places') },
+  'proportional-symbol-map': { shape: 'places', key: 'places', picker: 'cities', example: EX.places, hint: 'Four columns: name, longitude, latitude, value.', toText: (s) => writePlaces(s, 'places') },
   'flow-map': {
-    shape: 'places', key: 'routes',
+    shape: 'places', key: 'routes', picker: 'cities',
     example: EX.places, hint: 'Four columns: destination, longitude, latitude, volume. The hub stays as configured.',
     toText: (s) => writePlaces(s, 'routes'),
   },

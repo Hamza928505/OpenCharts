@@ -80,8 +80,17 @@ export function renderHelp(container, def, spec, onEditData) {
   const ol = el('ol', 'help-steps');
 
   const stepData = el('li');
-  stepData.innerHTML = '<strong>Your data</strong> — paste a table from a spreadsheet, or edit the rows in place. ';
-  const editLink = el('button', 'help-link', 'Open the full editor');
+  // Name the way in that suits this chart: a map is far quicker to fill from
+  // the place list than by typing coordinates.
+  const picker = (def.data || {}).picker;
+  stepData.innerHTML = '<strong>Your data</strong> — ' + (
+    picker === 'cities'
+      ? 'pick cities from the list and type a value for each, or fill the table in yourself. '
+      : picker === 'countries'
+        ? 'pick countries from the list and type a value for each, or fill the table in yourself. '
+        : 'fill in the table, or paste one straight from a spreadsheet. '
+  );
+  const editLink = el('button', 'help-link', 'Open the editor');
   editLink.type = 'button';
   editLink.addEventListener('click', (e) => { e.stopPropagation(); onEditData(); });
   stepData.appendChild(editLink);

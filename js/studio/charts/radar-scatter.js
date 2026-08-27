@@ -3,27 +3,9 @@
  */
 
 import { C, withAlpha } from '../palette.js';
+import { SCATTER_POINTS, SCATTER_CLUSTERS } from './_data.js';
 import { baseOpts, yAxis, rAxis, TICK, seriesLegend } from '../chartjs-base.js';
 import { tickFormat } from '../serialize.js';
-
-/* Deterministic pseudo-random so a regenerated cloud is reproducible in the
-   exported code — a fresh Math.random() cloud would not match the picture. */
-function makeRng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-/** Scatter points clustered around a centre. */
-function cluster(n, cx, cy, spread, seed) {
-  const rnd = makeRng(seed);
-  return Array.from({ length: n }, () => ({
-    x: +(cx + (rnd() - 0.5) * spread * 2).toFixed(1),
-    y: +(cy + (rnd() - 0.5) * spread * 2).toFixed(1),
-  }));
-}
 
 const radarControls = [
   { group: 'Data',  type: 'labels', key: 'labels', label: 'Axis labels' },
@@ -153,16 +135,13 @@ export const scatterCharts = [
     blurb: 'Two measures per item. The eye reads correlation from the cloud, not from any one dot.',
     tags: ['scatter', 'correlation', 'xy', 'price rating'],
     spec: {
-      count: 120,
-      seed: 7,
+      points: [...SCATTER_POINTS],
       label: 'Product',
       color: C.purple,
       opts: { pointRadius: 5, alpha: 0.55, xMin: 0, xMax: 260, yMin: 2, yMax: 5.2, xTitle: 'Price ($)', yTitle: 'Rating', xPrefix: '$', ySuffix: '' },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'count', label: 'Point count', min: 20, max: 400, step: 10 },
-      { group: 'Data',  type: 'slider', key: 'seed',  label: 'Sample seed', min: 1, max: 60, step: 1 },
-      { group: 'Data',  type: 'text',   key: 'label', label: 'Series name' },
+      { group: 'Series', type: 'text',  key: 'label', label: 'Series name' },
       { group: 'Style', type: 'colors', key: 'pointColor', label: 'Point colour' },
       { group: 'Style', type: 'slider', key: 'opts.pointRadius', label: 'Point size', min: 2, max: 12, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Point opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
@@ -172,12 +151,8 @@ export const scatterCharts = [
     onChange(spec) { spec.color = spec.pointColor[0]; },
     chartjs: {
       build(spec) {
-        const rnd = makeRng(spec.seed * 9301 + 49297);
         const o = spec.opts;
-        const points = Array.from({ length: spec.count }, () => ({
-          x: +(o.xMin + rnd() * (o.xMax - o.xMin) * 0.9).toFixed(1),
-          y: +(o.yMin + rnd() * (o.yMax - o.yMin) * 0.92).toFixed(2),
-        }));
+        const points = spec.points;
         return {
           type: 'scatter',
           data: {
@@ -208,23 +183,22 @@ export const scatterCharts = [
     blurb: 'Segments given their own colour, so the groups separate without a legend hunt.',
     tags: ['scatter', 'clusters', 'segments', 'customers'],
     spec: {
-      groups: [
-        { label: 'High-value', color: C.purple, cx: 75, cy: 80, n: 30, spread: 12 },
-        { label: 'Regular',    color: C.teal,   cx: 45, cy: 45, n: 40, spread: 15 },
-        { label: 'Occasional', color: C.coral,  cx: 20, cy: 25, n: 35, spread: 12 },
-      ],
+      groups: SCATTER_CLUSTERS.map((g, i) => ({
+        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+      })),
       opts: { pointRadius: 6, alpha: 0.65, xMin: 0, xMax: 100, yMin: 0, yMax: 100, xTitle: 'Avg order value ($)', yTitle: 'Purchase frequency' },
     },
     controls: [
-      { group: 'Data',  type: 'series', key: 'groups', data: false, max: 5, min: 1 },
+      { group: 'Series', type: 'series', key: 'groups', data: false, max: 5, min: 1 },
       { group: 'Style', type: 'slider', key: 'opts.pointRadius', label: 'Point size', min: 2, max: 12, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Point opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       ...scatterAxisControls,
     ],
     onChange(spec) {
-      // Give a newly added group a sensible cloud instead of leaving it empty.
+      // A group added from the sidebar starts empty; give it one point so the
+      // chart still renders and there is something to drag in the data editor.
       spec.groups.forEach((g, i) => {
-        if (typeof g.cx !== 'number') { g.cx = 30 + i * 18; g.cy = 30 + i * 15; g.n = 28; g.spread = 13; }
+        if (!g.points || !g.points.length) g.points = [{ x: 30 + i * 18, y: 30 + i * 15 }];
       });
     },
     chartjs: {
@@ -233,7 +207,7 @@ export const scatterCharts = [
         data: {
           datasets: spec.groups.map((g, i) => ({
             label: g.label,
-            data: cluster(g.n, g.cx, g.cy, g.spread, (i + 1) * 1337),
+            data: g.points,
             backgroundColor: withAlpha(g.color, spec.opts.alpha),
             borderColor: g.color,
             borderWidth: 0,

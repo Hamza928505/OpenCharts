@@ -35,6 +35,25 @@ function makeRng(seed) {
   };
 }
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const hierarchyExtraCharts = [
   {
     id: 'icicle',
@@ -93,8 +112,7 @@ export const hierarchyExtraCharts = [
           .attr('height', boxH)
           .attr('rx', o.radius)
           .attr('fill', colourFor)
-          .append('title')
-          .text((d) => `${d.data.name}\n$${d.value}K`);
+          .attr('data-tip', (d) => `${d.data.name}\n$${d.value}K`);
 
         if (o.showLabels) {
           g.append('text')
@@ -184,7 +202,7 @@ export const hierarchyExtraCharts = [
         g.append('circle')
           .attr('r', (d) => (d.depth === 0 ? o.nodeRadius + 2 : o.nodeRadius))
           .attr('fill', (d) => (d.depth === 0 ? '#8B8880' : colourFor(d)))
-          .append('title').text((d) => d.data.name);
+          .attr('data-tip', (d) => d.data.name);
 
         if (o.showLabels) {
           g.append('text')
@@ -256,7 +274,7 @@ export const hierarchyExtraCharts = [
           .attr('fill', (_, i) => colourOf(i) + alphaHex)
           .attr('stroke', (_, i) => colourOf(i))
           .attr('stroke-width', o.strokeWidth)
-          .append('title').text((d) => d.label);
+          .attr('data-tip', (d) => d.label);
 
         if (o.showDelaunay) {
           svg.append('path')
@@ -303,7 +321,7 @@ export const hierarchyExtraCharts = [
         { label: 'UK',     value: 1250, color: C.coral },
         { label: 'London', value: 420,  color: C.amber },
       ],
-      opts: { shape: 'circle', mode: 'nested', alpha: 0.85, showValues: true, labelSize: 11, suffix: 'K' },
+      opts: { textColor: '#808080', shape: 'circle', mode: 'nested', alpha: 0.85, showValues: true, labelSize: 11, suffix: 'K' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'items', data: false, max: 8, min: 2 },
@@ -314,13 +332,17 @@ export const hierarchyExtraCharts = [
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Fill opacity', min: 0.2, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
       { group: 'Axis',  type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.items.forEach((it, i) => { if (typeof it.value !== 'number') it.value = 500 / (i + 1); });
     },
     canvas: {
+      helpers: [inkColor],
       height: 400,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const items = spec.items.slice().sort((a, b) => b.value - a.value);
         if (!items.length) return;
@@ -337,8 +359,12 @@ export const hierarchyExtraCharts = [
 
           items.forEach((it) => {
             const s = scale(it.value);
+            const label = it.label + ': ' + it.value + o.suffix;
             if (o.shape === 'circle') {
               const r = maxR * s;
+              // Nested shapes are drawn largest first, so the smallest is last
+              // in the list and wins the hit test — which is what you can see.
+              tip({ cx: cx, cy: baseY - r, r: r, text: label });
               ctx.beginPath();
               ctx.arc(cx, baseY - r, r, 0, Math.PI * 2);
               ctx.fillStyle = it.color + alphaHex;
@@ -348,6 +374,7 @@ export const hierarchyExtraCharts = [
               ctx.stroke();
             } else {
               const side = maxR * 2 * s;
+              tip(cx - side / 2, baseY - side, side, side, label);
               ctx.beginPath();
               ctx.rect(cx - side / 2, baseY - side, side, side);
               ctx.fillStyle = it.color + alphaHex;
@@ -365,7 +392,7 @@ export const hierarchyExtraCharts = [
             const y = 24 + i * 20;
             ctx.fillStyle = it.color;
             ctx.fillRect(W - 132, y - 8, 10, 10);
-            ctx.fillStyle = 'rgba(128,128,128,.95)';
+            ctx.fillStyle = ink(0.95);
             const text = o.showValues ? `${it.label} · ${it.value}${o.suffix}` : it.label;
             ctx.fillText(text, W - 116, y + 1);
           });
@@ -376,6 +403,9 @@ export const hierarchyExtraCharts = [
           items.forEach((it, i) => {
             const cx = slot * i + slot / 2;
             const s = scale(it.value);
+            // Side by side, the whole column is the target — the shapes are
+            // small and a reader should not have to find the exact circle.
+            tip(slot * i, 0, slot, H, it.label + ': ' + it.value + o.suffix);
             if (o.shape === 'circle') {
               const r = (maxSide / 2) * s;
               ctx.beginPath();
@@ -395,7 +425,7 @@ export const hierarchyExtraCharts = [
               ctx.lineWidth = 1.5;
               ctx.stroke();
             }
-            ctx.fillStyle = 'rgba(128,128,128,.95)';
+            ctx.fillStyle = ink(0.95);
             ctx.font = o.labelSize + 'px "DM Sans", system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(it.label, cx, baseY + 18);

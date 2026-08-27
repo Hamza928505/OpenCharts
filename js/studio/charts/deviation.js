@@ -11,6 +11,25 @@ import { C, MONTHS, withAlpha } from '../palette.js';
 import { baseOpts, xAxis, yAxis, TICK } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const deviationCharts = [
   {
     id: 'surplus-deficit-line',
@@ -24,7 +43,7 @@ export const deviationCharts = [
       baseline: 0,
       upColor: C.teal,
       downColor: C.coral,
-      opts: { lineWidth: 2.2, fillAlpha: 0.28, showBaseline: true, showPoints: true, pointRadius: 3, suffix: 'M', prefix: '$' },
+      opts: { textColor: '#808080', lineWidth: 2.2, fillAlpha: 0.28, showBaseline: true, showPoints: true, pointRadius: 3, suffix: 'M', prefix: '$' },
     },
     controls: [
       { group: 'Data',  type: 'labels', key: 'labels', label: 'Period labels' },
@@ -37,12 +56,16 @@ export const deviationCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.showBaseline', label: 'Show baseline' },
       { group: 'Axis',  type: 'text',   key: 'opts.prefix', label: 'Value prefix' },
       { group: 'Axis',  type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.signColors = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.signColors; },
     canvas: {
+      helpers: [inkColor],
       height: 360,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const vals = spec.values;
         if (!vals.length) return;
@@ -72,7 +95,7 @@ export const deviationCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + v.toFixed(1) + o.suffix, pad.l - 6, y + 4);
         }
@@ -130,8 +153,18 @@ export const deviationCharts = [
           });
         }
 
+        // One column per point, full height: on a line chart the y position
+        // is the value, so a target that only covers the line is unusable.
+        const colW = (W - pad.l - pad.r) / Math.max(1, vals.length);
+        vals.forEach((v, i) => {
+          const over = v - spec.baseline;
+          tip(toX(i) - colW / 2, pad.t, colW, H - pad.t - pad.b,
+            spec.labels[i] + ': ' + v + '\n'
+            + (over >= 0 ? 'surplus ' : 'deficit ') + Math.abs(over).toFixed(1));
+        });
+
         // Category labels, thinned so they never collide.
-        ctx.fillStyle = 'rgba(128,128,128,.8)';
+        ctx.fillStyle = ink(0.8);
         ctx.font = '10px "DM Sans", system-ui, sans-serif';
         ctx.textAlign = 'center';
         const skip = Math.ceil(vals.length / 12);
@@ -258,7 +291,7 @@ export const deviationCharts = [
       rightLabel: 'Mobile',
       leftColor: C.blue,
       rightColor: C.coral,
-      opts: { gutter: 96, barHeight: 0.62, radius: 3, showValues: true, max: 100 },
+      opts: { textColor: '#808080', gutter: 96, barHeight: 0.62, radius: 3, showValues: true, max: 100 },
     },
     controls: [
       { group: 'Data',  type: 'text',   key: 'leftLabel',  label: 'Left group name' },
@@ -268,12 +301,16 @@ export const deviationCharts = [
       { group: 'Style', type: 'slider', key: 'opts.barHeight', label: 'Bar height', min: 0.25, max: 0.9, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'slider', key: 'opts.radius', label: 'Corner radius', min: 0, max: 10, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.sides = [spec.leftColor, spec.rightColor]; },
     onChange(spec) { [spec.leftColor, spec.rightColor] = spec.sides; },
     canvas: {
+      helpers: [inkColor],
       height: 360,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -297,6 +334,10 @@ export const deviationCharts = [
           const y = pad.t + rowH * i + (rowH - bh) / 2;
           const lw = (r.left / o.max) * half;
           const rw = (r.right / o.max) * half;
+          // Each side separately: the whole point is comparing the two, and a
+          // single row-wide target could not say which one you are on.
+          tip(centreL - lw, y, lw, bh, r.label + '\n' + spec.leftLabel + ': ' + r.left);
+          tip(centreR, y, rw, bh, r.label + '\n' + spec.rightLabel + ': ' + r.right);
 
           // Left bar grows leftward from the spine.
           ctx.beginPath();
@@ -309,7 +350,7 @@ export const deviationCharts = [
           ctx.fillStyle = spec.rightColor;
           ctx.fill();
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(r.label, centreL + o.gutter / 2, y + bh / 2 + 4);

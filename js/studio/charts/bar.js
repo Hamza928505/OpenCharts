@@ -39,6 +39,25 @@ function barDatasets(spec, { stack = false } = {}) {
   }));
 }
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const barCharts = [
   {
     id: 'bar-vertical',
@@ -464,7 +483,7 @@ export const barCharts = [
         { label: 'Product',    value: 88, color: C.purple },
         { label: 'Website',    value: 71, color: C.blue   },
       ],
-      opts: { max: 100, dotRadius: 7, stemWidth: 2, showValue: true, labelWidth: 110 },
+      opts: { textColor: '#808080', max: 100, dotRadius: 7, stemWidth: 2, showValue: true, labelWidth: 110 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'items', data: false, max: 12, min: 2 },
@@ -473,12 +492,16 @@ export const barCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.showValue', label: 'Show value labels' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 20, max: 200, step: 10 },
       { group: 'Axis',  type: 'slider', key: 'opts.labelWidth', label: 'Label gutter', min: 60, max: 200, step: 10, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     // The series widget edits {label, color}; give each item a `data` mirror so
     // its value survives an edit through the shared control.
     canvas: {
+      helpers: [inkColor],
       height: 360,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const items = spec.items;
         const o = spec.opts;
         const pad = { t: 20, r: 44, b: 34, l: o.labelWidth };
@@ -496,7 +519,7 @@ export const barCharts = [
           ctx.moveTo(x, pad.t);
           ctx.lineTo(x, H - pad.b);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'center';
           ctx.fillText(String(Math.round(v)), x, H - pad.b + 16);
         }
@@ -504,6 +527,8 @@ export const barCharts = [
         items.forEach((d, i) => {
           const y = pad.t + rowH * (i + 0.5);
           const x = toX(d.value);
+          // The whole row, not just the dot: a 5px target is not a target.
+          tip(0, y - rowH / 2, W, rowH, d.label + ': ' + d.value);
 
           ctx.strokeStyle = d.color + '88';
           ctx.lineWidth = o.stemWidth;
@@ -518,7 +543,7 @@ export const barCharts = [
           ctx.fillStyle = d.color;
           ctx.fill();
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(d.label, pad.l - 12, y + 4);

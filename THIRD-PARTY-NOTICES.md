@@ -32,6 +32,20 @@ by the charts in the Geo category and is not committed to this repository. The
 underlying geometry derives from [Natural Earth](https://www.naturalearthdata.com/),
 which is released into the public domain.
 
+## Committed data
+
+| Data | Source | Licence |
+|---|---|---|
+| `data/cities/*.json` | [cities.json](https://github.com/lutangar/cities.json) 1.1.61, derived from [GeoNames](https://www.geonames.org/) | MIT (GeoNames data: CC BY 4.0) |
+| `data/countries.json` | the above, paired with Natural Earth country names via `world-atlas` | as above |
+
+Unlike the libraries, these files **are** committed, so that picking a country
+or a city needs no network call to a third party and no build step. They hold
+only place names and coordinates — 156,576 cities across 246 countries,
+reduced to three decimal places. `tools/README.md` documents how to regenerate
+them. GeoNames data is licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/);
+attribution is given here and in `tools/README.md`.
+
 ## Fonts
 
 DM Sans, DM Mono and Instrument Serif are loaded from Google Fonts at runtime

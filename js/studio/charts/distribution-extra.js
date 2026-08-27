@@ -2,25 +2,23 @@
  * Further distribution charts: density, ridgeline, ECDF, beeswarm, barcode
  * and radial histogram.
  *
- * All of them are seeded from distribution parameters rather than a literal
- * array of samples — that keeps the exported code short and, more importantly,
- * makes it redraw the exact chart that was copied.
+ * All of them read raw observations out of the spec. They used to sample from
+ * a mean and a standard deviation instead, which kept the exported code short
+ * at the cost of the whole point: a distribution chart exists to show the
+ * shape of *measurements*, and there was no way to get any in.
  */
 
 import { C } from '../palette.js';
+import {
+  DENSITY_GROUPS, RIDGELINE_ROWS, ECDF_GROUPS, BEESWARM_GROUPS, BARCODE_ROWS, WIND_ROSE,
+} from './_data.js';
 
-function makeRng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-function gaussSample(rnd, mu, sigma) {
-  const u = Math.max(1e-9, rnd());
-  const v = rnd();
-  return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+function quantile(sorted, q) {
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const next = sorted[base + 1];
+  return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
 }
 
 function kde(data, min, max, bandwidth, steps) {
@@ -60,6 +58,25 @@ function swarm(values, toX, radius) {
   return placed;
 }
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const distributionExtraCharts = [
   {
     id: 'density-plot',
@@ -68,52 +85,39 @@ export const distributionExtraCharts = [
     blurb: 'A smoothed histogram. No bin-width argument, but the bandwidth choice is doing the same work.',
     tags: ['density', 'kde', 'distribution', 'smoothed', 'histogram', 'curve'],
     spec: {
-      groups: [
-        { label: 'Control',   color: C.purple, mean: 52, sd: 12 },
-        { label: 'Treatment', color: C.teal,   mean: 64, sd: 9 },
-      ],
-      sample: 400,
-      seed: 5,
-      opts: { min: 10, max: 100, bandwidth: 4, fillAlpha: 0.22, lineWidth: 2, showRug: true },
+      groups: DENSITY_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      opts: { textColor: '#808080', min: 10, max: 100, bandwidth: 4, fillAlpha: 0.22, lineWidth: 2, showRug: true },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'groups', data: false, max: 4, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Sample size', min: 50, max: 1200, step: 50 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Shape', type: 'slider', key: 'opts.bandwidth', label: 'Bandwidth', min: 1, max: 15, step: 0.5, format: (v) => v.toFixed(1) },
       { group: 'Shape', type: 'slider', key: 'opts.fillAlpha', label: 'Fill opacity', min: 0, max: 0.6, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Shape', type: 'toggle', key: 'opts.showRug', label: 'Show rug marks' },
       { group: 'Axis',  type: 'slider', key: 'opts.min', label: 'Axis minimum', min: 0, max: 60, step: 5 },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 60, max: 200, step: 5 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.groups.forEach((g, i) => { if (typeof g.mean !== 'number') { g.mean = 50 + i * 10; g.sd = 10; } });
-    },
     canvas: {
       height: 360,
-      helpers: [makeRng, gaussSample, kde],
-      draw(ctx, spec, W, H) {
+      helpers: [kde, quantile, inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 18, r: 20, b: 40, l: 46 };
         const cw = W - pad.l - pad.r;
         const ch = H - pad.t - pad.b;
         const toX = (v) => pad.l + ((v - o.min) / (o.max - o.min)) * cw;
 
-        const curves = spec.groups.map((g, gi) => {
-          // Real observations win over the generated sample when supplied.
-          let data = g.values;
-          if (!data || !data.length) {
-            const rnd = makeRng((spec.seed + gi) * 2654435761);
-            data = [];
-            for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, g.mean, g.sd));
-          }
+        const curves = spec.groups.map((g) => {
+          const data = g.values || [];
           return { g: g, data: data, pts: kde(data, o.min, o.max, o.bandwidth, 160) };
         });
         const maxD = Math.max(...curves.flatMap((c) => c.pts.map((p) => p.d)), 1e-9);
         const toY = (d) => pad.t + ch - (d / maxD) * ch;
 
         ctx.strokeStyle = 'rgba(128,128,128,.14)';
-        ctx.fillStyle = 'rgba(128,128,128,.75)';
+        ctx.fillStyle = ink(0.75);
         ctx.font = '10px "DM Sans", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.lineWidth = 1;
@@ -127,7 +131,21 @@ export const distributionExtraCharts = [
           ctx.fillText(Math.round(v), x, H - pad.b + 18);
         }
 
-        curves.forEach((c) => {
+        curves.forEach((c, ci) => {
+          // Curves overlap, so each gets its own band of the plot rather than
+          // the whole area — otherwise only the last one drawn is reachable.
+          {
+            const sorted = c.data.slice().sort((p, q) => p - q);
+            if (sorted.length) {
+              tip(pad.l, pad.t + (ch / curves.length) * ci, cw, ch / curves.length, [
+                c.g.label,
+                'n = ' + sorted.length,
+                'median ' + quantile(sorted, 0.5).toFixed(1),
+                'q1–q3 ' + quantile(sorted, 0.25).toFixed(1) + '–' + quantile(sorted, 0.75).toFixed(1),
+                'range ' + sorted[0].toFixed(1) + '–' + sorted[sorted.length - 1].toFixed(1),
+              ].join('\n'));
+            }
+          }
           const alphaHex = Math.round(o.fillAlpha * 255).toString(16).padStart(2, '0');
           ctx.beginPath();
           ctx.moveTo(toX(c.pts[0].v), pad.t + ch);
@@ -168,35 +186,26 @@ export const distributionExtraCharts = [
     blurb: 'Densities stacked and overlapped down the page. Trades exact values for a very readable shift.',
     tags: ['ridgeline', 'joyplot', 'density', 'distribution', 'overlap', 'seasonal'],
     spec: {
-      rows: [
-        { label: 'Jan', color: C.blue,   mean: 4,  sd: 3 },
-        { label: 'Mar', color: C.teal,   mean: 9,  sd: 4 },
-        { label: 'May', color: C.olive,  mean: 16, sd: 4 },
-        { label: 'Jul', color: C.amber,  mean: 23, sd: 4 },
-        { label: 'Sep', color: C.coral,  mean: 18, sd: 4 },
-        { label: 'Nov', color: C.purple, mean: 8,  sd: 3 },
-      ],
-      sample: 400,
-      seed: 12,
-      opts: { min: -6, max: 36, bandwidth: 1.6, overlap: 2.1, fillAlpha: 0.8, lineWidth: 1.2, labelWidth: 52 },
+      rows: RIDGELINE_ROWS.map((r, i) => ({
+        ...r, color: [C.blue, C.teal, C.olive, C.amber, C.coral, C.purple][i % 6],
+      })),
+      opts: { textColor: '#808080', min: -6, max: 36, bandwidth: 1.6, overlap: 2.1, fillAlpha: 0.8, lineWidth: 1.2, labelWidth: 52 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 12, min: 2 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Sample size', min: 50, max: 1000, step: 50 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Shape', type: 'slider', key: 'opts.overlap', label: 'Overlap', min: 1, max: 4, step: 0.1, format: (v) => v.toFixed(1) + '×' },
       { group: 'Shape', type: 'slider', key: 'opts.bandwidth', label: 'Bandwidth', min: 0.5, max: 6, step: 0.1, format: (v) => v.toFixed(1) },
       { group: 'Shape', type: 'slider', key: 'opts.fillAlpha', label: 'Fill opacity', min: 0.2, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Axis',  type: 'slider', key: 'opts.min', label: 'Axis minimum', min: -20, max: 10, step: 1 },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 10, max: 60, step: 1 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.rows.forEach((r, i) => { if (typeof r.mean !== 'number') { r.mean = 5 + i * 3; r.sd = 3; } });
-    },
     canvas: {
       height: 400,
-      helpers: [makeRng, gaussSample, kde],
-      draw(ctx, spec, W, H) {
+      helpers: [kde, quantile, inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -207,20 +216,12 @@ export const distributionExtraCharts = [
         const rowStep = ch / rows.length;
         const toX = (v) => pad.l + ((v - o.min) / (o.max - o.min)) * cw;
 
-        const curves = rows.map((r, ri) => {
-          let data = r.values;
-          if (!data || !data.length) {
-            const rnd = makeRng((spec.seed + ri) * 2654435761);
-            data = [];
-            for (let i = 0; i < spec.sample; i++) data.push(gaussSample(rnd, r.mean, r.sd));
-          }
-          return kde(data, o.min, o.max, o.bandwidth, 150);
-        });
+        const curves = rows.map((r) => kde(r.values || [], o.min, o.max, o.bandwidth, 150));
         const maxD = Math.max(...curves.flat().map((p) => p.d), 1e-9);
         const amp = rowStep * o.overlap;
 
         ctx.font = '10px "DM Sans", system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(128,128,128,.7)';
+        ctx.fillStyle = ink(0.7);
         ctx.textAlign = 'center';
         for (let k = 0; k <= 5; k++) {
           const v = o.min + ((o.max - o.min) / 5) * k;
@@ -231,6 +232,19 @@ export const distributionExtraCharts = [
         for (let ri = rows.length - 1; ri >= 0; ri--) {
           const base = pad.t + rowStep * (ri + 1);
           const pts = curves[ri];
+          {
+            const sorted = rows[ri].values || [].slice().sort((p, q) => p - q);
+            if (sorted.length) {
+              tip(0, base - rowStep, W, rowStep, [
+                rows[ri].label,
+                'n = ' + sorted.length,
+                'median ' + quantile(sorted, 0.5).toFixed(1),
+                'q1–q3 ' + quantile(sorted, 0.25).toFixed(1) + '–' + quantile(sorted, 0.75).toFixed(1),
+                'range ' + sorted[0].toFixed(1) + '–' + sorted[sorted.length - 1].toFixed(1),
+              ].join('\n'));
+            }
+          }
+
           const alphaHex = Math.round(o.fillAlpha * 255).toString(16).padStart(2, '0');
 
           ctx.beginPath();
@@ -244,7 +258,7 @@ export const distributionExtraCharts = [
           ctx.lineWidth = o.lineWidth;
           ctx.stroke();
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(rows[ri].label, pad.l - 10, base - 3);
@@ -261,30 +275,23 @@ export const distributionExtraCharts = [
     blurb: 'Every point answers "what share is below this value?" — no binning decision to argue about.',
     tags: ['ecdf', 'cumulative', 'distribution', 'percentile', 'quantile', 'step'],
     spec: {
-      groups: [
-        { label: 'Version A', color: C.purple, mean: 420, sd: 130 },
-        { label: 'Version B', color: C.teal,   mean: 330, sd: 90 },
-      ],
-      sample: 300,
-      seed: 7,
-      opts: { min: 0, max: 900, lineWidth: 2, showMedian: true, suffix: 'ms' },
+      groups: ECDF_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      opts: { textColor: '#808080', min: 0, max: 900, lineWidth: 2, showMedian: true, suffix: 'ms' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'groups', data: false, max: 4, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Sample size', min: 50, max: 1000, step: 50 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Style', type: 'slider', key: 'opts.lineWidth', label: 'Line width', min: 1, max: 5, step: 0.5, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showMedian', label: 'Mark the median' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 100, max: 2000, step: 50 },
       { group: 'Axis',  type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.groups.forEach((g, i) => { if (typeof g.mean !== 'number') { g.mean = 400 + i * 80; g.sd = 110; } });
-    },
     canvas: {
       height: 360,
-      helpers: [makeRng, gaussSample],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 18, r: 20, b: 36, l: 50 };
         const cw = W - pad.l - pad.r;
@@ -302,25 +309,29 @@ export const distributionExtraCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(Math.round(p * 100) + '%', pad.l - 6, y + 4);
         }
         ctx.textAlign = 'center';
         for (let k = 0; k <= 4; k++) {
           const v = o.min + ((o.max - o.min) / 4) * k;
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(Math.round(v) + o.suffix, toX(v), H - pad.b + 18);
         }
 
         spec.groups.forEach((g, gi) => {
-          let data = g.values ? g.values.slice() : null;
-          if (!data || !data.length) {
-            const rnd = makeRng((spec.seed + gi) * 2654435761);
-            data = [];
-            for (let i = 0; i < spec.sample; i++) data.push(Math.max(0, gaussSample(rnd, g.mean, g.sd)));
-          }
-          data.sort((a, b) => a - b);
+          const data = (g.values || []).slice().sort((a, b) => a - b);
+          if (!data.length) return;
+          // Percentiles are what an ECDF is read for, so give the ones people
+          // actually quote rather than making them trace the curve.
+          const at = (q) => data[Math.min(data.length - 1, Math.floor(q * data.length))];
+          tip(pad.l, pad.t + (ch / spec.groups.length) * gi, cw, ch / spec.groups.length, [
+            g.label,
+            'median ' + at(0.5) + o.suffix,
+            'p90 ' + at(0.9) + o.suffix,
+            'p99 ' + at(0.99) + o.suffix,
+          ].join('\n'));
 
           // A true ECDF is a step function — draw it as one, not as a smooth line.
           ctx.beginPath();
@@ -364,31 +375,23 @@ export const distributionExtraCharts = [
     blurb: 'Every observation as its own dot, nudged aside so none hide. Honest about sample size.',
     tags: ['beeswarm', 'swarm', 'jitter', 'strip', 'distribution', 'raw data', 'dots'],
     spec: {
-      groups: [
-        { label: 'Free',       color: C.purple, mean: 34, sd: 14, n: 60 },
-        { label: 'Pro',        color: C.teal,   mean: 58, sd: 16, n: 50 },
-        { label: 'Enterprise', color: C.coral,  mean: 74, sd: 12, n: 35 },
-      ],
-      seed: 4,
-      opts: { min: 0, max: 110, radius: 4, alpha: 0.85, showMean: true, rowGap: 12 },
+      groups: BEESWARM_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      opts: { textColor: '#808080', min: 0, max: 110, radius: 4, alpha: 0.85, showMean: true, rowGap: 12 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'groups', data: false, max: 5, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Style', type: 'slider', key: 'opts.radius', label: 'Dot size', min: 2, max: 9, step: 0.5, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Dot opacity', min: 0.2, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'toggle', key: 'opts.showMean', label: 'Mark the mean' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 20, max: 300, step: 10 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.groups.forEach((g, i) => {
-        if (typeof g.mean !== 'number') { g.mean = 40 + i * 15; g.sd = 14; g.n = 45; }
-      });
-    },
     canvas: {
       height: 380,
-      helpers: [makeRng, gaussSample, swarm],
-      draw(ctx, spec, W, H) {
+      helpers: [swarm, inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const groups = spec.groups;
         if (!groups.length) return;
@@ -411,21 +414,20 @@ export const distributionExtraCharts = [
           ctx.moveTo(x, pad.t);
           ctx.lineTo(x, pad.t + ch);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(Math.round(v), x, H - pad.b + 18);
         }
 
         groups.forEach((g, gi) => {
-          let values = g.values;
-          if (!values || !values.length) {
-            const rnd = makeRng((spec.seed + gi) * 2654435761);
-            values = [];
-            for (let i = 0; i < g.n; i++) {
-              values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, g.mean, g.sd))));
-            }
-          }
+          const values = g.values || [];
           const cy = pad.t + rowH * gi + rowH / 2;
           const placed = swarm(values, toX, o.radius);
+          // Every dot is one observation, so each carries its own value — the
+          // whole claim of a beeswarm is that nothing is aggregated away.
+          placed.forEach((p) => {
+            tip({ cx: p.x, cy: cy + p.offset, r: Math.max(6, o.radius + 3),
+              text: g.label + ': ' + p.v });
+          });
 
           placed.forEach((p) => {
             const maxOffset = rowH / 2 - o.rowGap;
@@ -448,13 +450,13 @@ export const distributionExtraCharts = [
             ctx.globalAlpha = 1;
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(g.label, pad.l - 12, cy + 4);
           ctx.font = '10px "DM Sans", system-ui, sans-serif';
-          ctx.fillStyle = 'rgba(128,128,128,.6)';
-          ctx.fillText('n=' + g.n, pad.l - 12, cy + 18);
+          ctx.fillStyle = ink(0.6);
+          ctx.fillText('n=' + values.length, pad.l - 12, cy + 18);
         });
       },
     },
@@ -468,32 +470,26 @@ export const distributionExtraCharts = [
     blurb: 'One thin tick per observation on a shared scale. Reads clustering and outliers in almost no height.',
     tags: ['barcode', 'strip plot', 'dot strip', 'distribution', 'ticks', 'compact'],
     spec: {
-      rows: [
-        { label: 'North',   color: C.purple, mean: 68, sd: 18, n: 70 },
-        { label: 'South',   color: C.teal,   mean: 55, sd: 14, n: 70 },
-        { label: 'East',    color: C.coral,  mean: 75, sd: 22, n: 70 },
-        { label: 'West',    color: C.blue,   mean: 62, sd: 16, n: 70 },
-        { label: 'Central', color: C.amber,  mean: 70, sd: 20, n: 70 },
-      ],
-      seed: 6,
-      opts: { min: 0, max: 140, tickHeight: 22, alpha: 0.55, lineWidth: 1.4, showMedian: true, prefix: '$' },
+      rows: BARCODE_ROWS.map((r, i) => ({
+        ...r, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+      })),
+      opts: { textColor: '#808080', min: 0, max: 140, tickHeight: 22, alpha: 0.55, lineWidth: 1.4, showMedian: true, prefix: '$' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 8, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Style', type: 'slider', key: 'opts.tickHeight', label: 'Tick height', min: 8, max: 46, step: 2, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Tick opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'toggle', key: 'opts.showMedian', label: 'Mark the median' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 40, max: 400, step: 10 },
       { group: 'Axis',  type: 'text',   key: 'opts.prefix', label: 'Value prefix' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.rows.forEach((r, i) => { if (typeof r.mean !== 'number') { r.mean = 60 + i * 5; r.sd = 16; r.n = 70; } });
-    },
     canvas: {
       height: 340,
-      helpers: [makeRng, gaussSample],
-      draw(ctx, spec, W, H) {
+      helpers: [quantile, inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -509,21 +505,26 @@ export const distributionExtraCharts = [
         ctx.textAlign = 'center';
         for (let k = 0; k <= 5; k++) {
           const v = o.min + ((o.max - o.min) / 5) * k;
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(o.prefix + Math.round(v), toX(v), H - pad.b + 18);
         }
 
         rows.forEach((r, ri) => {
-          let values = r.values;
-          if (!values || !values.length) {
-            const rnd = makeRng((spec.seed + ri) * 2654435761);
-            values = [];
-            for (let i = 0; i < r.n; i++) {
-              values.push(Math.max(o.min, Math.min(o.max, gaussSample(rnd, r.mean, r.sd))));
-            }
-          }
+          const values = r.values || [];
           const cy = pad.t + rowH * ri + rowH / 2;
           const half = o.tickHeight / 2;
+          {
+            const sorted = values.slice().sort((p, q) => p - q);
+            if (sorted.length) {
+              tip(0, pad.t + rowH * ri, W, rowH, [
+                r.label,
+                'n = ' + sorted.length,
+                'median ' + quantile(sorted, 0.5).toFixed(1),
+                'q1–q3 ' + quantile(sorted, 0.25).toFixed(1) + '–' + quantile(sorted, 0.75).toFixed(1),
+                'range ' + sorted[0].toFixed(1) + '–' + sorted[sorted.length - 1].toFixed(1),
+              ].join('\n'));
+            }
+          }
 
           ctx.strokeStyle = r.color + alphaHex;
           ctx.lineWidth = o.lineWidth;
@@ -546,7 +547,7 @@ export const distributionExtraCharts = [
             ctx.stroke();
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(r.label, pad.l - 12, cy + 4);
@@ -563,46 +564,30 @@ export const distributionExtraCharts = [
     blurb: 'Bins wrapped around a circle. The right choice when the variable itself is angular — wind, time of day.',
     tags: ['radial histogram', 'wind rose', 'circular', 'polar', 'angular', 'bins'],
     spec: {
-      bins: 16,
-      seed: 9,
-      sample: 900,
+      labels: WIND_ROSE.map((d) => d.label),
+      binCounts: WIND_ROSE.map((d) => d.value),
       color: C.blue,
       accent: C.coral,
-      opts: { innerRadius: 26, showGrid: true, showLabels: true, concentration: 2.2, peakBin: 5 },
+      opts: { textColor: '#808080', innerRadius: 26, showGrid: true, showLabels: true },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'bins',   label: 'Bin count', min: 6, max: 36, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Sample size', min: 100, max: 3000, step: 100 },
-      { group: 'Data',  type: 'slider', key: 'opts.concentration', label: 'Concentration', min: 0, max: 5, step: 0.1, format: (v) => v.toFixed(1) },
-      { group: 'Data',  type: 'slider', key: 'opts.peakBin', label: 'Dominant direction', min: 0, max: 35, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Style', type: 'colors', key: 'radialColors', label: 'Low / high', names: () => ['Low', 'High'] },
       { group: 'Style', type: 'slider', key: 'opts.innerRadius', label: 'Inner radius', min: 0, max: 80, step: 2, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showGrid', label: 'Show rings' },
       { group: 'Style', type: 'toggle', key: 'opts.showLabels', label: 'Show compass labels' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.radialColors = [spec.color, spec.accent]; },
     onChange(spec) { [spec.color, spec.accent] = spec.radialColors; },
     canvas: {
+      helpers: [inkColor],
       height: 420,
-      helpers: [makeRng],
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const rnd = makeRng(spec.seed * 7919);
-        const n = spec.bins;
-        const counts = new Array(n).fill(0);
-
-        // Sample a direction biased toward the dominant bin.
-        for (let i = 0; i < spec.sample; i++) {
-          let idx;
-          if (rnd() < o.concentration / (o.concentration + 2)) {
-            const spread = Math.max(1, Math.round(n / 6));
-            idx = (o.peakBin % n) + Math.round((rnd() - 0.5) * spread * 2);
-          } else {
-            idx = Math.floor(rnd() * n);
-          }
-          counts[((idx % n) + n) % n]++;
-        }
+        const counts = spec.binCounts;
+        const n = counts.length;
 
         const cx = W / 2;
         const cy = H / 2;
@@ -631,6 +616,9 @@ export const distributionExtraCharts = [
         counts.forEach((c, i) => {
           const a0 = slice * i - Math.PI / 2;
           const a1 = a0 + slice * 0.92;
+          // Out to the full radius, so the sparse directions are hoverable too.
+          tip({ cx: cx, cy: cy, r0: o.innerRadius, r1: maxR, a0: a0, a1: a1,
+            text: ((spec.labels || [])[i] || 'Bin ' + (i + 1)) + ': ' + c });
           const t = c / maxC;
           const r = o.innerRadius + t * (maxR - o.innerRadius);
           ctx.beginPath();
@@ -643,7 +631,7 @@ export const distributionExtraCharts = [
 
         if (o.showLabels) {
           const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-          ctx.fillStyle = 'rgba(128,128,128,.85)';
+          ctx.fillStyle = ink(0.85);
           ctx.font = '11px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           dirs.forEach((d, i) => {

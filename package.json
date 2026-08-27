@@ -1,7 +1,7 @@
 {
   "name": "opencharts",
   "version": "2.0.0",
-  "description": "96 chart types you can edit live and copy as HTML, CSS and JavaScript. No build step.",
+  "description": "98 chart types you can edit live and copy as HTML, CSS and JavaScript. No build step.",
   "license": "MIT",
   "author": "Hamza Salameh",
   "type": "module",
@@ -24,7 +24,9 @@
     "svg",
     "code-generator",
     "no-build",
-    "vanilla-js"
+    "vanilla-js",
+    "geodata",
+    "maps"
   ],
   "scripts": {
     "start": "python -m http.server 8000",
@@ -36,8 +38,12 @@
   "files": [
     "index.html",
     "studio.html",
+    "favicon.svg",
+    "favicon-32.png",
+    "apple-touch-icon.png",
     "css/",
     "js/",
+    "data/",
     "lib/",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",

@@ -4,6 +4,7 @@
  */
 
 import { C, MONTHS, withAlpha } from '../palette.js';
+import { CALENDAR_DAYS } from './_data.js';
 import { baseOpts, xAxis, yAxis, TICK } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
 
@@ -13,6 +14,25 @@ function makeRng(seed) {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 4294967296;
   };
+}
+
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 export const comparisonExtraCharts = [
@@ -36,7 +56,7 @@ export const comparisonExtraCharts = [
       endLabel: '2025',
       startColor: C.gray,
       endColor: C.purple,
-      opts: { min: 0, max: 100, dotRadius: 7, barWidth: 3, labelWidth: 108, showDelta: true, sort: 'gap', suffix: '%' },
+      opts: { textColor: '#808080', min: 0, max: 100, dotRadius: 7, barWidth: 3, labelWidth: 108, showDelta: true, sort: 'gap', suffix: '%' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 12, min: 2 },
@@ -49,6 +69,7 @@ export const comparisonExtraCharts = [
       { group: 'Style', type: 'slider', key: 'opts.barWidth', label: 'Connector width', min: 1, max: 10, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showDelta', label: 'Show the change' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 20, max: 300, step: 10 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.ends = [spec.startColor, spec.endColor]; },
     onChange(spec) {
@@ -58,8 +79,11 @@ export const comparisonExtraCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 380,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         let rows = spec.rows.slice();
         if (o.sort === 'gap') rows.sort((a, b) => (b.end - b.start) - (a.end - a.start));
@@ -83,7 +107,7 @@ export const comparisonExtraCharts = [
           ctx.moveTo(x, pad.t - 8);
           ctx.lineTo(x, pad.t + ch);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(Math.round(v) + o.suffix, x, H - pad.b + 18);
         }
 
@@ -91,6 +115,14 @@ export const comparisonExtraCharts = [
           const y = pad.t + rowH * i + rowH / 2;
           const x1 = toX(r.start);
           const x2 = toX(r.end);
+          // The gap is the point of a dumbbell, so name it rather than making
+          // the reader subtract two numbers they have to hover separately.
+          tip(0, pad.t + rowH * i, W, rowH, [
+            r.label,
+            spec.startLabel + ': ' + r.start,
+            spec.endLabel + ': ' + r.end,
+            'change ' + (r.end - r.start > 0 ? '+' : '') + (r.end - r.start).toFixed(1),
+          ].join('\n'));
 
           ctx.strokeStyle = 'rgba(128,128,128,.45)';
           ctx.lineWidth = o.barWidth;
@@ -107,7 +139,7 @@ export const comparisonExtraCharts = [
             ctx.fill();
           });
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(r.label, pad.l - 14, y + 4);
@@ -255,7 +287,7 @@ export const comparisonExtraCharts = [
       ],
       lowColor: C.blue,
       highColor: C.coral,
-      opts: { min: -10, max: 50, capHeight: 16, lineWidth: 3, labelWidth: 96, showValues: true, suffix: '°C' },
+      opts: { textColor: '#808080', min: -10, max: 50, capHeight: 16, lineWidth: 3, labelWidth: 96, showValues: true, suffix: '°C' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 12, min: 2 },
@@ -265,6 +297,7 @@ export const comparisonExtraCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show end values' },
       { group: 'Axis',  type: 'slider', key: 'opts.min', label: 'Axis minimum', min: -40, max: 0, step: 5 },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 10, max: 120, step: 5 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.spanColors = [spec.lowColor, spec.highColor]; },
     onChange(spec) {
@@ -272,8 +305,11 @@ export const comparisonExtraCharts = [
       spec.rows.forEach((r, i) => { if (typeof r.min !== 'number') { r.min = i; r.max = i + 15; } });
     },
     canvas: {
+      helpers: [inkColor],
       height: 360,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -295,7 +331,7 @@ export const comparisonExtraCharts = [
           ctx.moveTo(x, pad.t);
           ctx.lineTo(x, pad.t + ch);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(Math.round(v) + o.suffix, x, H - pad.b + 18);
         }
 
@@ -303,6 +339,8 @@ export const comparisonExtraCharts = [
           const y = pad.t + rowH * i + rowH / 2;
           const x1 = toX(r.min);
           const x2 = toX(r.max);
+          tip(0, pad.t + rowH * i, W, rowH,
+            r.label + ': ' + r.min + '–' + r.max + '  (span ' + (r.max - r.min).toFixed(1) + ')');
 
           // The span itself, drawn as a gradient between the two end colours.
           const grad = ctx.createLinearGradient(x1, 0, x2, 0);
@@ -328,7 +366,7 @@ export const comparisonExtraCharts = [
             });
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(r.label, pad.l - 14, y + 4);
@@ -365,7 +403,7 @@ export const comparisonExtraCharts = [
         { label: 'Dose C',  color: C.purple, mean: 68, error: 11 },
         { label: 'Dose D',  color: C.coral,  mean: 59, error: 9 },
       ],
-      opts: { max: 90, barWidth: 0.6, radius: 3, capWidth: 14, errorWidth: 1.8, showValues: true, suffix: '' },
+      opts: { textColor: '#808080', max: 90, barWidth: 0.6, radius: 3, capWidth: 14, errorWidth: 1.8, showValues: true, suffix: '' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'groups', data: false, max: 10, min: 1 },
@@ -375,6 +413,7 @@ export const comparisonExtraCharts = [
       { group: 'Error', type: 'slider', key: 'opts.errorWidth', label: 'Whisker width', min: 1, max: 5, step: 0.5, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 20, max: 300, step: 10 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.groups.forEach((g, i) => {
@@ -382,8 +421,11 @@ export const comparisonExtraCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 360,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const groups = spec.groups;
         if (!groups.length) return;
@@ -405,7 +447,7 @@ export const comparisonExtraCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(Math.round(v) + o.suffix, pad.l - 6, y + 4);
         }
@@ -413,6 +455,10 @@ export const comparisonExtraCharts = [
         groups.forEach((g, i) => {
           const cx = pad.l + slot * i + slot / 2;
           const top = toY(g.mean);
+          // The interval is the whole reason this chart exists; the bar height
+          // alone is the part that misleads.
+          tip(pad.l + slot * i, pad.t, slot, H - pad.t - pad.b,
+            g.label + ': ' + g.mean + ' ± ' + g.error);
 
           ctx.beginPath();
           ctx.roundRect(cx - bw / 2, top, bw, pad.t + ch - top, [o.radius, o.radius, 0, 0]);
@@ -437,14 +483,14 @@ export const comparisonExtraCharts = [
             });
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(g.label, cx, H - pad.b + 20);
 
           if (o.showValues) {
             ctx.font = '500 11px "DM Sans", system-ui, sans-serif';
-            ctx.fillStyle = 'rgba(128,128,128,.85)';
+            ctx.fillStyle = ink(0.85);
             ctx.fillText(g.mean + ' ±' + g.error, cx, hi - 8);
           }
         });
@@ -546,7 +592,7 @@ export const comparisonExtraCharts = [
         { label: 'Integrations', x: 88, y: 52, color: C.olive,  r: 8 },
       ],
       quadrants: ['Maintain', 'Invest', 'Deprioritise', 'Fix first'],
-      opts: { xMid: 50, yMid: 50, max: 100, showLabels: true, alpha: 0.75, tint: 0.045, xTitle: 'Satisfaction', yTitle: 'Importance' },
+      opts: { textColor: '#808080', xMid: 50, yMid: 50, max: 100, showLabels: true, alpha: 0.75, tint: 0.045, xTitle: 'Satisfaction', yTitle: 'Importance' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'items', data: false, max: 14, min: 1 },
@@ -556,6 +602,7 @@ export const comparisonExtraCharts = [
       { group: 'Style', type: 'slider', key: 'opts.tint', label: 'Quadrant tint', min: 0, max: 0.15, step: 0.005, format: (v) => v.toFixed(3) },
       { group: 'Axis',  type: 'text',   key: 'opts.xTitle', label: 'X axis title' },
       { group: 'Axis',  type: 'text',   key: 'opts.yTitle', label: 'Y axis title' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.items.forEach((it, i) => {
@@ -563,8 +610,11 @@ export const comparisonExtraCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 420,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 24, r: 24, b: 42, l: 52 };
         const cw = W - pad.l - pad.r;
@@ -601,7 +651,7 @@ export const comparisonExtraCharts = [
 
         // Quadrant names, tucked into each corner.
         ctx.font = '600 10px "DM Sans", system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(128,128,128,.7)';
+        ctx.fillStyle = ink(0.7);
         const corners = [
           { t: spec.quadrants[0], x: pad.l + cw - 10, y: pad.t + 16, a: 'right' },
           { t: spec.quadrants[1], x: pad.l + 10,      y: pad.t + 16, a: 'left'  },
@@ -617,6 +667,9 @@ export const comparisonExtraCharts = [
         spec.items.forEach((it) => {
           const x = toX(it.x);
           const y = toY(it.y);
+          // Generous radius: the dot is the mark, but a 4px target is not one.
+          tip({ cx: x, cy: y, r: Math.max(12, (it.r || 8) + 4),
+            text: it.label + '\n' + spec.xTitle + ': ' + it.x + '\n' + spec.yTitle + ': ' + it.y });
           ctx.beginPath();
           ctx.arc(x, y, it.r || 8, 0, Math.PI * 2);
           ctx.fillStyle = (it.color || '#6C63D8') + alphaHex;
@@ -626,14 +679,14 @@ export const comparisonExtraCharts = [
           ctx.stroke();
 
           if (o.showLabels) {
-            ctx.fillStyle = 'rgba(128,128,128,.95)';
+            ctx.fillStyle = ink(0.95);
             ctx.font = '11px "DM Sans", system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(it.label, x, y - (it.r || 8) - 6);
           }
         });
 
-        ctx.fillStyle = 'rgba(128,128,128,.8)';
+        ctx.fillStyle = ink(0.8);
         ctx.font = '11px "DM Sans", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(o.xTitle, pad.l + cw / 2, H - 10);
@@ -664,7 +717,7 @@ export const comparisonExtraCharts = [
         { label: 'Launch',         start: 20, end: 22, lane: 0, color: C.coral },
       ],
       axisLabel: 'Week',
-      opts: { min: 0, max: 24, laneHeight: 42, barHeight: 26, radius: 6, showLabels: true, tickStep: 4 },
+      opts: { textColor: '#808080', min: 0, max: 24, laneHeight: 42, barHeight: 26, radius: 6, showLabels: true, tickStep: 4 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'events', data: false, max: 14, min: 1 },
@@ -675,6 +728,7 @@ export const comparisonExtraCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.showLabels', label: 'Show labels on bars' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 6, max: 80, step: 2 },
       { group: 'Axis',  type: 'slider', key: 'opts.tickStep', label: 'Tick spacing', min: 1, max: 12, step: 1 },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onChange(spec) {
       spec.events.forEach((e, i) => {
@@ -682,8 +736,11 @@ export const comparisonExtraCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 340,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const events = spec.events;
         if (!events.length) return;
@@ -703,10 +760,10 @@ export const comparisonExtraCharts = [
           ctx.moveTo(x, pad.t);
           ctx.lineTo(x, pad.t + lanes * o.laneHeight);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.fillText(String(v), x, pad.t + lanes * o.laneHeight + 18);
         }
-        ctx.fillStyle = 'rgba(128,128,128,.6)';
+        ctx.fillStyle = ink(0.6);
         ctx.textAlign = 'left';
         ctx.fillText(spec.axisLabel, pad.l, pad.t + lanes * o.laneHeight + 32);
 
@@ -715,6 +772,9 @@ export const comparisonExtraCharts = [
           const x2 = toX(e.end);
           const y = pad.t + (e.lane || 0) * o.laneHeight + (o.laneHeight - o.barHeight) / 2;
           const w = Math.max(2, x2 - x1);
+          // A short event can be two pixels wide, so the target is padded.
+          tip(x1 - 3, y - 3, w + 6, o.barHeight + 6,
+            e.label + '\n' + e.start + ' – ' + e.end + '  (' + (e.end - e.start) + ')');
 
           ctx.beginPath();
           ctx.roundRect(x1, y, w, o.barHeight, o.radius);
@@ -746,29 +806,32 @@ export const comparisonExtraCharts = [
     tags: ['calendar', 'heatmap', 'year', 'daily', 'github', 'contributions', 'streak'],
     spec: {
       year: 2025,
-      seed: 14,
+      // Keyed by ISO date, which is what the data editor writes and what
+      // anyone exporting a contribution graph already has.
+      dayValues: Object.fromEntries(CALENDAR_DAYS.map((v, i) => [
+        new Date(Date.UTC(2025, 0, 1) + i * 86400000).toISOString().slice(0, 10), v,
+      ])),
       color: C.teal,
-      opts: { cell: 13, gap: 3, radius: 2, weekdayLabels: true, monthLabels: true, minAlpha: 0.08, weekendBias: 0.45, intensity: 1 },
+      opts: { textColor: '#808080', cell: 13, gap: 3, radius: 2, weekdayLabels: true, monthLabels: true, minAlpha: 0.08 },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'year', label: 'Year', min: 2015, max: 2030, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'opts.intensity', label: 'Activity level', min: 0.2, max: 2, step: 0.1, format: (v) => v.toFixed(1) + '×' },
-      { group: 'Data',  type: 'slider', key: 'opts.weekendBias', label: 'Weekend activity', min: 0, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
+      { group: 'Year',  type: 'slider', key: 'year', label: 'Year', min: 2015, max: 2030, step: 1 },
       { group: 'Style', type: 'colors', key: 'calColor', label: 'Scale colour' },
       { group: 'Style', type: 'slider', key: 'opts.cell', label: 'Cell size', min: 7, max: 22, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Cell gap', min: 0, max: 6, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.monthLabels', label: 'Month labels' },
       { group: 'Style', type: 'toggle', key: 'opts.weekdayLabels', label: 'Weekday labels' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.calColor = [spec.color]; },
     onChange(spec) { spec.color = spec.calColor[0]; },
     canvas: {
       height: 220,
-      helpers: [makeRng],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const rnd = makeRng(spec.seed * 7919 + spec.year);
         const step = o.cell + o.gap;
         const left = o.weekdayLabels ? 30 : 6;
         const top = o.monthLabels ? 22 : 6;
@@ -780,14 +843,13 @@ export const comparisonExtraCharts = [
         // Grid columns are ISO weeks; row 0 is Monday.
         const firstCol = (jan1.getUTCDay() + 6) % 7;
 
+        // A date with no entry is a zero, not a gap: a contribution grid is
+        // only readable when every square of the year is drawn.
         const values = [];
         let maxV = 1;
         for (let i = 0; i < days; i++) {
-          const d = new Date(jan1.getTime() + i * dayMs);
-          const dow = (d.getUTCDay() + 6) % 7;
-          const weekend = dow >= 5;
-          const base = weekend ? o.weekendBias : 1;
-          const v = Math.max(0, Math.round(rnd() * 12 * base * o.intensity));
+          const iso = new Date(jan1.getTime() + i * dayMs).toISOString().slice(0, 10);
+          const v = Math.max(0, Number(spec.dayValues[iso]) || 0);
           values.push(v);
           if (v > maxV) maxV = v;
         }
@@ -806,6 +868,9 @@ export const comparisonExtraCharts = [
           const y = top + dow * step;
           const t = values[i] / maxV;
           const alpha = values[i] === 0 ? o.minAlpha : o.minAlpha + t * (1 - o.minAlpha);
+          // A 13px square with no label is unreadable without this.
+          tip(x, y, o.cell, o.cell,
+            d.toISOString().slice(0, 10) + ': ' + values[i]);
 
           ctx.beginPath();
           ctx.roundRect(x, y, o.cell, o.cell, o.radius);
@@ -816,7 +881,7 @@ export const comparisonExtraCharts = [
         }
 
         if (o.monthLabels) {
-          ctx.fillStyle = 'rgba(128,128,128,.8)';
+          ctx.fillStyle = ink(0.8);
           ctx.font = '10px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'left';
           const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -826,7 +891,7 @@ export const comparisonExtraCharts = [
         }
 
         if (o.weekdayLabels) {
-          ctx.fillStyle = 'rgba(128,128,128,.7)';
+          ctx.fillStyle = ink(0.7);
           ctx.font = '9px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ['Mon', '', 'Wed', '', 'Fri', '', 'Sun'].forEach((name, i) => {

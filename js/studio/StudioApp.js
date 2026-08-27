@@ -16,6 +16,8 @@ import { openDataDialog } from './DataDialog.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
+import { takeHandOff } from './DataMatch.js';
+import { applyData } from './dataio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -75,7 +77,6 @@ export class StudioApp {
     this.titleEl    = $('#chart-title');
     this.blurbEl    = $('#chart-blurb');
     this.crumbEl    = $('#chart-crumb');
-    this.chipEl     = $('#chart-chip');
     this.stageTitle = $('#stage-title');
     this.idxEl      = $('#chart-idx');
     this.searchEl   = $('#rail-search');
@@ -239,6 +240,7 @@ export class StudioApp {
     });
     $('#btn-png')?.addEventListener('click', () => this._exportPNG());
     $('#btn-share')?.addEventListener('click', () => this._share());
+    $('#btn-embed')?.addEventListener('click', () => this._embed());
 
     const railToggle = $('#rail-toggle');
     const rail = $('#rail');
@@ -280,6 +282,21 @@ export class StudioApp {
     this.spec = shared ? { ...newSpec(def), ...shared } : newSpec(def);
     this.isShared = !!shared;
 
+    // A reader who matched a table in the gallery and clicked through meant to
+    // draw *that*, not the example. It travels in session storage because a
+    // table does not fit in a URL, and is taken exactly once — a later reload
+    // of the same page is a fresh start, not a repeat of somebody's paste.
+    if (!shared) {
+      const brought = takeHandOff();
+      if (brought) {
+        const res = applyData(def, this.spec, brought);
+        if (res.ok) {
+          if (typeof def.onChange === 'function') def.onChange(this.spec);
+          this.broughtData = res.message;
+        }
+      }
+    }
+
     if (push) {
       history.pushState({ id }, '', `studio.html?chart=${encodeURIComponent(id)}`);
     }
@@ -291,14 +308,17 @@ export class StudioApp {
       `<a href="index.html">Library</a><span class="sep">/</span>`
       + `<span>${escapeHtml(def.category)}</span><span class="sep">/</span>`
       + `<span>${escapeHtml(def.title)}</span>`;
-    this.chipEl.className = `pill chip-engine ${def.engineChip}`;
-    this.chipEl.textContent = def.engineLabel;
     this.stageTitle.textContent = def.title;
     this.idxEl.textContent = `${chartIndex(id) + 1} / ${CHARTS.length}`;
 
     buildControls(this.controlsEl, def, this.spec, () => this._onEdit());
     this._markActive();
     this.rebuild();
+
+    if (this.broughtData) {
+      toast('Your table — ' + this.broughtData, 'ok');
+      this.broughtData = null;
+    }
   }
 
   _onEdit() {
@@ -337,6 +357,22 @@ export class StudioApp {
       }
     } catch {
       toast('Could not copy the link', 'bad');
+    }
+  }
+
+  /** The same link, as an <iframe> somebody can paste into a page. */
+  async _embed() {
+    try {
+      const url = new URL(await buildShareUrl(this.def.id, this.spec));
+      url.searchParams.set('embed', '1');
+      const height = (this.def.canvas || this.def.d3 || this.def.dom || {}).height || 420;
+      const tag = `<iframe src="${url.toString()}" width="100%" height="${height + 40}"`
+        + ` style="border:1px solid #e5e5e5;border-radius:10px"`
+        + ` title="${escapeHtml(this.def.title)}" loading="lazy"></iframe>`;
+      await navigator.clipboard.writeText(tag);
+      toast('Embed code copied', 'ok');
+    } catch {
+      toast('Could not copy the embed code', 'bad');
     }
   }
 

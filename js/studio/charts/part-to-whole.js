@@ -16,6 +16,25 @@ const sliceControls = [
   { group: 'Style', type: 'colors', key: 'colors', label: 'Slice colours', names: (s) => s.labels },
 ];
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const partToWholeCharts = [
   {
     id: 'pie',
@@ -191,7 +210,7 @@ export const partToWholeCharts = [
       labels: [...MONTHS],
       values: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410],
       colors: [C.purple, C.purple, C.teal, C.teal, C.teal, C.coral, C.coral, C.coral, C.blue, C.blue, C.amber, C.amber],
-      opts: { alpha: 0.75, rings: true, sqrtScale: true, gap: 0.02 },
+      opts: { textColor: '#808080', alpha: 0.75, rings: true, sqrtScale: true, gap: 0.02 },
     },
     controls: [
       ...sliceControls,
@@ -199,10 +218,14 @@ export const partToWholeCharts = [
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Segment gap', min: 0, max: 0.1, step: 0.005, format: (v) => v.toFixed(3) },
       { group: 'Style', type: 'toggle', key: 'opts.rings', label: 'Show guide rings' },
       { group: 'Style', type: 'toggle', key: 'opts.sqrtScale', label: 'Scale by area (√)' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     canvas: {
+      helpers: [inkColor],
       height: 400,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const vals = spec.values;
         const o = spec.opts;
         const size = Math.min(W, H);
@@ -228,6 +251,12 @@ export const partToWholeCharts = [
           const ratio = v / maxV;
           const r = (o.sqrtScale ? Math.sqrt(ratio) : ratio) * maxR;
           const colour = spec.colors[i % spec.colors.length];
+          // A wedge, not its bounding box: a box here covers most of the
+          // circle and would steal every neighbour's hover.
+          tip({
+            cx: cx, cy: cy, r0: 0, r1: r, a0: a0, a1: a1,
+            text: (spec.labels[i] || 'Slice ' + (i + 1)) + ': ' + v,
+          });
 
           ctx.beginPath();
           ctx.moveTo(cx, cy);
@@ -241,7 +270,7 @@ export const partToWholeCharts = [
           ctx.stroke();
 
           const mid = (a0 + a1) / 2;
-          ctx.fillStyle = 'rgba(128,128,128,.9)';
+          ctx.fillStyle = ink(0.9);
           ctx.font = '10px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(
@@ -296,7 +325,9 @@ export const partToWholeCharts = [
             cell.className = 'waffle-cell';
             cell.style.background = seg.color;
             cell.style.borderRadius = o.radius + 'px';
-            cell.title = `${seg.label} — ${seg.value}%`;
+            // data-tip rather than title: the same styled readout every other
+            // chart uses, instead of the browser's slow native tooltip.
+            cell.setAttribute('data-tip', `${seg.label}: ${seg.value}%`);
             grid.appendChild(cell);
           }
         });

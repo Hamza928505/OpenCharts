@@ -177,8 +177,7 @@ export const hierarchyCharts = [
           .attr('fill', colourFor)
           .attr('stroke', 'rgba(255,255,255,.4)')
           .attr('stroke-width', 1)
-          .append('title')
-          .text((d) => `${d.data.name}\n$${d.value}K`);
+          .attr('data-tip', (d) => `${d.data.name}\n$${d.value}K`);
 
         if (o.showLabels && !compact) {
           svg.selectAll('text')
@@ -274,7 +273,7 @@ export const hierarchyCharts = [
             .text((d) => (d.r > o.minRadius ? d.data.name : ''));
         }
 
-        nodes.append('title').text((d) => `${d.data.name}\n${d.data.channel}\n${d.data.v}`);
+        nodes.attr('data-tip', (d) => `${d.data.name}\n${d.data.channel}\n${d.data.v}`);
       },
     },
     legend: (spec) => spec.groups.map((g, i) => ({

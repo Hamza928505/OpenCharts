@@ -1,33 +1,19 @@
 /**
  * Distribution chart definitions: histogram, box plot, violin, heatmap.
  *
- * Sampled data is generated from a *seeded* generator rather than
- * Math.random(). That matters here more than anywhere else: the exported code
- * has to reproduce the exact picture the user was looking at when they copied
- * it, and an unseeded sample would draw something different on every load.
+ * Every one of these draws from real observations held in the spec. They used
+ * to sample from a seeded generator instead, which meant the "Points per
+ * group" and "Sample seed" sliders were the only data controls — and nobody's
+ * actual measurements could ever get in.
  */
 
 import { C, DAYS, withAlpha } from '../palette.js';
 import { baseOpts, xAxis, yAxis, TICK } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
+import { HISTOGRAM_VALUES, BOX_GROUPS, VIOLIN_GROUPS, HEATMAP_CELLS } from './_data.js';
 
 /* ── Helpers shared with the exported code ───────────────────────────────── */
 /* Declared as plain functions so they serialise cleanly into the JS tab. */
-
-function makeRng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-function gaussSample(rnd, mu, sigma) {
-  // Box–Muller: two uniforms in, one normal out.
-  const u = Math.max(1e-9, rnd());
-  const v = rnd();
-  return mu + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
 
 function kde(data, min, max, bandwidth, step) {
   const points = [];
@@ -51,6 +37,25 @@ function quantile(sorted, q) {
   return next !== undefined ? sorted[base] + rest * (next - sorted[base]) : sorted[base];
 }
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const distributionCharts = [
   {
     id: 'histogram',
@@ -59,23 +64,17 @@ export const distributionCharts = [
     blurb: 'Counts per bucket. Bin width is a real editorial choice — change it and see.',
     tags: ['histogram', 'distribution', 'bins', 'frequency', 'ages'],
     spec: {
+      groups: [{ label: 'Customers', color: C.purple, values: [...HISTOGRAM_VALUES] }],
       bins: 10,
-      mean: 32,
-      sd: 12,
       min: 18,
       max: 75,
-      sample: 2400,
-      seed: 11,
       color: C.purple,
-      label: 'Customers',
       opts: { radius: 2, alpha: 0.8 },
     },
     controls: [
       { group: 'Bins',  type: 'slider', key: 'bins', label: 'Bin count', min: 4, max: 40, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'mean', label: 'Mean', min: 20, max: 65, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'sd',   label: 'Std deviation', min: 3, max: 25, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Sample size', min: 200, max: 6000, step: 100 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
+      { group: 'Bins',  type: 'slider', key: 'min', label: 'Range from', min: 0, max: 100, step: 1 },
+      { group: 'Bins',  type: 'slider', key: 'max', label: 'Range to', min: 10, max: 200, step: 1 },
       { group: 'Style', type: 'colors', key: 'barColor', label: 'Bar colour' },
       { group: 'Style', type: 'slider', key: 'opts.radius', label: 'Corner radius', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Fill opacity', min: 0.3, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
@@ -84,16 +83,12 @@ export const distributionCharts = [
     onChange(spec) { spec.color = spec.barColor[0]; },
     chartjs: {
       build(spec) {
-        const rnd = makeRng(spec.seed * 7919);
-        // Pasted observations replace the generated sample.
-        const supplied = (spec.groups && spec.groups[0] && spec.groups[0].values) || null;
         const width = (spec.max - spec.min) / spec.bins;
         const bins = Array.from({ length: spec.bins }, (_, i) => ({
           label: `${Math.round(spec.min + i * width)}–${Math.round(spec.min + (i + 1) * width)}`,
           count: 0,
         }));
-        const feed = supplied || Array.from({ length: spec.sample },
-          () => Math.round(gaussSample(rnd, spec.mean, spec.sd)));
+        const feed = (spec.groups[0] && spec.groups[0].values) || [];
         feed.forEach((raw) => {
           const v = Math.round(raw);
           if (v < spec.min || v > spec.max) return;
@@ -104,7 +99,9 @@ export const distributionCharts = [
           data: {
             labels: bins.map((b) => b.label),
             datasets: [{
-              label: spec.label,
+              // The group's own name, so renaming the column in the data editor
+              // renames the series too.
+              label: (spec.groups[0] && spec.groups[0].label) || 'Values',
               data: bins.map((b) => b.count),
               backgroundColor: withAlpha(spec.color, spec.opts.alpha),
               borderColor: spec.color,
@@ -138,30 +135,17 @@ export const distributionCharts = [
     blurb: 'Median, quartiles, whiskers and outliers — five numbers that survive skew.',
     tags: ['box plot', 'quartiles', 'median', 'outliers', 'distribution'],
     spec: {
-      groups: [
-        { label: 'North',   color: C.purple, mean: 68, sd: 18 },
-        { label: 'South',   color: C.teal,   mean: 55, sd: 14 },
-        { label: 'East',    color: C.coral,  mean: 75, sd: 22 },
-        { label: 'West',    color: C.blue,   mean: 62, sd: 16 },
-        { label: 'Central', color: C.amber,  mean: 70, sd: 20 },
-      ],
-      sample: 80,
-      seed: 5,
+      groups: BOX_GROUPS.map((g, i) => ({
+        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+      })),
       opts: { alpha: 0.27, borderWidth: 1.5, outlierRadius: 3, prefix: '$' },
     },
     controls: [
-      { group: 'Data',  type: 'series', key: 'groups', data: false, max: 7, min: 2 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Points per group', min: 20, max: 300, step: 10 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
+      { group: 'Series', type: 'series', key: 'groups', data: false, max: 7, min: 2 },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Box fill', min: 0.05, max: 0.7, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'slider', key: 'opts.outlierRadius', label: 'Outlier size', min: 1, max: 7, step: 1, format: (v) => v + 'px' },
       { group: 'Axis',  type: 'text',   key: 'opts.prefix', label: 'Value prefix' },
     ],
-    onChange(spec) {
-      spec.groups.forEach((g, i) => {
-        if (typeof g.mean !== 'number') { g.mean = 60 + i * 4; g.sd = 16; }
-      });
-    },
     chartjs: {
       plugins: ['boxplot'],
       build(spec) {
@@ -169,13 +153,8 @@ export const distributionCharts = [
           type: 'boxplot',
           data: {
             labels: spec.groups.map((g) => g.label),
-            datasets: spec.groups.map((g, gi) => {
-              // Real observations win over the generated sample when supplied.
-              const rnd = makeRng((spec.seed + gi) * 2654435761);
-              const values = (g.values && g.values.length)
-                ? g.values
-                : Array.from({ length: spec.sample }, () =>
-                  Math.max(5, Math.round(gaussSample(rnd, g.mean, g.sd))));
+            datasets: spec.groups.map((g) => {
+              const values = g.values || [];
               return {
                 label: g.label,
                 // The boxplot controller takes one array of raw values per slot.
@@ -211,34 +190,26 @@ export const distributionCharts = [
     blurb: 'A mirrored kernel density estimate. Shows shape a box plot flattens — bimodality, skew.',
     tags: ['violin', 'kde', 'density', 'distribution', 'session length'],
     spec: {
-      groups: [
-        { label: 'Desktop', color: C.purple, mean: 8,   sd: 3   },
-        { label: 'Mobile',  color: C.teal,   mean: 4.5, sd: 2   },
-        { label: 'Tablet',  color: C.coral,  mean: 6.5, sd: 2.5 },
-      ],
-      sample: 300,
-      seed: 3,
-      opts: { min: 0, max: 18, bandwidth: 0.8, alpha: 0.22, showBox: true, suffix: 'm' },
+      groups: VIOLIN_GROUPS.map((g, i) => ({
+        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+      })),
+      opts: { textColor: '#808080', min: 0, max: 18, bandwidth: 0.8, alpha: 0.22, showBox: true, suffix: 'm' },
     },
     controls: [
-      { group: 'Data',  type: 'series', key: 'groups', data: false, max: 5, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'sample', label: 'Points per group', min: 50, max: 800, step: 50 },
-      { group: 'Data',  type: 'slider', key: 'seed',   label: 'Sample seed', min: 1, max: 60, step: 1 },
+      { group: 'Series', type: 'series', key: 'groups', data: false, max: 5, min: 1 },
       { group: 'Shape', type: 'slider', key: 'opts.bandwidth', label: 'Smoothing', min: 0.2, max: 2.5, step: 0.1, format: (v) => v.toFixed(1) },
       { group: 'Shape', type: 'slider', key: 'opts.alpha', label: 'Fill opacity', min: 0.05, max: 0.6, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Shape', type: 'toggle', key: 'opts.showBox', label: 'Show quartile box' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 5, max: 60, step: 1 },
       { group: 'Axis',  type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.groups.forEach((g, i) => {
-        if (typeof g.mean !== 'number') { g.mean = 5 + i * 2; g.sd = 2; }
-      });
-    },
     canvas: {
       height: 360,
-      helpers: [makeRng, gaussSample, kde, quantile],
-      draw(ctx, spec, W, H) {
+      helpers: [kde, quantile, inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 18, r: 24, b: 34, l: 46 };
         const colW = (W - pad.l - pad.r) / Math.max(1, spec.groups.length);
@@ -255,23 +226,26 @@ export const distributionCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(Math.round(v) + o.suffix, pad.l - 6, y + 4);
         }
 
         spec.groups.forEach((g, gi) => {
-          // Real observations win over the generated sample when supplied.
-          let data = g.values;
-          if (!data || !data.length) {
-            const rnd = makeRng((spec.seed + gi) * 2654435761);
-            data = [];
-            for (let i = 0; i < spec.sample; i++) {
-              data.push(Math.max(o.min + 0.2, gaussSample(rnd, g.mean, g.sd)));
-            }
-          }
+          const data = g.values || [];
+          if (!data.length) return;
 
           const cx = pad.l + colW * gi + colW / 2;
+          // A distribution's summary is what the shape is *for*, so the hover
+          // gives the five numbers the silhouette only implies.
+          const sorted = data.slice().sort((p, q) => p - q);
+          tip(cx - colW / 2, pad.t, colW, H - pad.t - pad.b, [
+            g.label,
+            'n = ' + sorted.length,
+            'median ' + quantile(sorted, 0.5).toFixed(1) + o.suffix,
+            'q1–q3 ' + quantile(sorted, 0.25).toFixed(1) + '–' + quantile(sorted, 0.75).toFixed(1),
+            'range ' + sorted[0].toFixed(1) + '–' + sorted[sorted.length - 1].toFixed(1),
+          ].join('\n'));
           const pts = kde(data, o.min, o.max, o.bandwidth, (o.max - o.min) / 60);
           const maxD = pts.reduce((m, p) => Math.max(m, p.d), 0) || 1;
           const scale = (colW * 0.42) / maxD;
@@ -308,7 +282,7 @@ export const distributionCharts = [
             ctx.stroke();
           }
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(g.label, cx, H - 10);
@@ -326,17 +300,14 @@ export const distributionCharts = [
     tags: ['heatmap', 'matrix', 'density', 'calendar', 'tickets'],
     spec: {
       rows: [...DAYS],
-      hours: 24,
-      seed: 9,
+      cols: Array.from({ length: 24 }, (_, h) => String(h)),
+      // Flat {x, y, v} is what the matrix controller reads, and what the data
+      // editor's `matrix` shape writes — so pasted grids need no translation.
+      cells: HEATMAP_CELLS.flatMap((row, y) => row.map((v, x) => ({ x, y, v }))),
       color: C.purple,
-      opts: { weekdayBase: 8, weekendBase: 2, peakBoost: 15, gap: 2, minAlpha: 0.12 },
+      opts: { gap: 2, minAlpha: 0.12 },
     },
     controls: [
-      { group: 'Data',  type: 'labels', key: 'rows', label: 'Row labels' },
-      { group: 'Data',  type: 'slider', key: 'opts.weekdayBase', label: 'Weekday base', min: 0, max: 25, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'opts.weekendBase', label: 'Weekend base', min: 0, max: 25, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'opts.peakBoost',   label: 'Peak boost',   min: 0, max: 40, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Style', type: 'colors', key: 'heatColor', label: 'Scale colour' },
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Cell gap', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.minAlpha', label: 'Floor opacity', min: 0, max: 0.5, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
@@ -346,22 +317,14 @@ export const distributionCharts = [
     chartjs: {
       plugins: ['matrix'],
       build(spec) {
-        const rnd = makeRng(spec.seed * 40503);
         const o = spec.opts;
         const rows = spec.rows;
-        const data = [];
-        rows.forEach((_, ri) => {
-          for (let h = 0; h < spec.hours; h++) {
-            const weekend = ri >= 5;
-            const base = weekend ? o.weekendBase : o.weekdayBase;
-            const peak = (h >= 9 && h <= 11) || (h >= 14 && h <= 16) ? o.peakBoost : 0;
-            const jitter = Math.round((rnd() - 0.5) * 6);
-            data.push({ x: h, y: ri, v: Math.max(0, base + peak + jitter) });
-          }
-        });
+        const cols = spec.cols;
+        const data = spec.cells;
         const maxV = data.reduce((m, d) => Math.max(m, d.v), 1);
         const { r, g, b } = hexToRgb(spec.color);
         const labelsJSON = JSON.stringify(rows);
+        const colsJSON = JSON.stringify(cols);
 
         // These callbacks are both executed live and printed into the exported
         // code, so every value they need is baked in as a literal rather than
@@ -385,7 +348,7 @@ export const distributionCharts = [
               backgroundColor: fillFn,
               borderColor: 'transparent',
               borderWidth: o.gap,
-              width: srcFn(`(ctx) => (ctx.chart.chartArea ? ctx.chart.chartArea.width : 400) / ${spec.hours}`),
+              width: srcFn(`(ctx) => (ctx.chart.chartArea ? ctx.chart.chartArea.width : 400) / ${cols.length}`),
               height: srcFn(`(ctx) => (ctx.chart.chartArea ? ctx.chart.chartArea.height : 200) / ${rows.length}`),
             }],
           },
@@ -397,8 +360,8 @@ export const distributionCharts = [
               // keeps the ticks on whole numbers, which the label callbacks
               // below depend on.
               x: {
-                type: 'linear', offset: true, min: 0, max: spec.hours - 1,
-                ticks: { ...TICK, stepSize: 3, autoSkip: false, callback: srcFn(`(v) => (v === 0 ? '12a' : v < 12 ? v + 'a' : v === 12 ? '12p' : (v - 12) + 'p')`) },
+                type: 'linear', offset: true, min: 0, max: cols.length - 1,
+                ticks: { ...TICK, stepSize: Math.max(1, Math.round(cols.length / 8)), autoSkip: false, callback: srcFn(`(v) => (${colsJSON})[v] ?? ''`) },
                 grid: { display: false }, border: { display: false },
               },
               y: {
@@ -410,8 +373,8 @@ export const distributionCharts = [
             plugins: {
               tooltip: {
                 callbacks: {
-                  title: srcFn(`(ctx) => (${labelsJSON})[ctx[0].raw.y] + ' · ' + ctx[0].raw.x + ':00'`),
-                  label: srcFn(`(ctx) => ctx.raw.v + ' events'`),
+                  title: srcFn(`(ctx) => (${labelsJSON})[ctx[0].raw.y] + ' · ' + (${colsJSON})[ctx[0].raw.x]`),
+                  label: srcFn(`(ctx) => String(ctx.raw.v)`),
                 },
               },
             },

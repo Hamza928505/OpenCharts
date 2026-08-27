@@ -12,6 +12,8 @@
  */
 
 import { C } from '../palette.js';
+import { REGION_VALUES } from './_data.js';
+import { countryKey } from '../geodata.js';
 
 function makeRng(seed) {
   let s = (seed >>> 0) || 1;
@@ -37,48 +39,62 @@ function loadTopology(url) {
 }
 
 /**
- * The value for one region.
+ * The value for one region, or null if the data does not cover it.
  *
- * A pasted lookup wins outright. Falling back to a hash of the name keeps the
- * sample map deterministic without shipping a table of made-up figures.
  * Matching is case- and punctuation-insensitive because nobody should have to
  * guess whether Natural Earth writes "United States" or "United States of
  * America".
+ *
+ * There is deliberately no fallback. This used to hash the country's name into
+ * a number when no value was supplied, which filled every map on the site with
+ * figures that looked authoritative and meant nothing. A country with no entry
+ * is now drawn in the no-data colour, which is the truth.
  */
-function valueFor(name, seed, lookup) {
-  if (lookup) {
-    const key = String(name).toLowerCase().replace(/[^a-z]/g, '');
-    for (const k in lookup) {
-      if (String(k).toLowerCase().replace(/[^a-z]/g, '') === key) return lookup[k];
-    }
-    return null;
+function valueFor(name, lookup) {
+  const key = countryKey(name);
+  for (const k in lookup) {
+    if (countryKey(k) === key) return lookup[k];
   }
-  let h = seed >>> 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return (h % 1000) / 10;
+  return null;
 }
 
 /**
- * Find one country's feature by name.
+ * The country features a map is focused on.
  *
- * Matching ignores case, punctuation and spacing, and also accepts common
- * short names — Natural Earth writes "United States of America", but nobody
- * types that. Returns null for the world view.
+ * Takes an array, a single name, or a comma-separated string — the last two so
+ * that a share link written before this took a list still resolves.
+ *
+ * Matching ignores case, punctuation and spacing, and accepts the common short
+ * names: Natural Earth writes "United States of America", but nobody types it.
+ * Returns an empty array for the world view, which every caller reads as
+ * "no focus" without needing a null check.
  */
-function findCountry(features, name) {
-  if (!name || name === 'World') return null;
-  const key = (s) => String(s).toLowerCase().replace(/[^a-z]/g, '');
-  const aliases = {
-    usa: 'unitedstatesofamerica', us: 'unitedstatesofamerica',
-    unitedstates: 'unitedstatesofamerica', america: 'unitedstatesofamerica',
-    uk: 'unitedkingdom', britain: 'unitedkingdom', greatbritain: 'unitedkingdom',
-    uae: 'unitedarabemirates', drc: 'democraticrepublicofthecongo',
-    southkorea: 'southkorea', czechia: 'czechia', czechrepublic: 'czechia',
-  };
-  const want = aliases[key(name)] || key(name);
-  return features.find((f) => key(f.properties.name) === want)
-    || features.find((f) => key(f.properties.name).startsWith(want))
-    || null;
+function findCountries(features, want) {
+  const names = Array.isArray(want) ? want : String(want || '').split(',');
+  const out = [];
+  names.forEach((name) => {
+    const trimmed = String(name).trim();
+    if (!trimmed || trimmed === 'World') return;
+    const wanted = countryKey(trimmed);
+    if (!wanted) return;
+    const hit = features.find((f) => countryKey(f.properties.name) === wanted)
+      || features.find((f) => countryKey(f.properties.name).startsWith(wanted));
+    if (hit && out.indexOf(hit) < 0) out.push(hit);
+  });
+  return out;
+}
+
+/**
+ * Wrap the focused features so a projection can be fitted to all of them at
+ * once. Two countries on opposite sides of the world will fit to a very wide
+ * frame, which is the honest result rather than a bug.
+ */
+function focusedOn(o) {
+  return [].concat(o.countries || o.country || []).filter(Boolean);
+}
+
+function focusExtent(list) {
+  return list.length ? { type: 'FeatureCollection', features: list } : null;
 }
 
 /**
@@ -105,13 +121,16 @@ const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m
 /**
  * Focus the map on one country.
  *
- * Free text rather than a dropdown of 177 entries: typing "Jordan" is faster
- * than finding it in a list, and the matcher accepts short names.
+ * A searchable list rather than free text, because the atlas spells countries
+ * its own way ("Bosnia and Herz.", "Dem. Rep. Congo") and a reasonable guess
+ * used to match nothing at all, leaving the map silently on the world. Typing
+ * still works; it now filters the list instead of hoping for a hit.
  */
 const countryControl = {
-  group: 'Area', type: 'text', key: 'opts.country',
-  label: 'Focus on a country',
-  placeholder: 'World — or type a country name',
+  group: 'Area', type: 'countries', key: 'opts.countries',
+  label: 'Focus on countries',
+  placeholder: 'Add a country…',
+  emptyLabel: 'Whole world',
 };
 
 const projectionControl = {
@@ -162,8 +181,10 @@ function makeProjection(name, geo, W, H, rotate, focus) {
   };
   const projection = (factories[name] || factories.naturalEarth)();
 
-  // Focusing on one country: Mercator is the sensible default at national
-  // scale, and the globe is turned to face it rather than being fitted flat.
+  // Focused on one or more countries: Mercator is the sensible default at
+  // national scale, and the globe turns to face the middle of them rather than
+  // being fitted flat. `focus` here is the combined extent, or null for the
+  // world — never an array, so a plain truthiness test is right.
   if (focus) {
     if (name === 'globe') {
       const c = d3.geoCentroid(focus);
@@ -187,25 +208,46 @@ function makeProjection(name, geo, W, H, rotate, focus) {
 /**
  * Give a globe drag-to-rotate. Returns nothing; the caller re-renders.
  * Kept separate so it can be serialised into the exported code intact.
+ *
+ * Every map that offers the globe projection calls this, not just the Globe
+ * chart — a sphere you cannot turn is worse than a flat map, because half the
+ * data is behind it with no way to reach it.
  */
 function attachGlobeDrag(svg, spec, redraw) {
-  let last = null;
-  const onDown = (e) => { last = [e.clientX, e.clientY]; e.preventDefault(); };
-  const onMove = (e) => {
-    if (!last) return;
-    const dx = e.clientX - last[0];
-    const dy = e.clientY - last[1];
-    last = [e.clientX, e.clientY];
-    const r = spec.opts.rotate || [0, -15, 0];
-    // Vertical drag is clamped so the globe cannot tumble past the poles.
-    spec.opts.rotate = [r[0] + dx * 0.4, Math.max(-90, Math.min(90, r[1] - dy * 0.4)), r[2]];
-    redraw();
-  };
-  const onUp = () => { last = null; };
+  if (!svg || typeof redraw !== 'function') return;
   svg.style.cursor = 'grab';
-  svg.addEventListener('pointerdown', onDown);
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
+  // Without this a touch drag scrolls the page instead of turning the globe.
+  svg.style.touchAction = 'none';
+
+  svg.addEventListener('pointerdown', (e) => {
+    let last = [e.clientX, e.clientY];
+    svg.style.cursor = 'grabbing';
+    e.preventDefault();
+
+    // Move and release are watched on the window rather than the SVG for two
+    // reasons: a redraw may replace the SVG mid-drag, and the pointer often
+    // leaves the element while turning. They are added per drag and removed on
+    // release, so they cannot accumulate — the previous version added a pair
+    // on every redraw and never removed any.
+    const onMove = (ev) => {
+      const dx = ev.clientX - last[0];
+      const dy = ev.clientY - last[1];
+      last = [ev.clientX, ev.clientY];
+      const r = spec.opts.rotate || [0, -15, 0];
+      // Vertical drag is clamped so the globe cannot tumble past the poles.
+      spec.opts.rotate = [r[0] + dx * 0.4, Math.max(-90, Math.min(90, r[1] - dy * 0.4)), r[2]];
+      redraw();
+    };
+    const onUp = () => {
+      svg.style.cursor = 'grab';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  });
 }
 
 export const geoCharts = [
@@ -216,15 +258,14 @@ export const geoCharts = [
     blurb: 'Regions shaded by value. Only ever for rates and ratios — shade a raw count and you have drawn a population map.',
     tags: ['choropleth', 'map', 'geo', 'spatial', 'countries', 'rate', 'd3'],
     spec: {
-      seed: 21,
+      regionValues: { ...REGION_VALUES },
       lowColor: '#EDE9FB',
       highColor: C.purple,
-      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
+      opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
     },
     controls: [
       countryControl,
       projectionControl,
-      { group: 'Data',   type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Colour', type: 'colors', key: 'scaleColors', label: 'Low / high', names: () => ['Low', 'High'] },
       { group: 'Colour', type: 'slider', key: 'opts.steps', label: 'Colour steps', min: 3, max: 9, step: 1 },
       { group: 'Style',  type: 'slider', key: 'opts.strokeWidth', label: 'Border width', min: 0, max: 2, step: 0.1, format: (v) => v.toFixed(1) + 'px' },
@@ -236,16 +277,22 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry],
-      mount(host, spec, W, H) {
+      helpers: [countryKey, loadTopology, valueFor, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, attachGlobeDrag],
+      mount(host, spec, W, H, env) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+        // A globe you cannot turn hides half its data behind itself. Not when
+        // it is focused on a country, though: the projection is then locked to
+        // that country's centroid, so a drag would move nothing.
+        if (o.projection === 'globe' && !focusedOn(o).length) attachGlobeDrag(svg.node(), spec, env && env.redraw);
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate, focus);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate, extent);
           const path = d3.geoPath(projection);
 
           // Quantise a continuous scale so the key reads as discrete bands.
@@ -268,15 +315,14 @@ export const geoCharts = [
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
             .attr('fill', (d) => {
-              if (focus && d !== focus) return o.neighbourColor;
-              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              if (focus.length && !inFocus(d)) return o.neighbourColor;
+              const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
               return v == null ? o.noDataColor : colour(v);
             })
             .attr('stroke', '#ffffff')
             .attr('stroke-width', o.strokeWidth)
-            .append('title')
-            .text((d) => {
-              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+            .attr('data-tip', (d) => {
+              const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
               return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
             });
 
@@ -308,11 +354,11 @@ export const geoCharts = [
     blurb: 'The world as a sphere, shaded by value. Drag to spin it. Honest 3D — no extrusion, no occlusion, no distorted areas.',
     tags: ['globe', '3d', 'orthographic', 'sphere', 'world', 'rotate', 'earth', 'map'],
     spec: {
-      seed: 21,
+      regionValues: { ...REGION_VALUES },
       lowColor: '#E7F1EC',
       highColor: '#16916A',
       opts: {
-        country: '',
+        countries: [],
         neighbourColor: '#E6E3DA',
         projection: 'globe',
         rotate: [-10, -12, 0],
@@ -327,10 +373,9 @@ export const geoCharts = [
       },
     },
     controls: [
-      { group: 'Area', type: 'text', key: 'opts.country', label: 'Turn to a country', placeholder: 'World — or type a country name' },
+      { group: 'Area', type: 'countries', key: 'opts.countries', label: 'Turn to countries', placeholder: 'Add a country…', emptyLabel: 'Whole world' },
       { group: 'Rotation', type: 'slider', key: 'opts.rotate.0', label: 'Spin (longitude)', min: -180, max: 180, step: 5, format: (v) => v + '°' },
       { group: 'Rotation', type: 'slider', key: 'opts.rotate.1', label: 'Tilt (latitude)', min: -90, max: 90, step: 5, format: (v) => v + '°' },
-      { group: 'Sample',   type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Colour', type: 'colors', key: 'scaleColors', label: 'Low / high', names: () => ['Low', 'High'] },
       { group: 'Colour', type: 'slider', key: 'opts.steps', label: 'Colour steps', min: 3, max: 9, step: 1 },
       { group: 'Style',  type: 'toggle', key: 'opts.showOcean', label: 'Fill the ocean' },
@@ -343,7 +388,7 @@ export const geoCharts = [
     d3: {
       height: 460,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry, attachGlobeDrag],
+      helpers: [countryKey, loadTopology, valueFor, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, attachGlobeDrag],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -354,8 +399,10 @@ export const geoCharts = [
 
           const draw = () => {
             svg.selectAll('*').remove();
-            const focus = findCountry(geo.features, o.country);
-            const projection = makeProjection('globe', geo, W, H, o.rotate, focus);
+            const focus = findCountries(geo.features, o.countries || o.country);
+            const inFocus = (d) => focus.indexOf(d) >= 0;
+            const extent = focusExtent(focus);
+            const projection = makeProjection('globe', geo, W, H, o.rotate, extent);
             const path = d3.geoPath(projection);
 
             const domain = spec.regionValues && Object.keys(spec.regionValues).length
@@ -396,14 +443,13 @@ export const geoCharts = [
             svg.append('g').selectAll('path').data(geo.features).join('path')
               .attr('d', path)
               .attr('fill', (d) => {
-                const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+                const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
                 return v == null ? o.noDataColor : colour(v);
               })
               .attr('stroke', '#ffffff')
               .attr('stroke-width', o.strokeWidth)
-              .append('title')
-              .text((d) => {
-                const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              .attr('data-tip', (d) => {
+                const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
                 return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
               });
 
@@ -417,7 +463,7 @@ export const geoCharts = [
           };
 
           draw();
-          attachGlobeDrag(svg.node(), spec, draw);
+          if (!focusedOn(o).length) attachGlobeDrag(svg.node(), spec, draw);
         }).catch((err) => geoMessage(host, err.message));
       },
     },
@@ -434,7 +480,7 @@ export const geoCharts = [
     blurb: 'One country, with a value at each city. The common case when the statistic you have is local, not national.',
     tags: ['city', 'country', 'map', 'geo', 'local', 'regional', 'points', 'd3'],
     spec: {
-      country: 'Jordan',
+      countries: ['Jordan'],
       places: [
         { name: 'Amman',    lon: 35.93, lat: 31.95, value: 4300 },
         { name: 'Zarqa',    lon: 36.09, lat: 32.07, value: 1450 },
@@ -447,7 +493,7 @@ export const geoCharts = [
       ],
       color: C.purple,
       opts: {
-        country: 'Jordan',
+        countries: ['Jordan'],
         clipToCountry: false,
         projection: 'mercator',
         rotate: [0, -15, 0],
@@ -462,7 +508,7 @@ export const geoCharts = [
       },
     },
     controls: [
-      { group: 'Area',    type: 'text',   key: 'opts.country', label: 'Country', placeholder: 'Jordan' },
+      { group: 'Area',    type: 'countries', key: 'opts.countries', label: 'Countries', placeholder: 'Add a country…', onlyWithCities: true },
       { group: 'Area',    type: 'toggle', key: 'opts.clipToCountry', label: 'Hide cities outside it' },
       { group: 'Symbols', type: 'colors', key: 'symbolColor', label: 'Symbol colour' },
       { group: 'Symbols', type: 'slider', key: 'opts.maxRadius', label: 'Largest city', min: 8, max: 70, step: 2, format: (v) => v + 'px' },
@@ -474,15 +520,16 @@ export const geoCharts = [
     onInit(spec) { spec.symbolColor = [spec.color]; },
     onChange(spec) {
       spec.color = spec.symbolColor[0];
-      // The country lives in opts so the shared helpers can see it, but it is
-      // the most important field on this chart, so keep the two in step.
-      if (spec.country && spec.country !== spec.opts.country) spec.opts.country = spec.country;
-      spec.country = spec.opts.country;
+      // opts.countries is what the helpers read, so it is the authority. The
+      // top-level copy is mirrored from it for a legible saved config —
+      // mirroring the other way made the control unable to change anything,
+      // because the stale copy overwrote every new choice.
+      spec.country = (spec.opts.countries || [])[0] || '';
     },
     d3: {
       height: 460,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage, makeProjection, findCountry],
+      helpers: [countryKey, loadTopology, geoMessage, makeProjection, findCountries, focusExtent, focusedOn],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
@@ -490,19 +537,22 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          if (o.country && !focus) {
-            geoMessage(host, `No country matched "${o.country}". Try its English name, for example "Jordan" or "Germany".`);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const asked = [].concat(o.countries || o.country || []).filter(Boolean);
+          if (asked.length && !focus.length) {
+            geoMessage(host, `No country matched ${asked.map((c) => '"' + c + '"').join(' or ')}. Try the English name, for example "Jordan" or "Germany".`);
             return;
           }
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, extent);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
+            .attr('fill', (d) => (focus.length && !inFocus(d) ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', (d) => (focus && d === focus ? 1.2 : 0.4));
+            .attr('stroke-width', (d) => (inFocus(d) ? 1.2 : 0.4));
 
           const maxV = Math.max(...spec.places.map((p) => p.value), 1);
           const r = (v) => o.maxRadius * Math.sqrt(v / maxV);
@@ -510,12 +560,12 @@ export const geoCharts = [
 
           const pts = spec.places
             .map((p) => ({ ...p, xy: projection([p.lon, p.lat]) }))
-            .filter((p) => p.xy && (!focus || !o.clipToCountry || d3.geoContains(focus, [p.lon, p.lat])))
+            .filter((p) => p.xy && (!focus.length || !o.clipToCountry || focus.some((f) => d3.geoContains(f, [p.lon, p.lat]))))
             .sort((a, b) => b.value - a.value);
 
           if (!pts.length) {
             geoMessage(host, focus
-              ? `None of these places fall inside ${focus.properties.name}. Check that longitude comes before latitude.`
+              ? `None of these places fall inside ${focus.map((f) => f.properties.name).join(' or ')}. Check that longitude comes before latitude.`
               : 'No places could be placed. Check the longitude and latitude columns.');
             return;
           }
@@ -528,8 +578,7 @@ export const geoCharts = [
             .attr('fill', spec.color + alphaHex)
             .attr('stroke', spec.color)
             .attr('stroke-width', o.strokeWidth)
-            .append('title')
-            .text((d) => `${d.name}: ${d.value}${o.suffix}`);
+            .attr('data-tip', (d) => `${d.name}: ${d.value}${o.suffix}`);
 
           if (o.showLabels) {
             // Below the threshold the labels are noise on a crowded map.
@@ -571,7 +620,7 @@ export const geoCharts = [
         { name: 'Sydney',       lon: 151.2, lat: -33.9, value: 5 },
       ],
       color: C.coral,
-      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
+      opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
     },
     controls: [
       countryControl,
@@ -587,24 +636,30 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage, makeProjection, findCountry, isVisible],
-      mount(host, spec, W, H) {
+      helpers: [countryKey, loadTopology, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, isVisible, attachGlobeDrag],
+      mount(host, spec, W, H, env) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+        // A globe you cannot turn hides half its data behind itself. Not when
+        // it is focused on a country, though: the projection is then locked to
+        // that country's centroid, so a drag would move nothing.
+        if (o.projection === 'globe' && !focusedOn(o).length) attachGlobeDrag(svg.node(), spec, env && env.redraw);
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, extent);
           const path = d3.geoPath(projection);
 
           // Focused: neighbours recede so the country of interest reads first.
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
+            .attr('fill', (d) => (focus.length && !inFocus(d) ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
+            .attr('stroke-width', (d) => (inFocus(d) ? 1.1 : 0.4));
 
           // Radius scales with the square root of the value, so area encodes it.
           const maxV = Math.max(...spec.places.map((p) => p.value), 1);
@@ -615,8 +670,8 @@ export const geoCharts = [
           const onMap = spec.places
             .map((p) => ({ ...p, xy: projection([p.lon, p.lat]) }))
             .filter((p) => p.xy && isVisible(projection, [p.lon, p.lat], o.projection));
-          const inside = onMap.filter((p) => !focus || !o.clipToCountry
-            || d3.geoContains(focus, [p.lon, p.lat]));
+          const inside = onMap.filter((p) => !focus.length || !o.clipToCountry
+            || focus.some((f) => d3.geoContains(f, [p.lon, p.lat])));
           // Clipping everything away leaves a blank map with no explanation,
           // which is worse than showing the points that do exist.
           const pts = (inside.length ? inside : onMap).sort((a, b) => b.value - a.value);
@@ -629,8 +684,7 @@ export const geoCharts = [
             .attr('fill', spec.color + alphaHex)
             .attr('stroke', spec.color)
             .attr('stroke-width', o.strokeWidth)
-            .append('title')
-            .text((d) => `${d.name}: ${d.value}${o.suffix}`);
+            .attr('data-tip', (d) => `${d.name}: ${d.value}${o.suffix}`);
 
           if (o.showLabels) {
             g.append('text')
@@ -654,9 +708,12 @@ export const geoCharts = [
     blurb: 'One dot per n units, scattered inside each region. Shows where things are without shading whole areas.',
     tags: ['dot density', 'map', 'geo', 'scatter', 'population', 'distribution', 'd3'],
     spec: {
+      // Dot placement is randomised but seeded, so an export redraws the map
+      // it was copied from rather than reshuffling every load.
       seed: 17,
+      regionValues: { ...REGION_VALUES },
       color: C.teal,
-      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
+      opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
     },
     controls: [
       countryControl,
@@ -665,39 +722,44 @@ export const geoCharts = [
       { group: 'Dots',  type: 'slider', key: 'opts.radius', label: 'Dot size', min: 0.6, max: 5, step: 0.2, format: (v) => v.toFixed(1) + 'px' },
       { group: 'Dots',  type: 'slider', key: 'opts.alpha', label: 'Dot opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Dots',  type: 'colors', key: 'dotColor', label: 'Dot colour' },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
     ],
     onInit(spec) { spec.dotColor = [spec.color]; },
     onChange(spec) { spec.color = spec.dotColor[0]; },
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [makeRng, loadTopology, valueFor, geoMessage, makeProjection, findCountry, isVisible],
-      mount(host, spec, W, H) {
+      helpers: [countryKey, makeRng, loadTopology, valueFor, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, isVisible, attachGlobeDrag],
+      mount(host, spec, W, H, env) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+        // A globe you cannot turn hides half its data behind itself. Not when
+        // it is focused on a country, though: the projection is then locked to
+        // that country's centroid, so a drag would move nothing.
+        if (o.projection === 'globe' && !focusedOn(o).length) attachGlobeDrag(svg.node(), spec, env && env.redraw);
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, extent);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
+            .attr('fill', (d) => (focus.length && !inFocus(d) ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
+            .attr('stroke-width', (d) => (inFocus(d) ? 1.1 : 0.4));
 
           // Rejection sampling: throw points at each country's bounding box and
           // keep the ones that land inside it.
           const rnd = makeRng(spec.seed * 7919);
           const dots = [];
-          const scatterIn = focus ? [focus] : geo.features;
+          const scatterIn = focus.length ? focus : geo.features;
           scatterIn.forEach((f) => {
             const name = f.properties.name || String(f.id);
-            const raw = valueFor(name, spec.seed, spec.regionValues);
+            const raw = valueFor(name, spec.regionValues);
             const share = Math.max(0, (raw == null ? 0 : raw)) / 100;
             const want = Math.round(o.dotsPerRegion * share);
             if (want < 1) return;
@@ -709,17 +771,19 @@ export const geoCharts = [
               if (!d3.geoContains(f, [lon, lat])) continue;
               const xy = projection([lon, lat]);
               if (!xy || !isVisible(projection, [lon, lat], o.projection)) continue;
-              dots.push(xy);
+              // Carry the country through, so a dot can say what it counts.
+              dots.push({ xy: xy, name: name, value: raw });
               placed++;
             }
           });
 
           const alphaHex = Math.round(o.alpha * 255).toString(16).padStart(2, '0');
           svg.append('g').selectAll('circle').data(dots).join('circle')
-            .attr('cx', (d) => d[0])
-            .attr('cy', (d) => d[1])
+            .attr('cx', (d) => d.xy[0])
+            .attr('cy', (d) => d.xy[1])
             .attr('r', o.radius)
-            .attr('fill', spec.color + alphaHex);
+            .attr('fill', spec.color + alphaHex)
+            .attr('data-tip', (d) => d.name + ': ' + (d.value == null ? 'no data' : d.value));
         }).catch((err) => geoMessage(host, err.message));
       },
     },
@@ -747,7 +811,7 @@ export const geoCharts = [
       ],
       color: C.purple,
       hubColor: C.coral,
-      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
+      opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
     },
     controls: [
       countryControl,
@@ -763,23 +827,29 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, geoMessage, makeProjection, findCountry, isVisible],
-      mount(host, spec, W, H) {
+      helpers: [countryKey, loadTopology, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, isVisible, attachGlobeDrag],
+      mount(host, spec, W, H, env) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+        // A globe you cannot turn hides half its data behind itself. Not when
+        // it is focused on a country, though: the projection is then locked to
+        // that country's centroid, so a drag would move nothing.
+        if (o.projection === 'globe' && !focusedOn(o).length) attachGlobeDrag(svg.node(), spec, env && env.redraw);
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, extent);
           const path = d3.geoPath(projection);
 
           svg.append('g').selectAll('path').data(geo.features).join('path')
             .attr('d', path)
-            .attr('fill', (d) => (focus && d !== focus ? o.neighbourColor : o.landColor))
+            .attr('fill', (d) => (focus.length && !inFocus(d) ? o.neighbourColor : o.landColor))
             .attr('stroke', '#ffffff')
-            .attr('stroke-width', (d) => (focus && d === focus ? 1.1 : 0.4));
+            .attr('stroke-width', (d) => (inFocus(d) ? 1.1 : 0.4));
 
           const hub = projection([spec.hub.lon, spec.hub.lat]);
           if (!hub) { geoMessage(host, 'Hub falls outside this projection.'); return; }
@@ -809,8 +879,7 @@ export const geoCharts = [
             .attr('stroke', spec.color + alphaHex)
             .attr('stroke-width', (d) => Math.max(0.6, (d.value / maxV) * o.maxWidth))
             .attr('stroke-linecap', 'round')
-            .append('title')
-            .text((d) => `${spec.hub.name} → ${d.name}: ${d.value}`);
+            .attr('data-tip', (d) => `${spec.hub.name} → ${d.name}: ${d.value}`);
 
           const g = svg.append('g').selectAll('g').data(targets).join('g')
             .attr('transform', (d) => `translate(${d.xy[0]},${d.xy[1]})`);
@@ -896,7 +965,8 @@ export const geoCharts = [
     onChange(spec) { [spec.lowColor, spec.highColor] = spec.tileColors; },
     canvas: {
       height: 440,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const cells = spec.cells;
         if (!cells.length) return;
@@ -935,6 +1005,7 @@ export const geoCharts = [
         cells.forEach((c) => {
           const x = offX + c.col * size;
           const y = offY + c.row * size;
+          tip(x, y, size, size, (c.name || c.code) + ': ' + c.value + o.suffix);
           ctx.beginPath();
           ctx.roundRect(x + o.gap / 2, y + o.gap / 2, size - o.gap, size - o.gap, o.radius);
           ctx.fillStyle = colourAt(c.value);
@@ -966,14 +1037,13 @@ export const geoCharts = [
     blurb: 'Each country shrunk about its own centre in proportion to its value. Keeps the shapes; abandons the adjacency.',
     tags: ['cartogram', 'map', 'geo', 'distortion', 'value by area', 'non-contiguous', 'd3'],
     spec: {
-      seed: 33,
+      regionValues: { ...REGION_VALUES },
       color: C.purple,
-      opts: { country: '', clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
+      opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
     },
     controls: [
       countryControl,
       projectionControl,
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
       { group: 'Scale', type: 'slider', key: 'opts.minScale', label: 'Smallest scale', min: 0.02, max: 0.6, step: 0.02, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'colors', key: 'cartoColor', label: 'Fill colour' },
       { group: 'Style', type: 'toggle', key: 'opts.ghost', label: 'Show true outlines behind' },
@@ -984,16 +1054,22 @@ export const geoCharts = [
     d3: {
       height: 440,
       libraries: ['topojson', 'worldAtlas'],
-      helpers: [loadTopology, valueFor, geoMessage, makeProjection, findCountry],
-      mount(host, spec, W, H) {
+      helpers: [countryKey, loadTopology, valueFor, geoMessage, makeProjection, findCountries, focusExtent, focusedOn, attachGlobeDrag],
+      mount(host, spec, W, H, env) {
         const o = spec.opts;
         const url = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json';
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
+        // A globe you cannot turn hides half its data behind itself. Not when
+        // it is focused on a country, though: the projection is then locked to
+        // that country's centroid, so a drag would move nothing.
+        if (o.projection === 'globe' && !focusedOn(o).length) attachGlobeDrag(svg.node(), spec, env && env.redraw);
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
-          const focus = findCountry(geo.features, o.country);
-          const projection = makeProjection(o.projection, geo, W, H, o.rotate, focus);
+          const focus = findCountries(geo.features, o.countries || o.country);
+          const inFocus = (d) => focus.indexOf(d) >= 0;
+          const extent = focusExtent(focus);
+          const projection = makeProjection(o.projection, geo, W, H, o.rotate, extent);
           const path = d3.geoPath(projection);
 
           if (o.ghost) {
@@ -1012,7 +1088,7 @@ export const geoCharts = [
             .attr('transform', (d) => {
               const c = path.centroid(d);
               if (!c || Number.isNaN(c[0])) return null;
-              const raw = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+              const raw = valueFor(d.properties.name || String(d.id), spec.regionValues);
               const v = Math.max(0, (raw == null ? 0 : raw)) / 100;
               const k = o.minScale + Math.sqrt(v) * (1 - o.minScale);
               return `translate(${c[0]},${c[1]}) scale(${k.toFixed(3)}) translate(${-c[0]},${-c[1]})`;
@@ -1020,9 +1096,8 @@ export const geoCharts = [
             .attr('fill', spec.color + alphaHex)
             .attr('stroke', '#ffffff')
             .attr('stroke-width', o.strokeWidth)
-            .append('title')
-            .text((d) => {
-              const v = valueFor(d.properties.name || String(d.id), spec.seed, spec.regionValues);
+            .attr('data-tip', (d) => {
+              const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
               return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1));
             });
         }).catch((err) => geoMessage(host, err.message));

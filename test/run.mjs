@@ -133,7 +133,9 @@ const results = await page.evaluate(async (ids) => {
   const reg = await import('/js/studio/registry.js');
   const eng = await import('/js/studio/engines.js');
   const cdn = await import('/js/studio/cdn.js');
-  const { applyData } = await import('/js/studio/dataio.js');
+  const { applyData, parseTable } = await import('/js/studio/dataio.js');
+  // The editor knows its own header row; so does this check.
+  const parseTableFor = (text) => parseTable(text, true);
 
   const host = document.createElement('div');
   host.style.cssText = 'width:900px;height:440px;position:fixed;left:-9999px;top:0';
@@ -187,6 +189,86 @@ const results = await page.evaluate(async (ids) => {
           const inst2 = eng.renderChart(def, host, fresh);
           if (inst2.engine === 'error') r.problems.push('broke after pasting its own example');
           eng.destroyInstance(inst2);
+
+          // ...and what the editor shows next has to be what it just read.
+          //
+          // `toText` writes the table the data editor opens on. If it writes a
+          // shape this chart's own reader cannot take back, the second visit
+          // to the editor shows something broken — which is exactly how
+          // Parallel Sets shipped: it wrote {from, to, flow} into a renderer
+          // that reads record[dimensionName], so a round trip came back empty.
+          //
+          // The invariant is a fixed point, not equality with the example:
+          // reading and writing may merge duplicate rows or add a header, but
+          // doing it twice must give the same table as doing it once.
+          const written = typeof def.toText === 'function' ? def.toText(fresh) : null;
+          if (written == null || !written.trim()) {
+            r.problems.push('writes no table back for the editor to open on');
+          } else {
+            const again = reg.newSpec(def);
+            const back = applyData(def, again, parseTableFor(written));
+            if (!back.ok) {
+              r.problems.push('cannot read back what it writes: ' + back.message);
+            } else {
+              if (typeof def.onChange === 'function') def.onChange(again);
+              const twice = def.toText(again);
+              if (twice !== written) {
+                r.problems.push('the editor table changes on every visit');
+              }
+            }
+          }
+        }
+
+        // ...and the data must actually *reach* the chart.
+        //
+        // Accepting a paste without throwing proves nothing. Four charts
+        // passed every other check here while their renderers ignored the spec
+        // and drew from a seed instead. Feed a chart two different tables and
+        // the code it generates has to differ.
+        //
+        // Numbers and labels are tested separately and deliberately so. A
+        // combined perturbation hides exactly the bug worth catching: a
+        // scatter that honours its group names while ignoring every x and y
+        // still changes, and would pass.
+        const perturb = (text, mul, add, tag) => text.split('\n').map((line, li) => {
+          if (!li && !/^[-+]?[\d.]+([,\t;]|$)/.test(line)) return line;   // header
+          return line.split(/([,\t;])/).map((cell) => {
+            const t = cell.trim();
+            if (!t || /[,\t;]/.test(cell)) return cell;
+            const v = Number(t);
+            if (Number.isFinite(v)) return String(Math.round(v * mul) + add);
+            return t + tag;
+          }).join('');
+        }).join('\n');
+
+        const codeFor = (text) => {
+          const sp = reg.newSpec(def);
+          const ok = applyData(def, sp, text);
+          if (!ok.ok) return null;
+          if (typeof def.onChange === 'function') def.onChange(sp);
+          return eng.generateCode(def, sp).js;
+        };
+
+        const example = def.data.example || '';
+        const body = example.split('\n').slice(1).join('\n');
+        const cells = body.split(/[\n,\t;]/).map((c) => c.trim()).filter(Boolean);
+        const hasNumbers = cells.some((c) => Number.isFinite(Number(c)));
+        const hasLabels = cells.some((c) => !Number.isFinite(Number(c)));
+
+        const base = codeFor(perturb(example, 1, 0, ''));
+        if (base) {
+          if (hasNumbers) {
+            const scaled = codeFor(perturb(example, 2, 17, ''));
+            if (scaled && scaled === base) {
+              r.problems.push('ignores the numbers it accepts — doubling every value draws the same chart');
+            }
+          }
+          if (hasLabels) {
+            const renamed = codeFor(perturb(example, 1, 0, ' Z'));
+            if (renamed && renamed === base) {
+              r.problems.push('ignores the labels it accepts — renaming every row draws the same chart');
+            }
+          }
         }
       }
 
@@ -243,6 +325,105 @@ check(gallery.filters >= meta.categories, 'gallery has a filter per category');
 check(gallery.credits > 0, 'gallery credits its dependencies');
 console.log(`  ${green('✓')} gallery — ${gallery.tiles} tiles, ${gallery.live} previews live`);
 
+/* The gallery answers the other question: "I have this table, what draws it?" */
+const match = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const paste = async (text, header) => {
+    const box = document.querySelector('#match-text');
+    box.value = text;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(400);
+    const hdr = document.querySelector('#match-header');
+    const detected = hdr.checked;
+    if (header != null && hdr.checked !== header) {
+      hdr.checked = header;
+      hdr.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(300);
+    }
+    return {
+      detected,
+      cards: document.querySelectorAll('.card').length,
+      chips: [...document.querySelectorAll('.match-col-chip b')].map((c) => c.textContent),
+      verdict: (document.querySelector('.match-verdict') || {}).textContent || '',
+      banner: !!document.querySelector('.match-note'),
+      ids: [...document.querySelectorAll('.card')].map((c) => new URL(c.href).searchParams.get('chart')),
+    };
+  };
+
+  document.querySelector('#match-toggle').click();
+  await sleep(150);
+
+  const total = document.querySelectorAll('.card').length;
+
+  // Two ends of a name and a number: only the flow-shaped charts read this.
+  const flow = await paste('from,to,value\nOrganic,Visit,4200\nVisit,Checkout,3800', true);
+  // Words where a number belongs. Nothing that needs a value can draw this —
+  // though a graph still can, because two columns of names *are* an edge list.
+  const junk = await paste('label,value\nA,lots\nB,heaps', true);
+  // A header row of years cannot be detected, and the tick box is the answer.
+  const years = await paste('region,2023,2024\nNorth,520,680\nSouth,440,575', null);
+  const yearsFixed = await paste('region,2023,2024\nNorth,520,680\nSouth,440,575', true);
+
+  // The banner has to lead back out of the filter.
+  document.querySelector('.match-note .btn').click();
+  await sleep(300);
+  const cleared = document.querySelectorAll('.card').length;
+
+  return { total, flow, junk, years, yearsFixed, cleared };
+});
+
+check(match.flow.cards > 0 && match.flow.cards < match.total,
+  'a table narrows the gallery to the charts that read it',
+  `${match.flow.cards} of ${match.total}`);
+check(match.flow.ids.includes('sankey') && match.flow.ids.includes('chord'),
+  'a from/to/value table finds the flow charts', match.flow.ids.join(','));
+check(!match.flow.ids.includes('pie') && !match.flow.ids.includes('histogram'),
+  'and does not offer charts that would read its names as zero');
+check(match.flow.chips.join(',') === 'from,to,value',
+  'the columns are named back to the reader', match.flow.chips.join(','));
+check(match.flow.banner, 'a filtered grid says so');
+check(match.junk.cards < 6, 'words where numbers belong rule out nearly everything',
+  `${match.junk.cards} charts: ${match.junk.ids.join(',')}`);
+check(!match.junk.ids.some((id) => ['pie', 'bar-vertical', 'histogram', 'line-basic'].includes(id)),
+  'and rule out every chart that would draw those words as zero',
+  match.junk.ids.join(','));
+check(match.years.detected === false,
+  'a header row of years cannot be detected — the box says so');
+check(match.yearsFixed.chips.join(',') === 'region,2023,2024',
+  'and ticking the box settles it', match.yearsFixed.chips.join(','));
+check(match.yearsFixed.cards > match.flow.cards,
+  'a plain label-and-values table suits far more charts',
+  `${match.yearsFixed.cards} vs ${match.flow.cards}`);
+check(match.cleared === match.total, 'and the banner leads back to every chart',
+  `${match.cleared} of ${match.total}`);
+
+/* Clicking through carries the table into the studio. */
+await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const box = document.querySelector('#match-text');
+  box.value = 'from,to,value\nAd,Visit,320\nVisit,Buy,180';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(400);
+  const hdr = document.querySelector('#match-header');
+  if (!hdr.checked) { hdr.checked = true; hdr.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(300);
+  const card = [...document.querySelectorAll('.card')].find((c) => c.href.includes('chart=sankey'));
+  card.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+});
+await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const carried = await page.evaluate(() => ({
+  flows: JSON.stringify(window.openCharts.spec.flows),
+  spent: sessionStorage.getItem('opencharts.table'),
+}));
+check(/"Ad"/.test(carried.flows) && /"Buy"/.test(carried.flows),
+  'the matched table opens in the chart the reader picked', carried.flows.slice(0, 80));
+check(carried.spent === null, 'and is taken once, not left for the next page load');
+console.log(`  ${green('✓')} data match — ${match.flow.cards} charts read a flow table, ${match.yearsFixed.cards} read a plain one`);
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+
 /* Suite 4 — search and filtering. */
 const search = await page.evaluate(async () => {
   const el = document.querySelector('#search');
@@ -268,7 +449,7 @@ await page.waitForTimeout(900);
 const studio = await page.evaluate(() => ({
   title: (document.querySelector('#chart-title') || {}).textContent,
   controls: document.querySelectorAll('.controls .ctrl-group').length,
-  dataEditor: !!document.querySelector('.data-paste'),
+  dataEditor: !!document.querySelector('.data-card'),
   tabs: document.querySelectorAll('.tab').length,
   gutterLines: document.querySelectorAll('.gutter span').length,
   sources: document.querySelectorAll('.source-row').length,
@@ -302,25 +483,61 @@ check(live.changed, 'editing a control updates the code');
 check(live.hasRadius, 'the edit appears verbatim in the code');
 console.log(`  ${green('✓')} live editing — control change reaches the JS tab`);
 
-/* Suite 7 — pasting data drives the chart. */
-const paste = await page.evaluate(async () => {
-  const area = document.querySelector('.data-paste');
-  area.value = 'label,Alpha,Beta\nOne,10,20\nTwo,30,40\nThree,50,60';
+/* Suite 7 — the sidebar shows the data, and the grid edits it. */
+const sidebar = await page.evaluate(async () => {
+  const card = document.querySelector('.data-card');
+  const preview = card ? [...card.querySelectorAll('.data-mini td')].map((t) => t.textContent) : [];
+
   [...document.querySelectorAll('.controls .btn')]
-    .find((b) => b.textContent.includes('Use this data')).click();
-  await new Promise((r) => setTimeout(r, 500));
+    .find((b) => b.textContent.includes('Edit data')).click();
+  await new Promise((r) => setTimeout(r, 350));
+
+  const setCell = (r, c, v) => {
+    const inp = document.querySelector(`.dgrid-cell[data-row="${r}"][data-col="${c}"]`);
+    inp.value = v;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const rowsBefore = document.querySelectorAll('.dgrid tbody tr').length;
+  setCell(0, 0, 'Renamed');
+  setCell(0, 1, '999');
+
+  // A word in a value column must be flagged the moment it is typed, not on
+  // apply — that is the whole reason the grid exists.
+  setCell(1, 1, 'not a number');
+  const flaggedWhileTyping = document.querySelectorAll('.dgrid-cell.bad').length;
+  setCell(1, 1, '42');
+  const flaggedAfterFix = document.querySelectorAll('.dgrid-cell.bad').length;
+
+  // Add a row through the button rather than by typing a newline.
+  [...document.querySelectorAll('.dgrid-foot .btn')].find((b) => b.textContent.includes('+ Row')).click();
+  setCell(rowsBefore, 0, 'Extra');
+  setCell(rowsBefore, 1, '250');
+
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => b.textContent.includes('Use this data')).click();
+  await new Promise((r) => setTimeout(r, 700));
+
   return {
+    preview,
+    rowsBefore,
+    flaggedWhileTyping,
+    flaggedAfterFix,
+    closed: !document.querySelector('.dlg'),
     status: (document.querySelector('.data-status') || {}).textContent || '',
-    legend: document.querySelector('#legend').textContent,
-    code: document.querySelector('.code-body').textContent.includes("'Alpha'"),
+    card: (document.querySelector('.data-card') || {}).textContent || '',
+    code: document.querySelector('.code-body').textContent,
   };
 });
-check(/Loaded 3 rows/.test(paste.status), 'pasted data is accepted', paste.status);
-check(/Alpha/.test(paste.legend), 'pasted series reach the legend');
-check(paste.code, 'pasted data reaches the generated code');
-console.log(`  ${green('✓')} data editor — paste → chart → code`);
+check(sidebar.preview.length > 0, 'the sidebar previews the data instead of a textarea', `${sidebar.preview.length} cells`);
+check(sidebar.flaggedWhileTyping === 1, 'a non-numeric cell is flagged as it is typed', `${sidebar.flaggedWhileTyping} flagged`);
+check(sidebar.flaggedAfterFix === 0, 'fixing the cell clears the flag');
+check(sidebar.closed, 'applying the grid closes the dialog');
+check(/Loaded \d+ rows/.test(sidebar.status), 'the grid edit is accepted', sidebar.status);
+check(/Renamed/.test(sidebar.card), 'the sidebar preview shows the edited data', sidebar.card.slice(0, 60));
+check(/'Renamed'/.test(sidebar.code) && /999/.test(sidebar.code), 'the grid edit reaches the generated code');
+console.log(`  ${green('✓')} data grid — typed edit → chart → code`);
 
-/* Suite 8 — help and the data dialog. */
+/* Suite 8 — help, the paste tab, and the parser behind both. */
 const helpAndDialog = await page.evaluate(async () => {
   const { helpFor } = await import('/js/studio/chart-help.js');
   const reg = await import('/js/studio/registry.js');
@@ -331,10 +548,6 @@ const helpAndDialog = await page.evaluate(async () => {
     const h = helpFor(c);
     return !h || !h.read || !h.watch;
   }).map((c) => c.id);
-  const ownEntry = reg.CHARTS.filter((c) => {
-    const { CHART_HELP } = window.__helpTable || {};
-    return false;
-  });
 
   // The parser must survive a realistic messy spreadsheet paste.
   const messy = parseTable(['region\tQ1 sales\tQ2 sales', 'North\t$1,240\t$1,890', 'South\t$980\tn/a'].join('\n'));
@@ -349,37 +562,854 @@ check(!helpAndDialog.missingHelp.length, 'every chart has reading guidance', hel
 check(helpAndDialog.messyHeader, 'a header row is detected despite currency formatting');
 check(helpAndDialog.messyHeaders[0] === 'region', 'header names survive the parse', helpAndDialog.messyHeaders.join('|'));
 
-// The dialog opens, previews, and applies.
+// The dialog opens on the grid, and the paste tab still feeds it.
 await page.goto(`${base}/studio.html?chart=bar-stacked`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(900);
 const dialog = await page.evaluate(async () => {
   document.querySelector('.help-link').click();
   await new Promise((r) => setTimeout(r, 300));
+
+  const tabs = [...document.querySelectorAll('.dlg-tab')].map((t) => t.textContent);
+  const startsOnGrid = document.querySelector('.dlg-tab.active').textContent === 'Table';
+  const gridHeight = Math.round(document.querySelector('.dgrid-scroll').getBoundingClientRect().height);
+  // A component class that collides with a site-wide one silently blockifies
+  // the table and slides the header off its columns, so measure the layout
+  // rather than trusting that the markup is a table.
+  const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+  const headAligned = Math.abs(box('.dgrid thead th:nth-child(2)').left - box('.dgrid tbody td:nth-child(2)').left) < 1;
+  const gridFillsWidth = box('.dgrid').width / box('.dgrid-scroll').width > 0.95;
+
+  [...document.querySelectorAll('.dlg-tab')].find((t) => t.textContent === 'Paste text').click();
+  await new Promise((r) => setTimeout(r, 150));
+
   const area = document.querySelector('.dlg-paste');
-  const openedHeight = Math.round(area.getBoundingClientRect().height);
   area.value = ['region\tQ1\tQ2', 'North\t$1,240\t$1,890', 'South\t$980\tn/a', 'East\t$2,100\t$2,450'].join('\n');
   area.dispatchEvent(new Event('input', { bubbles: true }));
   await new Promise((r) => setTimeout(r, 250));
   const badCells = document.querySelectorAll('.dlg-table td.bad').length;
   const headers = [...document.querySelectorAll('.dlg-table th')].map((t) => t.firstChild.textContent);
+
+  // Reading the paste into the table must carry it across, not discard it.
+  [...document.querySelectorAll('.dlg-tools .btn')].find((b) => b.textContent.includes('Read into')).click();
+  await new Promise((r) => setTimeout(r, 250));
+  const gridRows = document.querySelectorAll('.dgrid tbody tr').length;
+  const firstCell = document.querySelector('.dgrid-cell[data-row="0"][data-col="0"]').value;
+
   [...document.querySelectorAll('.dlg-foot .btn')].find((b) => b.textContent.includes('Use this data')).click();
-  await new Promise((r) => setTimeout(r, 600));
+  await new Promise((r) => setTimeout(r, 250));
+
+  // "n/a" is not a number, so applying must ask rather than quietly zero it.
+  const asked = !!document.querySelector('.ask');
+  const askText = asked ? document.querySelector('.ask-text').textContent : '';
+  // Enter must not be a shortcut to the risky answer, so the safe button holds
+  // focus when there is something to lose.
+  const safeHasFocus = asked && document.activeElement === [...document.querySelectorAll('.ask-foot .btn')]
+    .find((b) => b.textContent.includes('Let me fix it'));
+  if (asked) {
+    [...document.querySelectorAll('.ask-foot .btn')].find((b) => b.textContent.includes('Use it anyway')).click();
+  }
+  await new Promise((r) => setTimeout(r, 700));
+
   return {
-    openedHeight,
+    tabs,
+    startsOnGrid,
+    gridHeight,
+    headAligned,
+    gridFillsWidth,
     badCells,
     headers,
+    gridRows,
+    firstCell,
+    asked,
+    askText,
+    safeHasFocus,
     dialogClosed: !document.querySelector('.dlg'),
     legend: document.querySelector('#legend').textContent,
   };
 });
-check(dialog.openedHeight > 250, 'the dialog editor is genuinely large', `${dialog.openedHeight}px`);
+check(dialog.startsOnGrid, 'the editor opens on the table, not the textarea');
+check(dialog.tabs.join('|') === 'Table|Paste text|Open a file',
+  'a non-geo chart offers three ways in', dialog.tabs.join('|'));
+check(dialog.gridHeight > 250, 'the grid is genuinely large', `${dialog.gridHeight}px`);
+check(dialog.headAligned, 'the grid header sits over its own columns');
+check(dialog.gridFillsWidth, 'the grid uses the width it is given');
 check(dialog.badCells === 1, 'unreadable cells are flagged before applying', `${dialog.badCells} flagged`);
-check(dialog.headers[0] === 'region', 'the dialog preview names the columns');
-check(dialog.dialogClosed, 'applying closes the dialog');
+check(dialog.headers[0] === 'region', 'the paste preview names the columns');
+check(dialog.gridRows === 3, 'a paste is read into the table', `${dialog.gridRows} rows`);
+check(dialog.firstCell === 'North', 'the pasted values land in the right cells', dialog.firstCell);
+check(dialog.asked, 'applying bad data asks instead of silently zeroing it', dialog.askText.slice(0, 70));
+check(dialog.safeHasFocus, 'the safe answer holds focus, so Enter does not apply bad data');
+check(dialog.dialogClosed, 'confirming closes the dialog');
 check(/Q1/.test(dialog.legend), 'applied data reaches the chart', dialog.legend);
-console.log(`  ${green('✓')} help & dialog — guidance for all charts, ${dialog.openedHeight}px editor`);
+console.log(`  ${green('✓')} help & dialog — guidance for all charts, ${dialog.gridHeight}px grid`);
 
-/* Suite 9 — geo country focus and city data. */
+/* Suite 9 — a flow reads as many stages as its table has columns. */
+await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+
+const flow = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { parseTable, applyData, columnRules } = await import('/js/studio/dataio.js');
+
+  const sankey = reg.getChart('sankey');
+
+  // A flow table is words over numbers in its *last* column, not its second.
+  // Header detection used to miss that, so every flow chart read its own
+  // header row as data and drew a phantom "from → to" ribbon.
+  const parsed = parseTable(sankey.data.example, ['from', 'to', 'value']);
+
+  const applied = (id, text) => {
+    const def = reg.getChart(id);
+    const sp = reg.newSpec(def);
+    const res = applyData(def, sp, text);
+    if (!res.ok) return { ok: false, message: res.message };
+    if (typeof def.onChange === 'function') def.onChange(sp);
+    return { ok: true, spec: sp, js: eng.generateCode(def, sp).js };
+  };
+
+  const example = applied('sankey', sankey.data.example);
+  // Two paths through the same middle: the shared hop is one ribbon carrying
+  // both, not two ribbons drawn on top of each other.
+  const path = applied('sankey', [
+    'stage 1,stage 2,stage 3,value',
+    'Ad,Visit,Checkout,320',
+    'Social,Visit,Checkout,180',
+    'Social,Visit,Bounce,90',
+  ].join('\n'));
+  const middle = path.ok && path.spec.flows.find((f) => f.from === 'Visit' && f.to === 'Checkout');
+
+  const sets = applied('parallel-sets', [
+    'Source,Device,Outcome,value',
+    'Search,Desktop,Purchase,120',
+    'Search,Mobile,Bounce,80',
+    'Ad,Mobile,Purchase,60',
+  ].join('\n'));
+
+  return {
+    hadHeader: parsed.hadHeader,
+    exampleNodes: example.ok ? example.spec.nodes : [],
+    pathOk: path.ok,
+    pathNodes: path.ok ? path.spec.nodes : [],
+    middle: middle || null,
+    setsOk: sets.ok,
+    setsDims: sets.ok ? sets.spec.dimensions : [],
+    setsFirst: sets.ok ? sets.spec.records[0] : null,
+    setsColorBy: sets.ok ? sets.spec.colorBy : null,
+    setsJs: sets.ok ? sets.js : '',
+    stageLabel: columnRules('links').add.label,
+    fixedShapeHasNoButton: columnRules('pairs').add === null,
+  };
+});
+
+check(flow.hadHeader, 'a from/to/value header row is recognised as a header');
+check(!flow.exampleNodes.includes('from') && !flow.exampleNodes.includes('to'),
+  'the flow example produces no phantom "from → to" node', flow.exampleNodes.join(', '));
+check(flow.pathOk, 'a four-column path is accepted');
+check(flow.middle && flow.middle.flow === 500,
+  'a hop shared by two paths carries their total', JSON.stringify(flow.middle));
+check(flow.pathNodes.join(',') === 'Ad,Visit,Checkout,Social,Bounce',
+  'every stage in the path becomes a node', flow.pathNodes.join(','));
+check(flow.setsOk && flow.setsDims.join(',') === 'Source,Device,Outcome',
+  'parallel sets take a dimension per column', flow.setsDims.join(','));
+check(flow.setsFirst && flow.setsFirst.Outcome === 'Purchase' && flow.setsFirst.value === 120,
+  'records are keyed by the dimension names, not from/to', JSON.stringify(flow.setsFirst));
+check(flow.setsColorBy === 'Source', 'the colour dimension is one that exists', flow.setsColorBy);
+check(/Outcome/.test(flow.setsJs), 'the dimensions reach the generated code');
+check(flow.stageLabel === '+ Stage', 'the flow grid offers a stage, not a series', flow.stageLabel);
+check(flow.fixedShapeHasNoButton, 'a fixed-width shape offers no column button');
+
+// And the same thing through the buttons, which is how anyone will meet it.
+const stageUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('.controls .btn')]
+    .find((b) => b.textContent.includes('Edit data')).click();
+  await sleep(350);
+
+  const colsBefore = document.querySelectorAll('.dgrid thead th').length;
+  const addBtn = [...document.querySelectorAll('.dgrid-foot .btn')]
+    .find((b) => b.textContent.includes('Stage'));
+  if (addBtn) addBtn.click();
+  await sleep(150);
+
+  const headers = [...document.querySelectorAll('.dgrid-head-input')].map((i) => i.value);
+  const setCell = (r, c, v) => {
+    const inp = document.querySelector(`.dgrid-cell[data-row="${r}"][data-col="${c}"]`);
+    if (!inp) return;
+    inp.value = v;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  ['Checkout', 'Checkout', 'Purchase', 'Exit'].forEach((v, r) => setCell(r, 2, v));
+  // A word in the new stage column names a node. Flagging it as a bad number
+  // is exactly what a grid that counted columns statically would do.
+  const flagged = document.querySelectorAll('.dgrid-cell.bad').length;
+
+  [...document.querySelectorAll('.dlg-foot .btn')]
+    .find((b) => b.textContent.includes('Use this data')).click();
+  await sleep(700);
+  document.querySelector('.tab[data-tab="js"]').click();
+  await sleep(200);
+
+  return {
+    colsBefore,
+    colsAfter: document.querySelectorAll('.dgrid thead th').length || colsBefore + 1,
+    headers,
+    flagged,
+    asked: !!document.querySelector('.ask'),
+    closed: !document.querySelector('.dlg'),
+    code: document.querySelector('.code-body').textContent,
+    legend: document.querySelector('#legend').textContent,
+  };
+});
+
+check(stageUi.headers.length === 4 && stageUi.headers[2] === 'Stage 3',
+  'the stage lands before the value column', stageUi.headers.join('|'));
+check(stageUi.flagged === 0, 'a node name in a stage column is not a bad number',
+  `${stageUi.flagged} flagged`);
+check(!stageUi.asked, 'a complete path applies without a warning');
+check(stageUi.closed, 'the multi-stage table applies');
+check(/Purchase/.test(stageUi.code) && /Exit/.test(stageUi.code),
+  'the added stage reaches the generated code');
+check(/Purchase/.test(stageUi.legend), 'the added stage reaches the chart', stageUi.legend);
+console.log(`  ${green('✓')} flows — ${flow.pathNodes.length} nodes from a path, dimensions per column`);
+
+/* Suite 10 — every chart says what it is showing when you hover it. */
+const hover = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;opacity:0';
+  document.body.appendChild(host);
+
+  const out = { silent: [], empty: [], engines: {} };
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const inst = eng.renderChart(def, host, spec);
+    const engine = inst.engine;
+    out.engines[engine] = (out.engines[engine] || 0) + 1;
+
+    if (engine === 'chartjs' || engine === 'native') {
+      // Chart.js and the custom engine bring their own tooltips.
+      eng.destroyInstance(inst);
+      host.innerHTML = '';
+      continue;
+    }
+
+    if (engine === 'canvas') {
+      // The draw reports the shapes it painted; no shapes means no hover.
+      const canvas = host.querySelector('canvas');
+      const regions = (canvas && canvas.__ocRegions) || [];
+      if (!regions.length) out.silent.push(def.id + ' (canvas)');
+      else if (regions.some((r) => !r.text || !String(r.text).trim())) out.empty.push(def.id);
+    }
+
+    if (engine === 'd3' || engine === 'dom') {
+      // SVG marks opt in by carrying data-tip. Geo charts fill in async.
+      for (let i = 0; i < 40; i++) {
+        if (host.querySelector('[data-tip]')) break;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      const marks = host.querySelectorAll('[data-tip]');
+      if (!marks.length) out.silent.push(def.id + ' (' + engine + ')');
+      else if ([...marks].some((m) => !m.getAttribute('data-tip').trim())) out.empty.push(def.id);
+    }
+
+    eng.destroyInstance(inst);
+    host.innerHTML = '';
+  }
+
+  host.remove();
+  return out;
+});
+
+check(!hover.silent.length,
+  'every self-drawn chart offers a hover readout', hover.silent.slice(0, 8).join(', '));
+check(!hover.empty.length,
+  'no chart offers a blank tooltip', hover.empty.slice(0, 8).join(', '));
+console.log(`  ${hover.silent.length ? red('✗') : green('✓')} hover — ${hover.silent.length} charts silent of ${(hover.engines.canvas || 0) + (hover.engines.d3 || 0) + (hover.engines.dom || 0)} self-drawn`);
+
+/* Suite 11 — opening a file, and refusing the ones that are not one. */
+const files = await page.evaluate(async () => {
+  const { readDataFile } = await import('/js/studio/fileimport.js');
+  const file = (name, parts, type) => new File(parts, name, { type: type || '' });
+  const out = {};
+
+  /* A real .xlsx, built here rather than committed as a fixture: the point is
+     to prove the ZIP and XML reading, and a checked-in binary would hide it. */
+  const deflate = async (text) => {
+    const stream = new Blob([text]).stream()
+      .pipeThrough(new CompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  };
+  const crc32 = (bytes) => {
+    let c; const table = [];
+    for (let n = 0; n < 256; n++) {
+      c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+      table[n] = c;
+    }
+    let crc = 0 ^ -1;
+    for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+    return (crc ^ -1) >>> 0;
+  };
+
+  const buildXlsx = async (parts) => {
+    const enc = new TextEncoder();
+    const locals = [];
+    const central = [];
+    let offset = 0;
+    for (const [name, text] of parts) {
+      const rawBytes = enc.encode(text);
+      const comp = await deflate(text);
+      const nameBytes = enc.encode(name);
+      const crc = crc32(rawBytes);
+
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true);
+      local.setUint16(4, 20, true);
+      local.setUint16(6, 0, true);
+      local.setUint16(8, 8, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, comp.length, true);
+      local.setUint32(22, rawBytes.length, true);
+      local.setUint16(26, nameBytes.length, true);
+      local.setUint16(28, 0, true);
+      locals.push(new Uint8Array(local.buffer), nameBytes, comp);
+
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true);
+      cd.setUint16(4, 20, true);
+      cd.setUint16(6, 20, true);
+      cd.setUint16(10, 8, true);
+      cd.setUint32(16, crc, true);
+      cd.setUint32(20, comp.length, true);
+      cd.setUint32(24, rawBytes.length, true);
+      cd.setUint16(28, nameBytes.length, true);
+      cd.setUint32(42, offset, true);
+      central.push(new Uint8Array(cd.buffer), nameBytes);
+      offset += 30 + nameBytes.length + comp.length;
+    }
+    const cdBytes = new Blob(central);
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(8, parts.length, true);
+    eocd.setUint16(10, parts.length, true);
+    eocd.setUint32(12, cdBytes.size, true);
+    eocd.setUint32(16, offset, true);
+    return new Blob([...locals, cdBytes, new Uint8Array(eocd.buffer)]);
+  };
+
+  const sheet = `<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+    <row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>
+    <row r="2"><c r="A2" t="s"><v>2</v></c><c r="B2"><v>1240</v></c></row>
+    <row r="3"><c r="A3" t="s"><v>3</v></c><c r="B3"><f>SUM(B2:B2)</f><v>980</v></c></row>
+  </sheetData></worksheet>`;
+  const strings = `<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <si><t>region</t></si><si><t>sales</t></si><si><t>North</t></si><si><t>South</t></si></sst>`;
+
+  const xlsx = await buildXlsx([
+    ['xl/sharedStrings.xml', strings],
+    ['xl/worksheets/sheet1.xml', sheet],
+  ]);
+  out.xlsx = await readDataFile(file('sales.xlsx', [xlsx]));
+
+  /* A formula cell must yield its stored value and never be evaluated. */
+  out.formulaIsData = out.xlsx.ok && out.xlsx.text.includes('980') && !out.xlsx.text.includes('SUM');
+
+  /* Plain text still works, BOM and all. */
+  out.csv = await readDataFile(file('a.csv', ['\uFEFFregion,sales\nNorth,1240']));
+  out.tsv = await readDataFile(file('a.txt', ['region\tsales\nNorth\t1240']));
+
+  /* ── and the ones that must be refused ─────────────────────────────── */
+
+  // Extension lies about the bytes: a ZIP wearing a .csv name.
+  out.zipAsCsv = await readDataFile(file('sneaky.csv', [xlsx]));
+
+  // The old compound-document .xls, which can carry macros.
+  out.ole = await readDataFile(file('book.xls',
+    [new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0])]));
+
+  // A binary that is not a table at all.
+  out.binary = await readDataFile(file('logo.png',
+    [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2])]));
+
+  // Over the size ceiling.
+  out.tooBig = await readDataFile(file('huge.csv', [new Uint8Array(11 * 1024 * 1024)]));
+
+  // Empty, and whitespace-only.
+  out.empty = await readDataFile(file('e.csv', []));
+  out.blank = await readDataFile(file('b.csv', ['   \n  \n']));
+
+  // An XXE attempt inside an otherwise valid workbook.
+  const evil = `<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>
+    <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+    <row r="1"><c r="A1" t="inlineStr"><is><t>&x;</t></is></c></row></sheetData></worksheet>`;
+  const evilBook = await buildXlsx([['xl/worksheets/sheet1.xml', evil]]);
+  out.xxe = await readDataFile(file('evil.xlsx', [evilBook]));
+
+  return out;
+});
+
+check(files.xlsx.ok, 'a real .xlsx opens', files.xlsx.message);
+check(files.xlsx.ok && /region,sales/.test(files.xlsx.text), 'shared strings are resolved',
+  files.xlsx.ok ? files.xlsx.text.slice(0, 40) : '');
+check(files.formulaIsData, 'a formula cell yields its value and is never evaluated');
+check(files.csv.ok && files.csv.text.startsWith('region'), 'a .csv opens, BOM stripped');
+check(files.tsv.ok, 'a tab-separated .txt opens');
+check(!files.zipAsCsv.ok, 'a ZIP wearing a .csv name is refused', files.zipAsCsv.message);
+check(!files.ole.ok && /\.xls/.test(files.ole.message), 'an old .xls is refused by name', files.ole.message);
+check(!files.binary.ok, 'a binary file is refused', files.binary.message);
+check(!files.tooBig.ok && /10MB/.test(files.tooBig.message), 'an oversized file is refused', files.tooBig.message);
+check(!files.empty.ok && !files.blank.ok, 'an empty file is refused');
+check(!files.xxe.ok && /DOCTYPE/i.test(files.xxe.message),
+  'a workbook carrying a DOCTYPE is refused outright', files.xxe.message);
+console.log(`  ${green('✓')} files — xlsx/csv/txt read, 6 hostile shapes refused`);
+
+/* Being text is not being a table.
+ *
+ * A .sql saved as .txt passes every byte-level check there is — it *is* text —
+ * and used to be split on whitespace into a grid of fragments. There is no
+ * magic number for this: CSV and source code are both just characters, so the
+ * content has to be read.
+ *
+ * Both halves matter. The impostors have to be turned away, and the real
+ * tables have to keep working — a check that rejects a valid CSV is worse than
+ * no check at all, and the awkward-but-real cases below are the ones that
+ * caught earlier versions of this out. */
+const notTables = await page.evaluate(async () => {
+  const { readDataFile } = await import('/js/studio/fileimport.js');
+  const f = (body) => new File([body], 'f.txt', { type: 'text/plain' });
+  const out = { missed: [], wrongly: [], named: {} };
+
+  const IMPOSTORS = {
+    SQL: "-- rollup\nCREATE TABLE sales (id INTEGER, region TEXT);\n"
+      + "INSERT INTO sales VALUES (1, 'North');\nSELECT region FROM sales\nWHERE id > 1\nGROUP BY region;",
+    'SQL without comments': "INSERT INTO sales VALUES (1, 'North', 5200);\n"
+      + "INSERT INTO sales VALUES (2, 'South', 4410);\nINSERT INTO sales VALUES (3, 'East', 6100);\n"
+      + "INSERT INTO sales VALUES (4, 'West', 3800);",
+    PHP: '<?php\nnamespace App;\nclass SalesController extends Controller\n{\n'
+      + '    public function index() { return view("sales"); }\n}',
+    HTML: '<!DOCTYPE html>\n<html>\n<body>\n<table><tr><td>North</td></tr></table>\n</body>\n</html>',
+    XML: '<?xml version="1.0"?>\n<sales>\n  <row><region>North</region></row>\n</sales>',
+    SVG: '<svg xmlns="http://www.w3.org/2000/svg">\n  <rect x="0" y="0" width="50" height="50"/>\n'
+      + '  <circle cx="70" cy="70" r="20"/>\n</svg>',
+    Python: 'import pandas as pd\n\ndef load(path):\n    df = pd.read_csv(path)\n'
+      + '    return df\n\nclass Report:\n    def total(self):\n        return 0',
+    JavaScript: "import { readFile } from 'node:fs';\n\nconst rows = [];\n\n"
+      + 'export function load(p) {\n  return readFile(p, "utf8");\n}\n\nload("a.csv");',
+    'C++': '#include <iostream>\n#include <vector>\n\nstruct Sale { std::string region; };\n\n'
+      + 'int main() {\n    std::vector<Sale> v;\n    return 0;\n}',
+    Java: 'package com.example;\n\nimport java.util.List;\n\npublic class Report {\n'
+      + '    private final List<Sale> rows;\n    public double total() { return 0; }\n}',
+    'C#': 'using System;\nusing System.Linq;\n\nnamespace Sales\n{\n    public class Report\n'
+      + '    {\n        public decimal Total() => 0;\n    }\n}',
+    Go: 'package main\n\nimport (\n\t"fmt"\n)\n\nfunc main() {\n\tfmt.Println("hi")\n}',
+    Rust: 'use std::collections::HashMap;\n\nstruct Sale { region: String }\n\n'
+      + 'fn main() {\n    let v: Vec<Sale> = Vec::new();\n    println!("{:?}", v.len());\n}',
+    Ruby: "require 'csv'\n\nclass SalesReport\n  def initialize(rows)\n    @rows = rows\n  end\n"
+      + '  def total\n    @rows.sum\n  end\nend',
+    Swift: 'import Foundation\n\nstruct Sale {\n    let region: String\n    let amount: Double\n}\n\n'
+      + 'func total(_ rows: [Sale]) -> Double {\n    return 0\n}',
+    Perl: '#!/usr/bin/perl\nuse strict;\nuse warnings;\n\nmy @rows = ();\n'
+      + 'foreach my $l (<STDIN>) {\n    push @rows, $l;\n}',
+    Bash: '#!/usr/bin/env bash\nset -euo pipefail\n\nif [ ! -f "$1" ]; then\n  echo "no" >&2\n'
+      + '  exit 1\nfi\n\nawk -F, \'{ t += $3 } END { print t }\' "$1"',
+    PowerShell: 'param([string]$Path = "a.csv")\n\n$rows = Import-Csv -Path $Path\n'
+      + 'foreach ($row in $rows) {\n    Write-Host $row.region\n}',
+    R: 'library(ggplot2)\n\nsales <- read.csv("sales.csv")\nsales$total <- sales$q1 + sales$q2\n\n'
+      + 'ggplot(sales, aes(x = region)) +\n  geom_bar(stat = "identity")',
+    CSS: '.chart-wrap {\n  position: relative;\n  width: 100%;\n}\n\n.chart-wrap canvas {\n'
+      + '  display: block;\n}\n\n.legend {\n  gap: 8px;\n}',
+    YAML: 'version: "3.8"\nservices:\n  web:\n    image: nginx\n    ports:\n      - "8080:80"',
+    TOML: '[package]\nname = "sales"\nversion = "0.1.0"\n\n[dependencies]\ncsv = "1.3"',
+    'a .env file': 'DATABASE_URL=postgres://localhost/sales\nAPI_KEY=abc123\nDEBUG=true\n'
+      + 'PORT=8080\nLOG_LEVEL=info',
+    JSON: '{\n  "rows": [\n    { "region": "North", "amount": 5200 },\n'
+      + '    { "region": "South", "amount": 4410 }\n  ]\n}',
+    'JSON Lines': '{"region":"North","amount":5200}\n{"region":"South","amount":4410}\n'
+      + '{"region":"East","amount":6100}\n{"region":"West","amount":3800}',
+    Markdown: '# Sales\n- North did well\n- South lagged\n## Notes\nSome detail here.',
+    LaTeX: '\\documentclass{article}\n\\usepackage{booktabs}\n\n\\begin{document}\n'
+      + '\\section{Sales}\nRevenue grew.\n\\end{document}',
+    'a diff': '--- a/js/x.js\n+++ b/js/x.js\n@@ -1,4 +1,4 @@\n-const old = 1;\n+const next = 2;',
+    'a Dockerfile': 'FROM node:20-alpine\nWORKDIR /app\nCOPY package.json .\n'
+      + 'RUN npm install\nEXPOSE 8080\nCMD ["node", "server.js"]',
+    'an Apache log': '127.0.0.1 - - [01/Aug/2025:12:00:01 +0000] "GET /a.html HTTP/1.1" 200 5320\n'
+      + '127.0.0.1 - - [01/Aug/2025:12:00:04 +0000] "GET /b.css HTTP/1.1" 200 812\n'
+      + '10.0.0.5 - - [01/Aug/2025:12:00:09 +0000] "POST /api HTTP/1.1" 500 145',
+    prose: 'The quarter went well overall.\nNorthern region led on revenue.\n'
+      + 'We should revisit pricing before the next cycle.\nA fourth sentence here.',
+    'a minified bundle': '!function(e,t){"object"==typeof exports?t(exports):t(e.x={})}'
+      + '(this,function(e){"use strict";e.a=function(n){return n*2}});',
+  };
+
+  for (const [label, body] of Object.entries(IMPOSTORS)) {
+    const r = await readDataFile(f(body));
+    if (r.ok) out.missed.push(label);
+    else out.named[label] = r.message;
+  }
+
+  /* Real tables, including every awkward shape that tripped an earlier pass. */
+  const TABLES = {
+    'plain csv': 'region,q1,q2\nNorth,520,680\nSouth,440,575\nEast,610,720\nWest,380,495',
+    tsv: 'region\tq1\tq2\nNorth\t520\t680\nSouth\t440\t575\nEast\t610\t720',
+    'semicolon csv': 'region;q1;q2\nNorth;520;680\nSouth;440;575\nEast;610;720',
+    'pipe table': 'region|q1|q2\nNorth|520|680\nSouth|440|575\nEast|610|720',
+    'excel paste': 'Region\tQ1\tGrowth\nNorth\t$1,240\t52.4%\nSouth\t$980\t14.3%\n'
+      + 'East\t$2,100\t16.7%\nWest\t$760\t-9.2%',
+    'crlf line endings': 'region,q1\r\nNorth,520\r\nSouth,440\r\nEast,610\r\nWest,380',
+    'blank lines between rows': 'region,q1\n\nNorth,520\n\nSouth,440\n\nEast,610',
+    'trailing commas': 'region,q1,\nNorth,520,\nSouth,440,\nEast,610,\nWest,380,',
+    'european decimals': 'Land;Umsatz\nNord;1.240,50\nSüd;980,00\nOst;2.100,75\nWest;760,25',
+    'a # preamble': '# exported 2025-08-01\nregion,q1\nNorth,520\nSouth,440\nEast,610',
+    'a ragged row': 'region,q1,q2\nNorth,520,680\nSouth,440\nEast,610,720,900\nWest,380,495',
+    'sparse cells': 'month,revenue,costs\nJan,,4200\nFeb,5100,\nMar,,4800\nApr,6200,5100',
+    'one numeric column': '52\n48\n61\n64\n71\n58\n55\n49',
+    'one name column': 'Amman\nZarqa\nIrbid\nAqaba\nMadaba',
+    'one date column': '2025-01-04\n2025-02-11\n2025-03-02\n2025-04-18\n2025-05-27',
+    'quoted commas': 'name,note,value\n"Smith, J","said ""ok""",12\n"Doe, A","fine",8\n"Roe, B","ok",5',
+    'long text cells': 'id,feedback,score\n1,"Onboarding was clear, though pricing confused me",7\n'
+      + '2,"Support replied within the hour; helpful",9\n3,"Could not find export",4',
+    'urls in cells': 'page,visits\nhttps://example.com/a,4200\nhttps://example.com/b,3100\n'
+      + 'https://example.com/c,2050',
+    'a glossary of SQL keywords': 'keyword,meaning\nSELECT,retrieves rows\nFROM,names the table\n'
+      + 'WHERE,filters the rows\nINSERT,adds a row',
+    'a report of SQL queries': 'query,runtime_ms\n"SELECT * FROM sales",412\n'
+      + '"INSERT INTO t VALUES (1)",88\n"UPDATE t SET x = 1",53\n"DELETE FROM t",9',
+    'JSON inside cells': 'id,payload,size\n1,"{""a"":1}",5\n2,"{""b"":2}",7\n3,"{""c"":3}",9',
+    'braces in cells': 'template,uses\n"{name} said {thing}",412\n"{a},{b}",88\n"{x}",53\n"{y}",12',
+  };
+
+  for (const [label, body] of Object.entries(TABLES)) {
+    const r = await readDataFile(f(body));
+    if (!r.ok) out.wrongly.push(label + ' — ' + r.message);
+  }
+
+  out.impostorCount = Object.keys(IMPOSTORS).length;
+  out.tableCount = Object.keys(TABLES).length;
+  return out;
+});
+
+check(!notTables.missed.length,
+  'no source file, config or document is taken for a table', notTables.missed.join(', '));
+check(!notTables.wrongly.length,
+  'and no real table is turned away by that check', notTables.wrongly.slice(0, 3).join(' | '));
+check(/SQL/.test(notTables.named.SQL || '') && /PHP/.test(notTables.named.PHP || '')
+  && /Python|code/.test(notTables.named.Python || ''),
+  'the refusal names what the file looks like');
+console.log(`  ${green('✓')} not-a-table — ${notTables.impostorCount} impostors refused, ${notTables.tableCount} real tables kept`);
+
+/* The sidebar states the format before a file is chosen, and checks it after. */
+const shapes = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const { expectedFormat, checkTableShape, parseTable } = await import('/js/studio/dataio.js');
+
+  const noFormat = [];
+  for (const def of reg.CHARTS) {
+    const fmt = expectedFormat(def);
+    if (!fmt.columns.length || fmt.min < 1) noFormat.push(def.id);
+  }
+
+  // A file in the wrong shape has to be caught, not quietly drawn.
+  const cityMap = reg.getChart('city-map');
+  const tooFew = checkTableShape(cityMap, parseTable('city,value\nAmman,4300'));
+  const right = checkTableShape(cityMap, parseTable('city,lon,lat,value\nAmman,35.9,31.9,4300'));
+
+  // Words where numbers belong are caught too, since they draw as zero.
+  const words = checkTableShape(reg.getChart('pie'), parseTable('label,value\nA,lots\nB,3'));
+
+  // Exactly-two-column shapes say so when handed more.
+  const extraCols = checkTableShape(reg.getChart('choropleth'),
+    parseTable('country,value,notes\nFrance,64,x'));
+
+  return {
+    noFormat,
+    tooFew: { ok: tooFew.ok, message: tooFew.message },
+    right: { ok: right.ok, message: right.message },
+    words: { ok: words.ok, message: words.message },
+    extraCols: { ok: extraCols.ok, message: extraCols.message },
+  };
+});
+
+check(!shapes.noFormat.length, 'every chart can state the format it reads', shapes.noFormat.slice(0, 6).join(', '));
+check(!shapes.tooFew.ok && /at least 3 columns/.test(shapes.tooFew.message),
+  'a file with too few columns is caught', shapes.tooFew.message);
+check(shapes.right.ok, 'a file in the right shape passes', shapes.right.message);
+check(!shapes.words.ok && /not a number/.test(shapes.words.message),
+  'words where numbers belong are caught', shapes.words.message);
+check(!shapes.extraCols.ok && /exactly 2 columns/.test(shapes.extraCols.message),
+  'extra columns are flagged on a fixed-shape chart', shapes.extraCols.message);
+
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const uploadRow = await page.evaluate(() => {
+  const buttons = [...document.querySelectorAll('.controls .btn')].map((b) => b.textContent.trim());
+  const edit = buttons.indexOf('Edit data');
+  const upload = buttons.indexOf('Upload a file');
+  const fmt = document.querySelector('.data-format');
+  return {
+    hasUpload: upload >= 0,
+    rightAfterEdit: edit >= 0 && upload === edit + 1,
+    format: fmt ? fmt.textContent : '',
+  };
+});
+check(uploadRow.hasUpload, 'the sidebar offers a file upload');
+check(uploadRow.rightAfterEdit, 'the upload button sits directly under Edit data');
+check(/city, lon, lat, value/.test(uploadRow.format),
+  'the sidebar names the columns this chart reads', uploadRow.format);
+console.log(`  ${green('✓')} upload — sidebar button, stated format, shape checked`);
+
+/* Suite 12 — the country and city dropdowns. */
+const geoLists = await page.evaluate(async () => {
+  const { loadCountries, loadCities, findCountryEntry } = await import('/js/studio/geodata.js');
+  const countries = await loadCountries();
+  const jo = findCountryEntry(countries, 'Jordan');
+  const usa = findCountryEntry(countries, 'USA');          // an alias, not a name
+  const cities = await loadCities(jo ? jo.iso2 : 'JO');
+  const amman = cities.find((c) => c.name === 'Amman');
+  return {
+    countries: countries.length,
+    withCities: countries.filter((c) => c.cities > 0).length,
+    jordanIso: jo ? jo.iso2 : null,
+    usaName: usa ? usa.name : null,
+    cityCount: cities.length,
+    amman,
+    sorted: cities.length > 1 && cities[0].name.localeCompare(cities[1].name) <= 0,
+  };
+});
+check(geoLists.countries > 150, 'the country list covers the world map', String(geoLists.countries));
+check(geoLists.withCities > 150, 'nearly every country has a city list', String(geoLists.withCities));
+check(geoLists.jordanIso === 'JO', 'a country resolves to its ISO code', String(geoLists.jordanIso));
+check(geoLists.usaName === 'United States of America', 'short names people type are accepted', String(geoLists.usaName));
+check(geoLists.cityCount > 20, 'a country loads its own cities', `${geoLists.cityCount} cities`);
+check(!!geoLists.amman && Math.abs(geoLists.amman.lat - 31.95) < 0.2, 'city coordinates are right', JSON.stringify(geoLists.amman));
+check(geoLists.sorted, 'cities are listed alphabetically');
+
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+const pickers = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* Pick one entry out of a Combobox by typing and clicking the first hit. */
+  const pickCombo = async (root, text) => {
+    const input = root.querySelector('.cbx-input');
+    input.focus();
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(140);
+    const item = root.querySelector('.cbx-item');
+    if (!item) return null;
+    const label = item.textContent;
+    item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    await sleep(140);
+    return label;
+  };
+
+  /* Tick a named row in a CheckList. */
+  const tick = async (name) => {
+    const search = document.querySelector('.clist-search');
+    search.value = name;
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(120);
+    const row = [...document.querySelectorAll('.clist-row')]
+      .find((r) => r.querySelector('.clist-label').textContent === name);
+    if (!row) return false;
+    const cb = row.querySelector('.clist-check');
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(60);
+    return true;
+  };
+
+  /* ── the sidebar takes a list of countries ──────────────────────────── */
+  const countryField = [...document.querySelectorAll('.controls .field')]
+    .find((f) => f.textContent.includes('Countries'));
+  const isCombobox = !!countryField.querySelector('.cbx');
+
+  await pickCombo(countryField, 'Germ');
+  await sleep(700);
+  await pickCombo(countryField, 'Franc');
+  await sleep(900);
+  const specCountries = (window.openCharts.spec.opts.countries || []).slice();
+  const chipNames = [...countryField.querySelectorAll('.country-chip > span')].map((c) => c.textContent);
+
+  // Both are highlighted on the map, not just the first.
+  const paths = [...document.querySelectorAll('#chart-host svg path')];
+  const neighbour = window.openCharts.spec.opts.neighbourColor;
+  const highlighted = paths.filter((p) => p.getAttribute('fill') && p.getAttribute('fill') !== neighbour).length;
+
+  // And one can be taken back out.
+  countryField.querySelector('.country-chip-x').click();
+  await sleep(700);
+  const afterRemove = (window.openCharts.spec.opts.countries || []).slice();
+
+  /* ── the editor lists that country's cities ─────────────────────────── */
+  [...document.querySelectorAll('.controls .btn')]
+    .find((b) => b.textContent.includes('Edit data')).click();
+  await sleep(400);
+  const tabs = [...document.querySelectorAll('.dlg-tab')].map((t) => t.textContent);
+  [...document.querySelectorAll('.dlg-tab')].find((t) => t.textContent === 'Pick cities').click();
+  await sleep(1400);
+
+  // It opens on the country the chart is already focused on, with its cities
+  // already listed — nobody should have to say which country twice.
+  const prefilled = document.querySelector('.pick-country .cbx-input').value;
+  const listLabel = document.querySelector('.pick-list-label').textContent;
+  const listedBefore = document.querySelectorAll('.clist-row').length;
+
+  // Take several in one pass.
+  const ticked = [];
+  for (const name of ['Berlin', 'Hamburg', 'Munich']) {
+    if (await tick(name)) ticked.push(name);
+  }
+  const addBtn = document.querySelector('.pick-actions .btn');
+  const addLabel = addBtn.textContent;
+  addBtn.click();
+  await sleep(400);
+  const status = document.querySelector('.pick-status').textContent;
+
+  [...document.querySelectorAll('.dlg-tab')].find((t) => t.textContent === 'Table').click();
+  await sleep(200);
+
+  const rows = [...document.querySelectorAll('.dgrid tbody tr')].length;
+  const cellAt = (r, c) => {
+    const inp = document.querySelector(`.dgrid-cell[data-row="${r}"][data-col="${c}"]`);
+    return inp ? inp.value : null;
+  };
+  const names = [];
+  for (let r = 0; r < rows; r++) names.push(cellAt(r, 0));
+  const at = names.indexOf('Berlin');
+  const parisRow = at >= 0 ? [cellAt(at, 0), cellAt(at, 1), cellAt(at, 2), cellAt(at, 3)] : null;
+  const headers = [...document.querySelectorAll('.dgrid-head-input')].map((i) => i.value);
+
+  // A chip is one line tall. Measuring it catches the class of bug that has
+  // now bitten twice: a component modifier colliding with a site-wide class
+  // — `.grid` blockified the data table, `.empty` gave every valueless chip
+  // 4rem of padding and turned it into an ellipse.
+  [...document.querySelectorAll('.dlg-tab')].find((t) => t.textContent === 'Pick cities').click();
+  await sleep(300);
+  const chipHeights = [...document.querySelectorAll('.pick-chip')]
+    .map((c) => Math.round(c.getBoundingClientRect().height));
+
+  return {
+    isCombobox, specCountries, chipNames, highlighted, afterRemove, chipHeights,
+    tabs, prefilled, listLabel, listedBefore, ticked, addLabel, status,
+    names, parisRow, headers,
+  };
+});
+
+check(pickers.isCombobox, 'the country control is a searchable list, not free text');
+check(pickers.specCountries.join(',') === 'Jordan,Germany,France',
+  'more than one country can be chosen', pickers.specCountries.join(','));
+check(pickers.chipNames.join(',') === 'Jordan,Germany,France',
+  'each chosen country gets a chip', pickers.chipNames.join(','));
+check(pickers.highlighted >= 2, 'every chosen country is highlighted on the map',
+  `${pickers.highlighted} highlighted`);
+check(pickers.afterRemove.join(',') === 'Germany,France', 'a country can be removed again',
+  pickers.afterRemove.join(','));
+
+check(pickers.tabs.includes('Pick cities'), 'a city map offers a city picker', pickers.tabs.join('|'));
+check(pickers.prefilled === 'Germany', 'the picker opens on the country the chart is focused on',
+  pickers.prefilled);
+check(/Cities in Germany/.test(pickers.listLabel), 'and says whose cities it is listing',
+  pickers.listLabel);
+check(pickers.listedBefore > 0, 'that country\'s cities are listed without being searched for',
+  `${pickers.listedBefore} rows`);
+check(pickers.ticked.length === 3, 'several cities can be ticked at once', pickers.ticked.join(','));
+check(/Add 3 selected/.test(pickers.addLabel), 'the button says how many are selected', pickers.addLabel);
+check(pickers.ticked.every((n) => pickers.names.includes(n)),
+  'all of them land in the table', pickers.names.join(','));
+check(pickers.parisRow && Math.abs(Number(pickers.parisRow[1]) - 13.4) < 0.3
+  && Math.abs(Number(pickers.parisRow[2]) - 52.52) < 0.3,
+  'coordinates are filled in for the user', JSON.stringify(pickers.parisRow));
+check(pickers.parisRow && pickers.parisRow[3] === '',
+  'the value is left blank for the reader to type', JSON.stringify(pickers.parisRow));
+check(pickers.headers.join(',') === 'name,lon,lat,value',
+  'the picker fills the existing place columns', pickers.headers.join(','));
+check(pickers.chipHeights.length > 0 && pickers.chipHeights.every((h) => h < 40),
+  'every chip is one line tall, whether or not it has a value yet',
+  pickers.chipHeights.join(','));
+/* Every list a reader sees is in one language, and every spelling of a country
+ * resolves to the same one. Both used to be false: the atlas abbreviates to fit
+ * a map label, and a handful of cities were left in their own script. */
+const names = await page.evaluate(async () => {
+  const { loadCountries, loadCities, countryKey, findCountryEntry } = await import('/js/studio/geodata.js');
+  const countries = await loadCountries();
+
+  // "Bosnia and Herz.", "Dem. Rep. Congo", "Eq. Guinea" — a label, not a name.
+  const abbreviated = countries.map((c) => c.name)
+    .filter((n) => /(^|\s)(Rep|Dem|Eq|Fr|N|S|W|St|Is)\.|\sHerz\./.test(n));
+
+  // Anything outside the Latin alphabet in a name a reader has to type.
+  const foreign = /[\u0370-\u03FF\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u4E00-\u9FFF]/;
+  const foreignCountries = countries.map((c) => c.name).filter((n) => foreign.test(n));
+  const codeless = countries.filter((c) => !c.iso2).map((c) => c.name);
+
+  // One ISO code per country, or picking one lists another's cities — which
+  // is how the Republic of the Congo came to offer the DRC's.
+  //
+  // Two pairs share a code on purpose. Northern Cyprus and Somaliland have no
+  // ISO code of their own and no separate gazetteer, so they borrow the one
+  // their cities are actually filed under. Borrowing lists a few places that
+  // sit the other side of the line; having no picker at all would be worse.
+  const BORROWED = { CY: 'Northern Cyprus', SO: 'Somaliland' };
+  const seen = new Map();
+  const shared = [];
+  countries.forEach((c) => {
+    if (!c.iso2 || BORROWED[c.iso2] === c.name) return;
+    if (seen.has(c.iso2)) shared.push(`${seen.get(c.iso2)} / ${c.name} → ${c.iso2}`);
+    else seen.set(c.iso2, c.name);
+  });
+
+  // Six countries' worth of cities is enough to catch a whole script leaking in.
+  const foreignCities = [];
+  for (const iso of ['MK', 'BY', 'GR', 'IN', 'YE', 'DZ']) {
+    for (const city of await loadCities(iso)) {
+      if (foreign.test(city.name)) foreignCities.push(`${iso}: ${city.name}`);
+    }
+  }
+
+  const same = (a, b) => countryKey(a) === countryKey(b);
+  return {
+    abbreviated,
+    foreignCountries,
+    codeless,
+    shared,
+    foreignCities,
+    trinidad: (findCountryEntry(countries, 'Trinidad and Tobago') || {}).cities || 0,
+    congo: (findCountryEntry(countries, 'Congo') || {}).iso2,
+    drc: (findCountryEntry(countries, 'Democratic Republic of the Congo') || {}).iso2,
+    matches: [
+      same('Bosnia and Herz.', 'Bosnia and Herzegovina'),
+      same('Dem. Rep. Congo', 'DRC'),
+      same("C\u00f4te d'Ivoire", 'Ivory Coast'),
+      same('United States of America', 'USA'),
+    ],
+    distinct: !same('Congo', 'Dem. Rep. Congo'),
+  };
+});
+
+check(!names.abbreviated.length, 'no country is listed by its map abbreviation',
+  names.abbreviated.join(', '));
+check(!names.foreignCountries.length, 'every country name is in the Latin alphabet',
+  names.foreignCountries.join(', '));
+check(!names.codeless.length, 'every country carries an ISO code', names.codeless.join(', '));
+check(!names.shared.length, 'no two countries claim one ISO code by accident', names.shared.join(', '));
+check(!names.foreignCities.length, 'no city name is left in another script',
+  names.foreignCities.slice(0, 5).join(', '));
+check(names.trinidad > 0, 'Trinidad and Tobago reaches its own city list',
+  `${names.trinidad} cities`);
+check(names.congo === 'CG' && names.drc === 'CD',
+  'the two Congos are two countries', `${names.congo} / ${names.drc}`);
+check(names.matches.every(Boolean), 'every spelling of a country resolves to one key',
+  names.matches.join(','));
+check(names.distinct, 'and a country whose name contains another stays distinct');
+
+console.log(`  ${green('✓')} pickers — ${geoLists.countries} countries, multi-select cities in ${geoLists.jordanIso}`);
+
+/* Suite 13 — geo country focus and city data. */
 await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(3500);
 const geoFocus = await page.evaluate(async () => {
@@ -391,7 +1421,7 @@ const geoFocus = await page.evaluate(async () => {
   const jordan = count();
 
   // Switch country and supply that country's cities.
-  app.spec.opts.country = 'Germany';
+  app.spec.opts.countries = ['Germany'];
   app.spec.opts.clipToCountry = true;
   app.spec.places = [
     { name: 'Berlin', lon: 13.4, lat: 52.52, value: 3600 },
@@ -405,7 +1435,7 @@ const geoFocus = await page.evaluate(async () => {
   const labels = [...document.querySelectorAll('#chart-host svg text')].map((t) => t.textContent);
 
   // An unknown country must say so rather than fail silently.
-  app.spec.opts.country = 'Nowhereland';
+  app.spec.opts.countries = ['Nowhereland'];
   app.rebuild();
   await new Promise((r) => setTimeout(r, 2200));
   const message = document.querySelector('#chart-host').textContent.trim();
@@ -429,7 +1459,7 @@ const globeFocus = await page.evaluate(async () => {
   const render = async (country) => {
     host.innerHTML = '';
     const spec = reg.newSpec(def);
-    spec.opts.country = country;
+    spec.opts.countries = country ? [country] : [];
     eng.renderChart(def, host, spec);
     // The globe fetches boundaries, so wait for real paths rather than a fixed
     // delay that a slow network would outlast.
@@ -455,9 +1485,78 @@ const globeFocus = await page.evaluate(async () => {
 });
 check(globeFocus.gotBoth, 'the globe renders when focused on a country');
 check(globeFocus.differs, 'focusing the globe on a different country turns it');
+
+// Every map that offers the globe projection has to be draggable, not just the
+// Globe chart. Five of them offered a sphere nobody could turn, which hides
+// half the data behind itself with no way to reach it.
+const globeDrag = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:600px;height:440px;position:fixed;left:-9999px;top:0';
+  document.body.appendChild(host);
+
+  const ids = ['globe', 'choropleth', 'proportional-symbol-map',
+    'dot-density-map', 'flow-map', 'cartogram'];
+  const out = {};
+
+  for (const id of ids) {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.opts.projection = 'globe';
+    const inst = eng.renderChart(def, host, spec);
+    for (let i = 0; i < 60; i++) {
+      if (host.querySelectorAll('svg path').length > 5) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const svg = host.querySelector('svg');
+    const before = (spec.opts.rotate || []).join(',');
+
+    // A real drag: press on the sphere, move, release.
+    svg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 200, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 380, clientY: 210, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 380, clientY: 210, pointerId: 1 }));
+    await new Promise((r) => setTimeout(r, 400));
+
+    out[id] = {
+      turned: (spec.opts.rotate || []).join(',') !== before,
+      grab: svg.style.cursor === 'grab',
+    };
+
+    // And the listeners must not pile up: a drag adds them, a release removes
+    // them. The old version added a pair to the window on every redraw.
+    const leak = [];
+    const realAdd = window.addEventListener;
+    const realRemove = window.removeEventListener;
+    let added = 0; let removed = 0;
+    window.addEventListener = function (...a) { if (a[0].startsWith('pointer')) added++; return realAdd.apply(this, a); };
+    window.removeEventListener = function (...a) { if (a[0].startsWith('pointer')) removed++; return realRemove.apply(this, a); };
+    for (let k = 0; k < 3; k++) {
+      svg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 200, pointerId: 1 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 300, clientY: 200, pointerId: 1 }));
+    }
+    window.addEventListener = realAdd;
+    window.removeEventListener = realRemove;
+    out[id].balanced = added > 0 && added === removed;
+    if (leak.length) out[id].leak = leak;
+
+    eng.destroyInstance(inst);
+    host.innerHTML = '';
+  }
+
+  host.remove();
+  return out;
+});
+
+const notTurning = Object.entries(globeDrag).filter(([, v]) => !v.turned).map(([k]) => k);
+const notGrab = Object.entries(globeDrag).filter(([, v]) => !v.grab).map(([k]) => k);
+const unbalanced = Object.entries(globeDrag).filter(([, v]) => !v.balanced).map(([k]) => k);
+check(!notTurning.length, 'every globe projection can be dragged to rotate', notTurning.join(', '));
+check(!notGrab.length, 'a draggable globe says so with a grab cursor', notGrab.join(', '));
+check(!unbalanced.length, 'a drag removes the listeners it added', unbalanced.join(', '));
 console.log(`  ${green('✓')} geo focus — country clipping, unknown names, globe rotation`);
 
-/* Suite 10 — a shared link round-trips an edited chart. */
+/* Suite 14 — a shared link round-trips an edited chart. */
 const shareToken = await page.evaluate(async () => {
   const { encodeSpec, decodeSpec } = await import('/js/studio/share.js');
   // A spec with edits that must survive the trip.
@@ -490,9 +1589,44 @@ const restored = await page.evaluate(() => ({
   code: document.querySelector('.code-body').textContent,
 }));
 check(/Mine/.test(restored.legend), 'a shared link restores the edited series');
-console.log(`  ${green('✓')} sharing — round-trip, ${shareToken.compressed ? 'compressed' : 'raw'}, ${shareToken.token.length} chars`);
+/* The same link, minus the studio around it. */
+const embedTag = await page.evaluate(async () => {
+  let copied = '';
+  navigator.clipboard.writeText = async (t) => { copied = t; };
+  document.querySelector('#btn-embed').click();
+  await new Promise((r) => setTimeout(r, 400));
+  return copied;
+});
+const embedSrc = (embedTag.match(/src="([^"]+)"/) || [])[1] || '';
+check(/^<iframe /.test(embedTag) && /embed=1/.test(embedSrc),
+  'the Embed button copies an iframe for this exact chart', embedTag.slice(0, 90));
 
-/* Suite 11 — the exported standalone file genuinely runs. */
+await page.goto(embedSrc.replace(/^https?:\/\/[^/]+/, base), { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const embedded = await page.evaluate(() => {
+  const gone = (sel) => {
+    const el = document.querySelector(sel);
+    return !el || getComputedStyle(el).display === 'none';
+  };
+  const canvas = document.querySelector('#chart-host canvas, #chart-host svg');
+  return {
+    chrome: ['.rail', '.page-head', '.controls', '.codepanel', '.help', '.stage-actions'].filter((s) => !gone(s)),
+    drawn: !!canvas && canvas.getBoundingClientRect().height > 80,
+    title: (document.querySelector('#stage-title') || {}).textContent || '',
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+    legend: document.querySelector('#legend').textContent,
+  };
+});
+check(!embedded.chrome.length, 'an embedded chart carries none of the studio',
+  embedded.chrome.join(', '));
+check(embedded.drawn, 'and still draws the chart');
+check(embedded.title.length > 0, 'and keeps the one label that says what it is', embedded.title);
+check(!embedded.overflow, 'and does not scroll sideways inside its frame');
+check(/Mine/.test(embedded.legend),
+  'an embed of an edited chart is the edited chart', embedded.legend);
+console.log(`  ${green('✓')} sharing — round-trip + embed, ${shareToken.compressed ? 'compressed' : 'raw'}, ${shareToken.token.length} chars`);
+
+/* Suite 15 — the exported standalone file genuinely runs. */
 const exported = await page.evaluate(async () => {
   const reg = await import('/js/studio/registry.js');
   const eng = await import('/js/studio/engines.js');
@@ -563,7 +1697,7 @@ for (const { id, html } of exported) {
 }
 console.log(`  ${green('✓')} exports — ${exportsOk}/${exported.length} standalone files run clean`);
 
-/* Suite 12 — responsive layout produces no horizontal overflow. */
+/* Suite 16 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
   for (const path of ['/index.html', '/studio.html?chart=sankey']) {
@@ -576,9 +1710,44 @@ for (const width of [390, 768, 1280]) {
     check(overflow <= 1, `no horizontal overflow at ${width}px on ${path}`, `${overflow}px`);
   }
 }
-console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px`);
 
-/* Suite 13 — nothing wrote to the console along the way. */
+// The data editor is a full-screen dialog on a phone, and it is the one part
+// of the studio nobody can work around if it overflows.
+await page.setViewportSize({ width: 390, height: 780 });
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+const phoneDialog = await page.evaluate(async () => {
+  [...document.querySelectorAll('.controls .btn')].find((b) => b.textContent.includes('Edit data')).click();
+  await new Promise((r) => setTimeout(r, 500));
+  const de = document.documentElement;
+  const dlg = document.querySelector('.dlg');
+  const grid = document.querySelector('.dgrid-scroll');
+  const out = {
+    pageOverflow: de.scrollWidth - de.clientWidth,
+    dialogFits: dlg.getBoundingClientRect().right <= window.innerWidth + 1,
+    gridHeight: Math.round(grid.getBoundingClientRect().height),
+    footVisible: document.querySelector('.dlg-foot').getBoundingClientRect().bottom <= window.innerHeight + 1,
+  };
+  [...document.querySelectorAll('.dlg-tab')].find((t) => t.textContent === 'Pick cities').click();
+  await new Promise((r) => setTimeout(r, 900));
+  out.pickOverflow = de.scrollWidth - de.clientWidth;
+  const addBtn = document.querySelector('.pick-actions .btn');
+  out.addVisible = addBtn.getBoundingClientRect().right <= window.innerWidth + 1;
+  const clist = document.querySelector('.clist-box');
+  out.listUsable = clist && clist.getBoundingClientRect().height > 100;
+  return out;
+});
+check(phoneDialog.pageOverflow <= 1, 'the data editor does not overflow a phone', `${phoneDialog.pageOverflow}px`);
+check(phoneDialog.dialogFits, 'the dialog fits the viewport at 390px');
+check(phoneDialog.gridHeight > 120, 'the grid is still usable at 390px', `${phoneDialog.gridHeight}px`);
+check(phoneDialog.footVisible, 'the apply button is reachable at 390px');
+check(phoneDialog.pickOverflow <= 1, 'the city picker does not overflow a phone', `${phoneDialog.pickOverflow}px`);
+check(phoneDialog.addVisible, 'the Add button is reachable at 390px');
+check(phoneDialog.listUsable, 'and the city list is still tall enough to use');
+await page.setViewportSize({ width: 1280, height: 900 });
+console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px, editor usable on a phone`);
+
+/* Suite 17 — nothing wrote to the console along the way. */
 const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);

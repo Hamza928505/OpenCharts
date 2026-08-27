@@ -8,15 +8,27 @@
  */
 
 import { C, MONTHS, withAlpha } from '../palette.js';
+import { HORIZON_ROWS, SPIRAL_VALUES } from './_data.js';
 import { baseOpts, xAxis, yAxis, TICK } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
 
-function makeRng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 export const timeseriesCharts = [
@@ -254,44 +266,39 @@ export const timeseriesCharts = [
     blurb: 'An area chart folded into bands so it survives being one-quarter the height. Density over precision.',
     tags: ['horizon', 'dense', 'time series', 'bands', 'small multiples', 'compact'],
     spec: {
-      series: [
-        { label: 'CPU',     color: C.purple, seed: 3 },
-        { label: 'Memory',  color: C.teal,   seed: 11 },
-        { label: 'Disk IO', color: C.coral,  seed: 21 },
-        { label: 'Network', color: C.blue,   seed: 31 },
-      ],
-      points: 120,
-      opts: { bands: 3, rowHeight: 62, gap: 6, mirrorNegative: true },
+      series: HORIZON_ROWS.map((r, i) => ({
+        ...r, color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.olive][i % 6],
+      })),
+      opts: { textColor: '#808080', bands: 3, rowHeight: 62, gap: 6, mirrorNegative: true },
     },
     controls: [
-      { group: 'Data',  type: 'series', key: 'series', data: false, max: 6, min: 1 },
-      { group: 'Data',  type: 'slider', key: 'points', label: 'Sample points', min: 30, max: 400, step: 10 },
+      { group: 'Series', type: 'series', key: 'series', data: false, max: 6, min: 1 },
       { group: 'Bands', type: 'slider', key: 'opts.bands', label: 'Band count', min: 1, max: 5, step: 1 },
       { group: 'Bands', type: 'toggle', key: 'opts.mirrorNegative', label: 'Mirror negatives' },
       { group: 'Style', type: 'slider', key: 'opts.rowHeight', label: 'Row height', min: 30, max: 110, step: 2, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Row gap', min: 0, max: 20, step: 1, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
-    onChange(spec) {
-      spec.series.forEach((s, i) => { if (typeof s.seed !== 'number') s.seed = (i + 1) * 7; });
-    },
     canvas: {
       height: 340,
-      helpers: [makeRng],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const pad = { t: 10, r: 14, b: 10, l: 78 };
         const cw = W - pad.l - pad.r;
 
         spec.series.forEach((s, si) => {
-          const rnd = makeRng(s.seed * 7919);
-          // A gentle random walk gives a dense, plausible signal.
-          const vals = [];
-          let v = 0;
-          for (let i = 0; i < spec.points; i++) {
-            v += (rnd() - 0.5) * 0.6;
-            v = Math.max(-1, Math.min(1, v * 0.97));
-            vals.push(v);
-          }
+          const vals = s.values || s.data || [];
+          if (!vals.length) return;
+          // Folding into bands is what makes a horizon chart dense and what
+          // makes a single value impossible to read off it, so state it.
+          const slotW = (W - pad.l - pad.r) / vals.length;
+          vals.forEach((v, vi) => {
+            tip(pad.l + vi * slotW, pad.t + si * (o.rowHeight + o.gap), slotW, o.rowHeight,
+              s.label + '\n' + 'point ' + (vi + 1) + ': ' + v);
+          });
 
           const top = pad.t + si * (o.rowHeight + o.gap);
           const rowH = o.rowHeight;
@@ -333,7 +340,7 @@ export const timeseriesCharts = [
           ctx.lineWidth = 1;
           ctx.strokeRect(pad.l, top, cw, rowH);
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(s.label, pad.l - 10, top + rowH / 2 + 4);
@@ -350,40 +357,41 @@ export const timeseriesCharts = [
     blurb: 'Time coiled outward so each turn is one cycle — weekly or seasonal rhythm becomes visible.',
     tags: ['spiral', 'cyclical', 'seasonal', 'radial', 'time', 'periodic'],
     spec: {
-      cycles: 4,
+      values: [...SPIRAL_VALUES],
+      // How many points make one turn. This is a property of the data — 52
+      // weeks, 12 months, 24 hours — so it stays a control.
       perCycle: 52,
-      seed: 8,
       color: C.purple,
       accent: C.coral,
-      opts: { innerRadius: 34, thickness: 15, gap: 3, mode: 'bar', showTicks: true },
+      opts: { textColor: '#808080', innerRadius: 34, thickness: 15, gap: 3, mode: 'bar', showTicks: true },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'cycles',   label: 'Cycles (turns)', min: 2, max: 8, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'perCycle', label: 'Points per cycle', min: 12, max: 60, step: 4 },
-      { group: 'Data',  type: 'slider', key: 'seed',     label: 'Sample seed', min: 1, max: 60, step: 1 },
+      { group: 'Cycle', type: 'slider', key: 'perCycle', label: 'Points per turn', min: 4, max: 60, step: 1 },
       { group: 'Style', type: 'seg',    key: 'opts.mode', label: 'Mark',
         options: [{ value: 'bar', label: 'Bars' }, { value: 'line', label: 'Ribbon' }] },
       { group: 'Style', type: 'colors', key: 'spiralColors', label: 'Low / high', names: () => ['Low', 'High'] },
       { group: 'Style', type: 'slider', key: 'opts.thickness', label: 'Turn thickness', min: 6, max: 30, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.innerRadius', label: 'Inner radius', min: 10, max: 90, step: 2, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.spiralColors = [spec.color, spec.accent]; },
     onChange(spec) { [spec.color, spec.accent] = spec.spiralColors; },
     canvas: {
       height: 420,
-      helpers: [makeRng],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const rnd = makeRng(spec.seed * 7919);
-        const total = spec.cycles * spec.perCycle;
+        const raw = spec.values;
+        if (!raw.length) return;
+        const total = raw.length;
 
-        // A seasonal sine plus noise, so the coil has something to reveal.
-        const vals = [];
-        for (let i = 0; i < total; i++) {
-          const phase = (i % spec.perCycle) / spec.perCycle;
-          const seasonal = Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5;
-          vals.push(Math.max(0, Math.min(1, seasonal * 0.75 + rnd() * 0.35)));
-        }
+        // The coil is drawn on a 0–1 scale, so normalise whatever came in.
+        const lo = Math.min(...raw);
+        const hi = Math.max(...raw);
+        const span = hi - lo || 1;
+        const vals = raw.map((v) => (v - lo) / span);
 
         const cx = W / 2;
         const cy = H / 2;
@@ -404,6 +412,14 @@ export const timeseriesCharts = [
           const angle = phase * Math.PI * 2 - Math.PI / 2;
           const rBase = o.innerRadius + cycle * turn + phase * turn;
           const len = v * o.thickness;
+          // Turn and position within it, because a coil hides both: the same
+          // spoke is four different periods on four different turns.
+          tip({
+            cx: cx, cy: cy, r0: rBase, r1: rBase + Math.max(len, o.thickness),
+            a0: angle, a1: angle + (Math.PI * 2) / spec.perCycle,
+            text: 'Turn ' + (cycle + 1) + ', point ' + ((i % spec.perCycle) + 1)
+              + '\n' + raw[i],
+          });
 
           if (o.mode === 'bar') {
             const a1 = angle;
@@ -426,10 +442,11 @@ export const timeseriesCharts = [
 
         if (o.showTicks) {
           ctx.strokeStyle = 'rgba(128,128,128,.2)';
-          ctx.fillStyle = 'rgba(128,128,128,.8)';
+          ctx.fillStyle = ink(0.8);
           ctx.font = '10px "DM Sans", system-ui, sans-serif';
           ctx.lineWidth = 1;
-          const outer = o.innerRadius + spec.cycles * turn + o.thickness;
+          // One turn per cycle in the data, however many that works out to be.
+          const outer = o.innerRadius + Math.ceil(total / spec.perCycle) * turn + o.thickness;
           for (let q = 0; q < 4; q++) {
             const a = (q / 4) * Math.PI * 2 - Math.PI / 2;
             ctx.beginPath();
@@ -461,7 +478,7 @@ export const timeseriesCharts = [
         { label: 'Sessions',  color: C.purple, data: [820, 910, 880, 1020, 1080, 1150, 1120, 1240, 1310, 1290, 1400, 1520], unit: '' },
         { label: 'NPS',       color: C.blue,   data: [31, 33, 30, 36, 38, 37, 41, 44, 42, 47, 49, 52], unit: '' },
       ],
-      opts: { rowHeight: 46, lineWidth: 2, fill: true, fillAlpha: 0.14, showBand: false, showEndDot: true, showMinMax: true, labelWidth: 96, valueWidth: 72 },
+      opts: { textColor: '#808080', rowHeight: 46, lineWidth: 2, fill: true, fillAlpha: 0.14, showBand: false, showEndDot: true, showMinMax: true, labelWidth: 96, valueWidth: 72 },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: true, max: 8, min: 1 },
@@ -471,10 +488,14 @@ export const timeseriesCharts = [
       { group: 'Marks', type: 'toggle', key: 'opts.showEndDot', label: 'Dot on last value' },
       { group: 'Marks', type: 'toggle', key: 'opts.showMinMax', label: 'Mark min and max' },
       { group: 'Marks', type: 'toggle', key: 'opts.showBand', label: 'Shade the mid range' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     canvas: {
+      helpers: [inkColor],
       height: 240,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const rows = spec.rows;
         if (!rows.length) return;
@@ -486,6 +507,16 @@ export const timeseriesCharts = [
           const data = row.data || [];
           if (data.length < 2) return;
           const top = ri * o.rowHeight;
+          // A sparkline is deliberately unlabelled; the hover is where the
+          // numbers behind the shape live.
+          const firstV = data[0];
+          const lastV = data[data.length - 1];
+          tip(0, top, W, o.rowHeight, [
+            row.label,
+            'latest ' + lastV,
+            'range ' + Math.min(...data) + '–' + Math.max(...data),
+            'change ' + (lastV - firstV >= 0 ? '+' : '') + (lastV - firstV).toFixed(1),
+          ].join('\n'));
           const padY = 9;
           const h = o.rowHeight - padY * 2;
           const lo = Math.min(...data);
@@ -494,7 +525,7 @@ export const timeseriesCharts = [
           const toX = (i) => plotL + (i / (data.length - 1)) * plotW;
           const toY = (v) => top + padY + h - ((v - lo) / span) * h;
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'left';
           ctx.fillText(row.label, 0, top + o.rowHeight / 2 + 4);

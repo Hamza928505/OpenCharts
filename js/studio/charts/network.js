@@ -34,6 +34,25 @@ const LINKS = [
   ['API', 'Analytics'], ['Analytics', 'S3'], ['Web', 'Analytics'],
 ];
 
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
 export const networkCharts = [
   {
     id: 'network',
@@ -110,8 +129,7 @@ export const networkCharts = [
           .attr('fill', colourOf)
           .attr('stroke', '#ffffff')
           .attr('stroke-width', 1.5)
-          .append('title')
-          .text((d) => `${d.id} — ${degree[d.id] || 0} connections`);
+          .attr('data-tip', (d) => `${d.id} — ${degree[d.id] || 0} connections`);
 
         if (o.showLabels) {
           g.append('text')
@@ -208,7 +226,7 @@ export const networkCharts = [
           .attr('r', (d) => radiusOf(d.id))
           .attr('fill', (d) => colourOf(d.id))
           .attr('stroke', '#ffffff').attr('stroke-width', 1.5)
-          .append('title').text((d) => `${d.id} — ${degree[d.id] || 0} connections`);
+          .attr('data-tip', (d) => `${d.id} — ${degree[d.id] || 0} connections`);
 
         g.append('text')
           .attr('transform', `rotate(${o.labelAngle})`)
@@ -250,6 +268,7 @@ export const networkCharts = [
     canvas: {
       height: 420,
       draw(ctx, spec, W, H, env) {
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const compact = !!(env && env.compact);
         const degree = {};
@@ -295,6 +314,9 @@ export const networkCharts = [
               continue;
             }
             if (!linked.has(r + ':' + c)) continue;
+            // Without this the matrix is unreadable off the diagonal: the row
+            // and column names live in gutters a long way from the cell.
+            tip(x, y, cell, cell, nodes[r].id + ' → ' + nodes[c].id);
             // Cells take the colour of the row's group.
             ctx.beginPath();
             ctx.roundRect(x + o.gap / 2, y + o.gap / 2, cell - o.gap, cell - o.gap, o.radius);
@@ -349,7 +371,7 @@ export const networkCharts = [
       ],
       colorBy: 'Channel',
       colors: [C.teal, C.coral, C.purple, C.blue, C.amber, C.pink],
-      opts: { barWidth: 14, gap: 8, ribbonAlpha: 0.42, showLabels: true, curve: 0.5 },
+      opts: { textColor: '#808080', barWidth: 14, gap: 8, ribbonAlpha: 0.42, showLabels: true, curve: 0.5 },
     },
     controls: [
       { group: 'Style', type: 'colors', key: 'colors', label: 'Category colours' },
@@ -358,10 +380,14 @@ export const networkCharts = [
       { group: 'Style', type: 'slider', key: 'opts.ribbonAlpha', label: 'Ribbon opacity', min: 0.1, max: 0.9, step: 0.04, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'slider', key: 'opts.curve', label: 'Ribbon curve', min: 0, max: 1, step: 0.05, format: (v) => v.toFixed(2) },
       { group: 'Style', type: 'toggle', key: 'opts.showLabels', label: 'Show labels' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     canvas: {
+      helpers: [inkColor],
       height: 420,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const dims = spec.dimensions;
         const recs = spec.records;
@@ -437,13 +463,18 @@ export const networkCharts = [
           const x = colX(di);
           catsPerDim[di].forEach((c) => {
             const blk = layout[di][c];
+            tip(x, blk.y0, o.barWidth, blk.h, [
+              d + ': ' + c,
+              blk.value == null ? null : blk.value.toLocaleString(),
+              Math.round((blk.h / (H - pad.t - pad.b)) * 100) + '% of the total',
+            ].filter(Boolean).join('\n'));
             ctx.fillStyle = di === dims.indexOf(spec.colorBy)
               ? spec.colors[(colourIndex[c] || 0) % spec.colors.length]
               : 'rgba(128,128,128,.55)';
             ctx.fillRect(x, blk.y0, o.barWidth, blk.h);
 
             if (o.showLabels && blk.h > 12) {
-              ctx.fillStyle = 'rgba(128,128,128,.95)';
+              ctx.fillStyle = ink(0.95);
               ctx.font = '11px "DM Sans", system-ui, sans-serif';
               ctx.textAlign = di === dims.length - 1 ? 'right' : 'left';
               const tx = di === dims.length - 1 ? x - 6 : x + o.barWidth + 6;
@@ -451,7 +482,7 @@ export const networkCharts = [
             }
           });
 
-          ctx.fillStyle = 'rgba(128,128,128,.7)';
+          ctx.fillStyle = ink(0.7);
           ctx.font = '600 10px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(d.toUpperCase(), x + o.barWidth / 2, pad.t - 14);
@@ -497,7 +528,8 @@ export const networkCharts = [
     },
     canvas: {
       height: 420,
-      draw(ctx, spec, W, H) {
+      draw(ctx, spec, W, H, env) {
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const three = o.mode === 'three' && spec.sets.length >= 3;
         const sets = spec.sets.slice(0, three ? 3 : 2);
@@ -520,6 +552,9 @@ export const networkCharts = [
 
         const alphaHex = Math.round(o.alpha * 255).toString(16).padStart(2, '0');
         sets.forEach((s, i) => {
+          // Circles overlap by design, so the last one drawn wins the hit test
+          // — which is the one painted on top and the one you are pointing at.
+          tip({ cx: centres[i].x, cy: centres[i].y, r: r, text: s.label + ': ' + s.size });
           ctx.beginPath();
           ctx.arc(centres[i].x, centres[i].y, r, 0, Math.PI * 2);
           ctx.fillStyle = s.color + alphaHex;

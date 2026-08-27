@@ -10,6 +10,7 @@
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe } from './cdn.js';
+import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 
 export const ENGINE_LABEL = {
   chartjs: 'Chart.js',
@@ -104,11 +105,17 @@ export function renderChart(def, host, spec, opts = {}) {
       const w = Math.max(120, host.clientWidth || width);
       const ctx = sizeCanvas(canvas, w, height);
       ctx.clearRect(0, 0, w, height);
+      // A canvas has nothing to hover, so the draw reports the boxes it paints
+      // and the tooltip hit-tests those. Gallery thumbnails skip it: they are
+      // not interactive, and collecting boxes for 98 of them is wasted work.
+      const regions = [];
+      ctxInfo.tip = opts.compact ? null : recordTip(regions);
       try {
         def.canvas.draw(ctx, spec, w, height, ctxInfo);
       } catch (err) {
         drawError(ctx, w, height, err.message);
       }
+      attachCanvasTips(canvas, regions);
     };
     draw();
     return { engine, canvas, redraw: draw };
@@ -123,10 +130,16 @@ export function renderChart(def, host, spec, opts = {}) {
       const w = Math.max(120, host.clientWidth || width);
       try {
         def.d3.mount(host, spec, w, height, ctxInfo);
+        if (!opts.compact) attachTips(host);
       } catch (err) {
         failure(host, err.message);
       }
     };
+    // A mount that reacts to input — the globe's drag-to-rotate — needs a way
+    // to ask for itself again. It cannot capture this closure, because the very
+    // same function is serialised into the export where no such closure exists,
+    // so it arrives on `env` the way width and height do.
+    ctxInfo.redraw = mount;
     mount();
     return { engine, redraw: mount, host };
   }
@@ -151,6 +164,7 @@ export function renderChart(def, host, spec, opts = {}) {
     host.innerHTML = '';
     try {
       def.dom.mount(host, spec, ctxInfo);
+      if (!opts.compact) attachTips(host);
     } catch (err) {
       failure(host, err.message);
     }
@@ -462,6 +476,10 @@ function buildJS(def, spec) {
       '',
       helperSource(block).trim(),
       '',
+      toFunctionSource(recordTip),
+      '',
+      toFunctionSource(attachCanvasTips),
+      '',
       namedFunction(block.draw, 'draw'),
       '',
       `// Size for the device pixel ratio, then draw in CSS pixels.`,
@@ -478,7 +496,12 @@ function buildJS(def, spec) {
       `  const ctx = canvas.getContext('2d');`,
       `  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
       `  ctx.clearRect(0, 0, w, h);`,
-      `  draw(ctx, spec, w, h);`,
+      `  const regions = [];`,
+      `  draw(ctx, spec, w, h, {`,
+      `    width: w, height: h,`,
+      `    tip: recordTip(regions),`,
+      `  });`,
+      `  attachCanvasTips(canvas, regions);`,
       `}`,
       '',
       `render();`,
@@ -497,12 +520,15 @@ function buildJS(def, spec) {
       '',
       helperSource(block).trim(),
       '',
+      toFunctionSource(attachTips),
+      '',
       namedFunction(block.mount, 'mount'),
       '',
       `const host = document.getElementById('chart');`,
       `function render() {`,
       `  host.innerHTML = '';`,
-      `  mount(host, spec, host.clientWidth, ${h});`,
+      `  mount(host, spec, host.clientWidth, ${h}, { width: host.clientWidth, height: ${h}, redraw: render });`,
+      `  attachTips(host);`,
       `}`,
       '',
       `render();`,
@@ -540,9 +566,13 @@ function buildJS(def, spec) {
     '',
     helperSource(block).trim(),
     '',
+    toFunctionSource(attachTips),
+    '',
     namedFunction(block.mount, 'mount'),
     '',
-    `mount(document.getElementById('chart'), spec);`,
+    `const host = document.getElementById('chart');`,
+    `mount(host, spec);`,
+    `attachTips(host);`,
     ...(hasLegend ? ['', legendCode(legend, false)] : []),
   ].join('\n'));
 }

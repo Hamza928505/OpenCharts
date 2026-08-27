@@ -6,13 +6,25 @@
 import { C, MONTHS6, QUARTERS, withAlpha } from '../palette.js';
 import { baseOpts, xAxis, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
+import { OHLC_BARS, PARALLEL_RECORDS } from './_data.js';
 
-function makeRng(seed) {
-  let s = (seed >>> 0) || 1;
-  return function next() {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
+/**
+ * Chart text at a given opacity, in whatever colour the spec asks for.
+ *
+ * Defaults to the neutral grey these charts have always used, so a spec that
+ * says nothing looks exactly as it did.
+ */
+function inkColor(color, alpha) {
+  if (!color) return 'rgba(128,128,128,' + alpha + ')';
+  const hex = String(color).replace('#', '');
+  const full = hex.length === 3 ? hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return 'rgba(128,128,128,' + alpha + ')';
+  }
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 }
 
 export const comparisonCharts = [
@@ -35,7 +47,7 @@ export const comparisonCharts = [
       endLabel: '2024',
       upColor: C.teal,
       downColor: C.coral,
-      opts: { dotRadius: 6, lineWidth: 2, gutter: 140, suffix: '%', showDelta: true },
+      opts: { textColor: '#808080', dotRadius: 6, lineWidth: 2, gutter: 140, suffix: '%', showDelta: true },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'items', data: false, max: 10, min: 2 },
@@ -46,6 +58,7 @@ export const comparisonCharts = [
       { group: 'Style', type: 'slider', key: 'opts.lineWidth', label: 'Line width', min: 1, max: 6, step: 0.5, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.gutter', label: 'Label gutter', min: 80, max: 220, step: 10, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showDelta', label: 'Show change' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.trend = [spec.upColor, spec.downColor]; },
     onChange(spec) {
@@ -55,8 +68,11 @@ export const comparisonCharts = [
       });
     },
     canvas: {
+      helpers: [inkColor],
       height: 380,
       draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
         const compact = !!(env && env.compact);
         const items = spec.items;
@@ -73,7 +89,7 @@ export const comparisonCharts = [
         const xB = W - pad.r;
 
 
-        ctx.fillStyle = 'rgba(128,128,128,.85)';
+        ctx.fillStyle = ink(0.85);
         ctx.font = '500 12px "DM Sans", system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(spec.startLabel, xA, 18);
@@ -92,6 +108,13 @@ export const comparisonCharts = [
           const ya = toY(d.from);
           const yb = toY(d.to);
           const rising = d.to > d.from;
+          // Both ends, because a slope chart is read at its endpoints and the
+          // line between them is where they overlap and become unhoverable.
+          const readout = d.label + '\n' + spec.startLabel + ': ' + d.from
+            + '\n' + spec.endLabel + ': ' + d.to
+            + '\n' + (rising ? '+' : '') + (d.to - d.from).toFixed(1);
+          tip({ cx: xA, cy: ya, r: 12, text: readout });
+          tip({ cx: xB, cy: yb, r: 12, text: readout });
 
           ctx.strokeStyle = d.color + (rising ? 'dd' : '99');
           ctx.lineWidth = o.lineWidth;
@@ -109,7 +132,7 @@ export const comparisonCharts = [
 
           if (compact) return;
 
-          ctx.fillStyle = 'rgba(128,128,128,.95)';
+          ctx.fillStyle = ink(0.95);
           ctx.font = '12px "DM Sans", system-ui, sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(`${d.label}  ${d.from}${o.suffix}`, xA - 14, ya + 4);
@@ -135,46 +158,27 @@ export const comparisonCharts = [
     blurb: 'Open, high, low and close in one mark. Body is the move, wick is the range.',
     tags: ['candlestick', 'ohlc', 'finance', 'stock', 'trading'],
     spec: {
-      count: 60,
-      seed: 4,
-      start: 148,
-      volatility: 4,
+      bars: [...OHLC_BARS],
       upColor: C.teal,
       downColor: C.coral,
-      opts: { floor: 120, ceiling: 200, barGap: 2, wickWidth: 1, prefix: '$' },
+      opts: { textColor: '#808080', barGap: 2, wickWidth: 1, prefix: '$' },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'count', label: 'Sessions', min: 15, max: 160, step: 5 },
-      { group: 'Data',  type: 'slider', key: 'seed', label: 'Sample seed', min: 1, max: 60, step: 1 },
-      { group: 'Data',  type: 'slider', key: 'start', label: 'Opening price', min: 50, max: 300, step: 5 },
-      { group: 'Data',  type: 'slider', key: 'volatility', label: 'Volatility', min: 0.5, max: 12, step: 0.5, format: (v) => v.toFixed(1) },
       { group: 'Style', type: 'colors', key: 'candle', label: 'Up / down', names: () => ['Rising', 'Falling'] },
       { group: 'Style', type: 'slider', key: 'opts.barGap', label: 'Candle gap', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
     ],
     onInit(spec) { spec.candle = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.candle; },
     canvas: {
       height: 340,
-      helpers: [makeRng],
-      draw(ctx, spec, W, H) {
+      helpers: [inkColor],
+      draw(ctx, spec, W, H, env) {
+        const ink = (a) => inkColor(spec.opts.textColor, a);
+        const tip = (env && env.tip) || function () {};
         const o = spec.opts;
-        const rnd = makeRng(spec.seed * 7919);
-
-        // Deterministic random walk — the same seed always draws this chart.
-        // Pasted OHLC rows replace it entirely.
-        let price = spec.start;
-        const candles = spec.bars && spec.bars.length ? spec.bars : [];
-        for (let i = 0; candles.length === 0 && i < spec.count; i++) {
-          const open = price;
-          price = Math.max(o.floor, Math.min(o.ceiling, price + (rnd() - 0.48) * spec.volatility));
-          const close = price;
-          candles.push({
-            o: +open.toFixed(2),
-            c: +close.toFixed(2),
-            h: +(Math.max(open, close) + rnd() * spec.volatility * 0.5).toFixed(2),
-            l: +(Math.min(open, close) - rnd() * spec.volatility * 0.5).toFixed(2),
-          });
-        }
+        const candles = spec.bars;
+        if (!candles.length) return;
 
         const vals = candles.flatMap((c) => [c.h, c.l]);
         const minV = Math.min(...vals) - 2;
@@ -196,7 +200,7 @@ export const comparisonCharts = [
           ctx.moveTo(pad.l, y);
           ctx.lineTo(W - pad.r, y);
           ctx.stroke();
-          ctx.fillStyle = 'rgba(128,128,128,.75)';
+          ctx.fillStyle = ink(0.75);
           ctx.textAlign = 'right';
           ctx.fillText(o.prefix + Math.round(v), pad.l - 6, y + 4);
         }
@@ -205,6 +209,14 @@ export const comparisonCharts = [
           const x = pad.l + i * slot + slot / 2;
           const up = c.c >= c.o;
           const colour = up ? spec.upColor : spec.downColor;
+          // The full column, so the thin wick is reachable too.
+          tip(pad.l + i * slot, pad.t, slot, H - pad.t - pad.b, [
+            'Session ' + (i + 1),
+            'open  ' + o.prefix + c.o,
+            'high  ' + o.prefix + c.h,
+            'low   ' + o.prefix + c.l,
+            'close ' + o.prefix + c.c,
+          ].join('\n'));
 
           ctx.strokeStyle = colour;
           ctx.lineWidth = o.wickWidth;
@@ -234,8 +246,7 @@ export const comparisonCharts = [
     tags: ['parallel coordinates', 'multivariate', 'd3', 'dimensions', 'trade off'],
     spec: {
       dims: ['Price', 'Rating', 'Reviews', 'Margin%', 'Returns%'],
-      count: 40,
-      seed: 6,
+      records: [...PARALLEL_RECORDS],
       groups: [
         { label: 'Premium', color: C.purple },
         { label: 'Mid',     color: C.teal   },
@@ -244,34 +255,20 @@ export const comparisonCharts = [
       opts: { strokeWidth: 1.2, alpha: 0.45, showAxisLabels: true },
     },
     controls: [
-      { group: 'Data',  type: 'slider', key: 'count', label: 'Item count', min: 10, max: 200, step: 5 },
-      { group: 'Data',  type: 'slider', key: 'seed',  label: 'Sample seed', min: 1, max: 60, step: 1 },
-      { group: 'Data',  type: 'series', key: 'groups', data: false, max: 5, min: 1 },
+      { group: 'Series', type: 'series', key: 'groups', data: false, max: 5, min: 1 },
       { group: 'Style', type: 'slider', key: 'opts.strokeWidth', label: 'Line width', min: 0.5, max: 4, step: 0.1, format: (v) => v.toFixed(1) + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Line opacity', min: 0.1, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       { group: 'Style', type: 'toggle', key: 'opts.showAxisLabels', label: 'Show axis titles' },
     ],
     d3: {
       height: 380,
-      helpers: [makeRng],
+      helpers: [],
       mount(host, spec, W, H) {
         const o = spec.opts;
         const pad = { t: 42, r: 34, b: 22, l: 34 };
-        const rnd = makeRng(spec.seed * 2654435761);
         const groupCount = Math.max(1, spec.groups.length);
-
-        const rows = Array.from({ length: spec.count }, (_, i) => {
-          const g = i % groupCount;
-          const band = groupCount - g;
-          return {
-            group: g,
-            Price: Math.round(15 + rnd() * 60 * band),
-            Rating: +(2.5 + rnd() * 2.4).toFixed(1),
-            Reviews: Math.round(10 + rnd() * 490),
-            'Margin%': Math.round(15 + rnd() * 50),
-            'Returns%': Math.round(2 + rnd() * 18),
-          };
-        });
+        const rows = spec.records;
+        if (!rows.length) return;
 
         const svg = d3.select(host).append('svg').attr('width', W).attr('height', H);
         const x = d3.scalePoint().domain(spec.dims).range([pad.l, W - pad.r]);
@@ -289,7 +286,9 @@ export const comparisonCharts = [
           .attr('fill', 'none')
           .attr('stroke', (r) => spec.groups[r.group % groupCount].color)
           .attr('stroke-width', o.strokeWidth)
-          .attr('stroke-opacity', o.alpha);
+          .attr('stroke-opacity', o.alpha)
+          // A crossing line is unreadable without a way to ask which item it is.
+          .attr('data-tip', (r) => [r.name || 'Item', ...spec.dims.map((d) => d + ': ' + r[d])].join('\n'));
 
         spec.dims.forEach((dim) => {
           const g = svg.append('g').attr('transform', `translate(${x(dim)},0)`);
