@@ -157,11 +157,48 @@ async function readEntry(view, bytes, entry) {
 
 /* ── XLSX ────────────────────────────────────────────────────────────────── */
 
+/**
+ * Does a DOCTYPE appear before the root element?
+ *
+ * Looking at a fixed slice of the head is not enough. XML allows whitespace,
+ * processing instructions and comments before the doctypedecl, and a comment
+ * can be any length — so `<!--` + 3KB of padding + `-->` pushes a DOCTYPE past
+ * a 2048-character window while leaving the document perfectly well-formed.
+ * Chromium parses that and expands the internal entities it declares.
+ *
+ * So walk the prolog instead: skip exactly the three things allowed to precede
+ * the root element, and stop at the first thing that is not one of them. That
+ * has no window to slip past, and it cannot misfire on content — a cell whose
+ * text is "<!DOCTYPE html>" is stored escaped, and by then we have stopped.
+ */
+function hasDoctype(text) {
+  let i = 0;
+  while (i < text.length) {
+    while (i < text.length && (text[i] === ' ' || text[i] === '\t'
+      || text[i] === '\n' || text[i] === '\r')) i++;
+
+    if (text.startsWith('<?', i)) {           // <?xml ... ?>
+      const end = text.indexOf('?>', i + 2);
+      if (end < 0) return false;              // malformed; the parser will refuse it
+      i = end + 2;
+    } else if (text.startsWith('<!--', i)) {  // a comment, of any length
+      const end = text.indexOf('-->', i + 4);
+      if (end < 0) return false;
+      i = end + 3;
+    } else if (text.slice(i, i + 9).toUpperCase() === '<!DOCTYPE') {
+      return true;
+    } else {
+      return false;                           // the root element — the prolog is over
+    }
+  }
+  return false;
+}
+
 /** Parse XML safely, and refuse anything carrying a DOCTYPE. */
 function parseXml(text, what) {
   // A spreadsheet part has no legitimate reason to declare a DOCTYPE, and
   // refusing outright is simpler to reason about than trusting the parser.
-  if (/<!DOCTYPE/i.test(text.slice(0, 2048))) {
+  if (hasDoctype(text)) {
     throw new Error(`that .xlsx has a DOCTYPE in its ${what}, which a spreadsheet should not`);
   }
   const doc = new DOMParser().parseFromString(text, 'application/xml');
