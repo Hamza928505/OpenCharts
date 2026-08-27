@@ -15,6 +15,25 @@ import { HISTOGRAM_VALUES, BOX_GROUPS, VIOLIN_GROUPS, HEATMAP_CELLS } from './_d
 /* ── Helpers shared with the exported code ───────────────────────────────── */
 /* Declared as plain functions so they serialise cleanly into the JS tab. */
 
+const UNSAFE_JS_CHAR_MAP = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+
+function escapeUnsafeChars(str) {
+  return String(str).replace(/[<>\/\\\b\f\n\r\t\0\u2028\u2029]/g, (x) => UNSAFE_JS_CHAR_MAP[x]);
+}
+
 function kde(data, min, max, bandwidth, step) {
   const points = [];
   const norm = bandwidth * Math.sqrt(2 * Math.PI);
@@ -323,8 +342,8 @@ export const distributionCharts = [
         const data = spec.cells;
         const maxV = data.reduce((m, d) => Math.max(m, d.v), 1);
         const { r, g, b } = hexToRgb(spec.color);
-        const labelsJSON = JSON.stringify(rows);
-        const colsJSON = JSON.stringify(cols);
+        const labelsJSON = escapeUnsafeChars(JSON.stringify(rows));
+        const colsJSON = escapeUnsafeChars(JSON.stringify(cols));
 
         // These callbacks are both executed live and printed into the exported
         // code, so every value they need is baked in as a literal rather than
