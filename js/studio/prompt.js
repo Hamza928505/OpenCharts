@@ -48,11 +48,13 @@ import { CHARTS, CATEGORIES } from './registry.js';
  *
  * The *site* links are derived from `location` so they are right wherever the
  * project is served from. This one cannot be, and is the only hard-coded URL
- * in the file. Note that `package.json` currently names a different repository
- * than `git remote`; this follows the remote, which is where the code actually
- * is.
+ * in the file — keep it in step with `package.json`'s `repository`.
+ *
+ * The repository was renamed from `Charts`, and GitHub redirects the old name,
+ * so a stale `git remote` keeps working and proves nothing about the current
+ * one. Check the repository field, not the remote.
  */
-const REPO_URL = 'https://github.com/Hamza928505/Charts';
+const REPO_URL = 'https://github.com/Hamza928505/OpenCharts';
 
 /**
  * Where the data sits in the generated code, per renderer.

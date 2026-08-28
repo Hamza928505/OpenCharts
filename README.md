@@ -30,6 +30,44 @@ the link *is* the document.
 the studio stripped away — no rail, no controls, no code panel, just the chart
 and its title. It is the same page and the same renderer, one URL flag apart.
 
+## Installing it
+
+Published to GitHub Packages as
+[`@hamza928505/opencharts`](https://github.com/Hamza928505/OpenCharts/packages).
+
+GitHub's npm registry authenticates every read, **including public packages**,
+so installing needs a one-off `.npmrc` and a personal access token with the
+`read:packages` scope:
+
+```
+@hamza928505:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_TOKEN
+```
+
+```bash
+npm install @hamza928505/opencharts
+```
+
+That gives you the whole site — `index.html`, `studio.html`, `css/`, `js/`,
+`lib/` and `data/` — which is the same thing the repository holds, because
+there is no build step. Serve the folder over HTTP and the gallery runs.
+
+If you would rather not deal with a token, the
+[Releases](https://github.com/Hamza928505/OpenCharts/releases) page carries the
+identical contents as a zip, and cloning the repository works too.
+
+Publishing happens on a tag, from the same workflow that cuts the Release, and
+only after the test suite passes:
+
+```bash
+npm version 2.1.0        # writes package.json and tags it
+git push --follow-tags
+```
+
+The workflow refuses to publish if the tag and `package.json` disagree, so a
+`v2.1.0` tag on a `2.0.0` package fails loudly rather than shipping the wrong
+version under the right name.
+
 ## Running it
 
 The site uses ES modules, so it needs to be served over HTTP.
