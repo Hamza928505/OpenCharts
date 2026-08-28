@@ -10,13 +10,16 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Least privilege by default; each job asks for exactly what it writes.
 permissions:
-  contents: write   # creating a Release writes to the repository
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # creating a Release writes to the repository
 
     steps:
       - uses: actions/checkout@v4
@@ -37,8 +40,10 @@ jobs:
       - name: Check syntax
         run: npm run check
 
-      # A tag that cannot pass the suite is not a release. Same 277 checks the
-      # Test workflow runs on every pull request.
+      # A tag that cannot pass the suite is not a release, and — because the
+      # publish job below waits on this one — nothing reaches the registry that
+      # did not pass it either. Same suite the Test workflow runs on every pull
+      # request.
       - name: Run the suite
         run: npm test
 
@@ -55,3 +60,50 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes "opencharts-${GITHUB_REF_NAME}.zip"
+
+  # The package on https://github.com/Hamza928505/OpenCharts/packages.
+  #
+  # A separate job on purpose. Publishing needs `packages: write` and a
+  # registry-scoped .npmrc, and neither has any business being set while the
+  # job above runs `npm ci` against the public registry. `needs: release` means
+  # nothing is ever published that did not pass the suite.
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # `workflow_dispatch` puts a branch name in GITHUB_REF_NAME, which is not a
+    # version. Only a tag publishes.
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `scope` is what keeps this .npmrc narrow: it routes only
+      # @hamza928505/* at GitHub and leaves everything else on npmjs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@hamza928505'
+
+      # A tag that disagrees with package.json publishes the wrong version
+      # under the right name, which is worse than failing here.
+      - name: The tag and the version must agree
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME is version $TAG, but package.json says $PKG. Bump one to match the other."
+            exit 1
+          fi
+          echo "Publishing $PKG."
+
+      # No build step, so there is nothing to prepare — `files` in package.json
+      # already says exactly what ships.
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}

@@ -379,9 +379,11 @@ out — and all of it is derived:
 - The gallery URL, because "paste a table, see what draws it" is a feature the
   platform already has and the prompt had never mentioned.
 - `REPO_URL`, the one hard-coded URL in the file. Every other link is derived
-  from `location`, so it is right wherever the site is served. **Note that
-  `package.json` names `OpenCharts` while `git remote` says `Charts`;** this
-  follows the remote. Fixing that mismatch is a separate job.
+  from `location`, so it is right wherever the site is served. Keep it in step
+  with `package.json`'s `repository` field. **The repository was renamed from
+  `Charts` to `OpenCharts`, and GitHub 301-redirects the old name** — so a
+  stale `git remote` still pushes successfully and is no evidence of the
+  current name. `package.json` is the source of truth here, not the remote.
 
 **`WHERE_DATA_LIVES` is keyed by renderer, and has to be.** `build()` runs
 *before* serialisation for the 39 Chart.js charts, so their template carries a
@@ -724,6 +726,38 @@ nothing from the spec at all.
 Exports are served over http from the project root during tests rather than
 via `setContent`, so relative imports and CDN scripts resolve the way they
 would for a real user.
+
+## Releasing and publishing
+
+A tag is the whole trigger. `.github/workflows/release.yml` runs the suite,
+cuts a GitHub Release with a zip of the `files` paths, and then — in a second
+job that `needs:` the first — publishes to GitHub Packages.
+
+```bash
+npm version 2.1.0        # writes package.json and tags it
+git push --follow-tags
+```
+
+Four things about the publish half that are easy to get wrong:
+
+- **The scope is not cosmetic.** GitHub's npm registry only accepts a package
+  whose scope is the repository owner, so the name is
+  `@hamza928505/opencharts`, not `opencharts`.
+- **It is a separate job.** Publishing needs `packages: write` and a
+  registry-scoped `.npmrc`, and neither should be in scope while the release
+  job runs `npm ci` against the public registry. `setup-node`'s `scope:` is
+  what keeps that `.npmrc` narrow — it routes `@hamza928505/*` at GitHub and
+  leaves everything else on npmjs.
+- **The tag and `package.json` must agree**, and the job fails loudly if they
+  do not. A `v2.1.0` tag on a `2.0.0` package would otherwise publish the wrong
+  version under the right name, which is worse than a red build.
+- **`workflow_dispatch` cannot publish.** It puts a branch name in
+  `GITHUB_REF_NAME`, which is not a version, so the job is gated on
+  `refs/tags/v`.
+
+Reading a package from GitHub Packages needs a token even when it is public.
+That is GitHub's rule, not a setting here — the Releases zip and a plain clone
+are the ways in that need no auth, and the README says so.
 
 ## Development Commands
 
