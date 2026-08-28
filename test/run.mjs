@@ -2141,7 +2141,16 @@ const escapeHatch = await page.evaluate(async () => {
     for (const [form, text] of [['full', full], ['data', short]]) {
       if (!text.includes('If this is the wrong chart')) noEscape.push(`${def.id}:${form}`);
       if (!text.includes('index.html')) noGallery.push(`${def.id}:${form}`);
-      if (!text.includes('github.com')) noRepo.push(`${def.id}:${form}`);
+      const urls = text.match(/https?:\/\/[^\s)'"`]+/g) || [];
+      const hasGitHubHost = urls.some((u) => {
+        try {
+          const { hostname } = new URL(u);
+          return hostname === 'github.com' || hostname.endsWith('.github.com');
+        } catch {
+          return false;
+        }
+      });
+      if (!hasGitHubHost) noRepo.push(`${def.id}:${form}`);
     }
 
     // The siblings named must genuinely read the same table.
