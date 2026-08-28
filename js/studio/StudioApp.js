@@ -12,6 +12,7 @@ import { buildControls } from './ControlPanel.js';
 import { CodePanel } from './CodePanel.js';
 import { renderSources } from './SourcesPanel.js';
 import { renderHelp } from './HelpPanel.js';
+import { buildPrompt } from './prompt.js';
 import { openDataDialog } from './DataDialog.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
@@ -241,6 +242,7 @@ export class StudioApp {
     $('#btn-png')?.addEventListener('click', () => this._exportPNG());
     $('#btn-share')?.addEventListener('click', () => this._share());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
+    $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
 
     const railToggle = $('#rail-toggle');
     const rail = $('#rail');
@@ -360,6 +362,34 @@ export class StudioApp {
     }
   }
 
+  /**
+   * Copy the AI brief for the chart as it stands.
+   *
+   * The prompt already exists as a tab, but that is three actions down the
+   * page — switch tab, find Copy, click. This is the same action the gallery
+   * tiles offer, in the one place a reader is already looking. It deliberately
+   * does not switch the code panel: someone reading the JS did not ask to
+   * lose their place.
+   */
+  async _copyPrompt() {
+    const btn = $('#btn-prompt');
+    const label = btn ? btn.innerHTML : '';
+    try {
+      const text = this.codePanel.promptText();
+      if (!text) { toast('This chart has no prompt yet', 'bad'); return; }
+      await navigator.clipboard.writeText(text);
+      if (btn) {
+        btn.innerHTML = '<span aria-hidden="true">✓</span> Copied';
+        setTimeout(() => { btn.innerHTML = label; }, 1800);
+      }
+      toast(this.codePanel.promptMode === 'data'
+        ? 'Data-only prompt copied — attach your spreadsheet to any AI'
+        : 'Prompt copied — attach your spreadsheet to any AI', 'ok');
+    } catch {
+      toast('Could not copy the prompt', 'bad');
+    }
+  }
+
   /** The same link, as an <iframe> somebody can paste into a page. */
   async _embed() {
     try {
@@ -386,6 +416,13 @@ export class StudioApp {
     this._renderMetrics();
 
     const code = generateCode(this.def, this.spec);
+    // Built here rather than inside generateCode: the prompt quotes the
+    // Standalone export, so it has to come after it, and it is a brief about
+    // the chart rather than one of its four code views.
+    // Both forms, because the panel switches between them without a rebuild.
+    // The short one costs nothing next to the code generation above it.
+    code.prompt = buildPrompt(this.def, this.spec, code, 'full');
+    code.promptShort = buildPrompt(this.def, this.spec, code, 'data');
     this.codePanel.setCode(code, this.def.id);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
     if (this.helpEl) renderHelp(this.helpEl, this.def, this.spec, () => this.editData());

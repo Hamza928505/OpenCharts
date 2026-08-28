@@ -457,7 +457,7 @@ const studio = await page.evaluate(() => ({
 }));
 check(/Vertical Bar/.test(studio.title || ''), 'studio loads the chart named in the URL');
 check(studio.dataEditor, 'studio shows the data editor first');
-check(studio.tabs === 4, 'studio offers four code tabs', String(studio.tabs));
+check(studio.tabs === 5, 'studio offers five code tabs', String(studio.tabs));
 check(studio.gutterLines > 0, 'code panel renders line numbers');
 check(studio.sources > 0, 'sources panel lists dependencies');
 check(studio.railGroups > 0, 'rail renders collapsible categories');
@@ -1802,7 +1802,448 @@ for (const { id, html } of exported) {
 }
 console.log(`  ${green('✓')} exports — ${exportsOk}/${exported.length} standalone files run clean`);
 
-/* Suite 16 — responsive layout produces no horizontal overflow. */
+/* Suite 16 — every chart hands out a prompt that carries its own format and code. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(700);
+
+const prompts = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { buildPrompt } = await import('/js/studio/prompt.js');
+
+  const noSchema = [];
+  const tooShort = [];
+  const noTitle = [];
+  const noTemplate = [];
+  const noFormat = [];
+  const noStudioLink = [];
+  const placeholders = [];
+  let shortest = Infinity;
+  let longest = 0;
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const code = eng.generateCode(def, spec);
+    const prompt = buildPrompt(def, spec, code);
+
+    if (prompt.length < 600) tooShort.push(`${def.id}:${prompt.length}`);
+    shortest = Math.min(shortest, prompt.length);
+    longest = Math.max(longest, prompt.length);
+
+    if (!prompt.includes(def.title)) noTitle.push(def.id);
+    // The whole working page has to travel, not a description of it.
+    if (!prompt.includes(code.standalone.trim())) noTemplate.push(def.id);
+    if (!prompt.includes(`studio.html?chart=${encodeURIComponent(def.id)}`)) noStudioLink.push(def.id);
+
+    if (!def.data || !def.data.shape) { noSchema.push(def.id); continue; }
+    // The columns the reader is told to produce must be the schema's own.
+    const header = String(def.data.example || '').split('\n')[0];
+    if (!header || !prompt.includes(header)) noFormat.push(def.id);
+
+    // Only the brief is ours to get right; the template below it is whatever
+    // the chart's own code says, and may legitimately mention anything.
+    const brief = prompt.split('```html')[0];
+    if (/\bundefined\b|\bNaN\b|\[object Object\]/.test(brief)) placeholders.push(def.id);
+  }
+
+  return { total: reg.CHARTS.length, noSchema, tooShort, noTitle, noTemplate, noFormat, noStudioLink, placeholders, shortest, longest };
+});
+
+check(prompts.noSchema.length === 0, 'every chart declares a data shape to describe', prompts.noSchema.join(', '));
+check(prompts.tooShort.length === 0, 'every prompt is a full brief, not a stub', prompts.tooShort.join(', '));
+check(prompts.noTitle.length === 0, 'every prompt names its chart', prompts.noTitle.join(', '));
+check(prompts.noTemplate.length === 0, 'every prompt carries the whole standalone page', prompts.noTemplate.join(', '));
+check(prompts.noFormat.length === 0, 'every prompt states the columns its chart reads', prompts.noFormat.join(', '));
+check(prompts.noStudioLink.length === 0, 'every prompt links back to its own studio page', prompts.noStudioLink.join(', '));
+check(prompts.placeholders.length === 0, 'no prompt leaks undefined, NaN or [object Object]', prompts.placeholders.join(', '));
+
+// The same demand the code tabs meet: a prompt describing the example while the
+// chart draws something else is worse than no prompt, because it looks right.
+const promptData = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const io = await import('/js/studio/dataio.js');
+  const { buildPrompt } = await import('/js/studio/prompt.js');
+
+  const stale = [];
+  let compared = 0;
+
+  for (const def of reg.CHARTS) {
+    if (!def.data || !def.data.example || typeof def.toText !== 'function') continue;
+    const specA = reg.newSpec(def);
+    const promptA = buildPrompt(def, specA, eng.generateCode(def, specA));
+
+    // Perturb the example's numbers — or its names, for the edge lists that
+    // carry no numbers at all. Skipping those would leave three charts free to
+    // hand out a prompt describing data they are not drawing.
+    const lines = def.data.example.split('\n');
+    const numbered = def.data.example.replace(/(^|[,\t;\n])(\d+(?:\.\d+)?)(?=$|[,\t;\n])/g,
+      (m, sep, n) => sep + (Number(n) + 7));
+    const bumped = numbered !== def.data.example
+      ? numbered
+      : [lines[0], ...lines.slice(1).map((r) => r.split(',').map((c) => c + 'X').join(','))].join('\n');
+    if (bumped === def.data.example) continue;
+
+    const specB = reg.newSpec(def);
+    const res = io.applyData(def, specB, bumped);
+    if (!res.ok) continue;
+    if (typeof def.onChange === 'function') def.onChange(specB);
+    const promptB = buildPrompt(def, specB, eng.generateCode(def, specB));
+
+    compared++;
+    if (promptA === promptB) stale.push(def.id);
+  }
+  return { stale, compared };
+});
+
+check(promptData.stale.length === 0, 'a prompt follows the data currently in the chart', promptData.stale.join(', '));
+console.log(`  ${green('✓')} prompts — ${prompts.total} charts, ${prompts.shortest}–${prompts.longest} chars, ${promptData.compared} tracked their data`);
+
+// And the tab itself is wired: it renders, wraps, and holds the same text.
+const promptTab = await page.evaluate(async () => {
+  document.querySelector('.tab[data-tab="prompt"]').click();
+  await new Promise((r) => setTimeout(r, 200));
+  const body = document.querySelector('.code-body');
+  return {
+    text: body.textContent,
+    prose: body.classList.contains('prose'),
+    gutterHidden: document.querySelector('.gutter').hidden,
+    note: (document.querySelector('.code-note') || {}).textContent || '',
+    wrapped: getComputedStyle(body).whiteSpace === 'pre-wrap',
+    overflows: body.scrollWidth > body.clientWidth + 2,
+    live: window.openCharts.codePanel.code.prompt,
+  };
+});
+check(promptTab.text.length > 600 && promptTab.text === promptTab.live,
+  'the AI Prompt tab shows the generated prompt');
+check(promptTab.prose && promptTab.wrapped && !promptTab.overflows,
+  'the prompt wraps instead of running off the panel');
+check(promptTab.gutterHidden, 'the prompt has no line numbers');
+check(/spreadsheet|CSV/i.test(promptTab.note), 'the prompt tab says what to do with it', promptTab.note);
+console.log(`  ${green('✓')} prompt tab — ${promptTab.text.length} chars, wrapped, no gutter`);
+
+// And the same brief is one click away from the gallery tile, without opening it.
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+
+const galleryPrompt = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { buildPrompt } = await import('/js/studio/prompt.js');
+
+  // Capture what is handed to the clipboard rather than reading it back:
+  // clipboard permission is a browser question, and what is under test is
+  // what the gallery puts there.
+  let copied = null;
+  navigator.clipboard.writeText = async (t) => { copied = t; };
+
+  const cards = document.querySelectorAll('.card').length;
+  const shells = document.querySelectorAll('.card-shell').length;
+  const buttons = document.querySelectorAll('.card-prompt').length;
+  // A button inside the anchor would be invalid, and would fire the tile's
+  // own handoff handlers on the way past.
+  const nestedInLink = document.querySelectorAll('.card .card-prompt').length;
+
+  const shellOf = (id) => [...document.querySelectorAll('.card-shell')]
+    .find((s) => s.querySelector('.card').href.includes(`chart=${id}`));
+
+  const shell = shellOf('sankey');
+  const btn = shell.querySelector('.card-prompt');
+  const before = location.href;
+  btn.click();
+  await sleep(150);
+  const fromExample = copied;
+  const feedback = btn.textContent;
+  const navigated = location.href !== before;
+
+  const def = reg.getChart('sankey');
+  const spec = reg.newSpec(def);
+  const expected = buildPrompt(def, spec, eng.generateCode(def, spec));
+
+  // With a table matched, the tile hands the reader's own data to the studio —
+  // so the prompt beside it has to carry the same table, not the example.
+  copied = null;
+  document.querySelector('#match-toggle').click();
+  await sleep(150);
+  const box = document.querySelector('#match-text');
+  box.value = 'from,to,value\nAlpha,Beta,1234\nBeta,Gamma,4321';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(450);
+  const hdr = document.querySelector('#match-header');
+  if (!hdr.checked) { hdr.checked = true; hdr.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(350);
+
+  shellOf('sankey').querySelector('.card-prompt').click();
+  await sleep(150);
+  const fromTable = copied || '';
+  // Split at the template fence: the brief's *example* block is the format
+  // illustration and rightly keeps saying `Organic` whatever data is loaded.
+  // What must follow the reader's table is the "currently draws" block and the
+  // code — so those are what the check reads.
+  const current = (fromTable.split('currently draws this exact table')[1] || '').split('```html')[0];
+  const template = fromTable.slice(fromTable.indexOf('```html'));
+
+  return {
+    cards, shells, buttons, nestedInLink, navigated, feedback,
+    matches: fromExample === expected,
+    length: (fromExample || '').length,
+    inCurrent: /Alpha/.test(current) && /1234/.test(current),
+    inCode: /Alpha/.test(template) && !/Organic/.test(template),
+    exampleKept: /Organic/.test(fromTable.split('currently draws')[0]),
+  };
+});
+
+check(galleryPrompt.buttons === galleryPrompt.cards && galleryPrompt.shells === galleryPrompt.cards,
+  'every gallery tile carries a prompt button',
+  `${galleryPrompt.buttons} buttons / ${galleryPrompt.cards} tiles`);
+check(galleryPrompt.nestedInLink === 0, 'the button is beside the tile link, not inside it');
+check(galleryPrompt.matches && galleryPrompt.length > 600,
+  'the tile copies the same prompt the studio would', `${galleryPrompt.length} chars`);
+check(!galleryPrompt.navigated, 'copying from a tile does not open the chart');
+check(/Copied/.test(galleryPrompt.feedback), 'the button says it copied', galleryPrompt.feedback);
+check(galleryPrompt.inCurrent && galleryPrompt.inCode,
+  'a matched table travels into the tile’s prompt, table and code alike',
+  `current:${galleryPrompt.inCurrent} code:${galleryPrompt.inCode}`);
+check(galleryPrompt.exampleKept,
+  'and the format example still shows the format, not the reader’s rows');
+console.log(`  ${green('✓')} gallery prompts — ${galleryPrompt.buttons} tiles, table-aware`);
+
+// The short form: same brief, no template — for when all that is wanted is the
+// spreadsheet reshaped into something the editor can take.
+const shortPrompts = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { buildPrompt } = await import('/js/studio/prompt.js');
+
+  const carriesCode = [];
+  const lostFormat = [];
+  const notShorter = [];
+  const noStudioLink = [];
+  let fullTotal = 0;
+  let shortTotal = 0;
+  let worst = 0;
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const code = eng.generateCode(def, spec);
+    const full = buildPrompt(def, spec, code, 'full');
+    const short = buildPrompt(def, spec, code, 'data');
+
+    fullTotal += full.length;
+    shortTotal += short.length;
+    worst = Math.max(worst, short.length);
+
+    // The whole point: no template, and no stray instruction to write code.
+    if (short.includes('```html') || short.includes('<!DOCTYPE')) carriesCode.push(def.id);
+    if (short.length >= full.length) notShorter.push(def.id);
+    if (!short.includes(`studio.html?chart=${encodeURIComponent(def.id)}`)) noStudioLink.push(def.id);
+
+    // Shortening must not cost the format, which is the only thing it carries.
+    const header = String((def.data || {}).example || '').split('\n')[0];
+    if (!header || !short.includes(header) || !short.includes(def.title)) lostFormat.push(def.id);
+  }
+
+  return {
+    carriesCode, lostFormat, notShorter, noStudioLink, worst,
+    avgFull: Math.round(fullTotal / reg.CHARTS.length),
+    avgShort: Math.round(shortTotal / reg.CHARTS.length),
+  };
+});
+
+check(shortPrompts.carriesCode.length === 0, 'the short prompt carries no template', shortPrompts.carriesCode.join(', '));
+check(shortPrompts.lostFormat.length === 0, 'and still states the chart and its columns', shortPrompts.lostFormat.join(', '));
+check(shortPrompts.noStudioLink.length === 0, 'and still says where to paste the result', shortPrompts.noStudioLink.join(', '));
+check(shortPrompts.notShorter.length === 0, 'the short prompt is shorter for every chart', shortPrompts.notShorter.join(', '));
+check(shortPrompts.avgShort < shortPrompts.avgFull / 2,
+  'the short prompt is worth switching to', `${shortPrompts.avgShort} vs ${shortPrompts.avgFull} chars`);
+console.log(`  ${green('✓')} short prompts — ${shortPrompts.avgShort} chars avg vs ${shortPrompts.avgFull}, worst ${shortPrompts.worst}`);
+
+// The switch, and that the choice survives a reload and reaches the gallery.
+// The block above left the page on the gallery.
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+const modeSwitch = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.querySelector('.tab[data-tab="prompt"]').click();
+  await sleep(150);
+  const read = () => document.querySelector('.code-body').textContent;
+  const shownOnPrompt = !document.querySelector('.prompt-modes').hidden;
+  const full = read();
+
+  document.querySelector('.prompt-mode[data-mode="data"]').click();
+  await sleep(150);
+  const short = read();
+  const noteAfter = document.querySelector('.code-note').textContent;
+
+  // It is a prompt-tab control, not a code-tab one.
+  document.querySelector('.tab[data-tab="js"]').click();
+  await sleep(120);
+  const shownOnCode = !document.querySelector('.prompt-modes').hidden;
+
+  return {
+    shownOnPrompt, shownOnCode,
+    switched: short.length < full.length && !short.includes('```html'),
+    stored: localStorage.getItem('opencharts.prompt-mode'),
+    noteChanged: /no code|reshaping/i.test(noteAfter),
+  };
+});
+check(modeSwitch.shownOnPrompt && !modeSwitch.shownOnCode,
+  'the mode switch belongs to the prompt tab only');
+check(modeSwitch.switched, 'switching to Data only drops the template from the panel');
+check(modeSwitch.stored === 'data', 'the choice is remembered', String(modeSwitch.stored));
+check(modeSwitch.noteChanged, 'and the note under it says what changed');
+
+// The gallery reads the same preference — one answer for both surfaces.
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+const tileHonours = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let copied = null;
+  navigator.clipboard.writeText = async (t) => { copied = t; };
+  const shell = [...document.querySelectorAll('.card-shell')]
+    .find((s) => s.querySelector('.card').href.includes('chart=bar-vertical'));
+  shell.querySelector('.card-prompt').click();
+  await sleep(150);
+  return { mode: localStorage.getItem('opencharts.prompt-mode'), hasCode: (copied || '').includes('```html'), len: (copied || '').length };
+});
+check(tileHonours.mode === 'data' && !tileHonours.hasCode && tileHonours.len > 600,
+  'a tile hands out the kind of prompt the reader last chose',
+  `${tileHonours.mode}, ${tileHonours.len} chars`);
+await page.evaluate(() => localStorage.removeItem('opencharts.prompt-mode'));
+console.log(`  ${green('✓')} prompt modes — switch, remembered, honoured by the tiles`);
+
+// A brief that knows only one chart is a dead end the moment the data does not
+// suit it. Both forms have to offer the way out.
+const escapeHatch = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { buildPrompt } = await import('/js/studio/prompt.js');
+
+  const noEscape = [];
+  const noGallery = [];
+  const noRepo = [];
+  const noSiblings = [];
+  const wrongSiblings = [];
+  const noDataLocation = [];
+  const longLines = [];
+
+  // What the generated code actually calls its data, per renderer. Telling an
+  // assistant to "edit the spec" is wrong for the Chart.js half of the library.
+  const NAMES = { chartjs: '`config`', canvas: '`spec`', d3: '`spec`', dom: '`spec`', native: '`data`' };
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const code = eng.generateCode(def, spec);
+    const full = buildPrompt(def, spec, code, 'full');
+    const short = buildPrompt(def, spec, code, 'data');
+
+    for (const [form, text] of [['full', full], ['data', short]]) {
+      if (!text.includes('If this is the wrong chart')) noEscape.push(`${def.id}:${form}`);
+      if (!text.includes('index.html')) noGallery.push(`${def.id}:${form}`);
+      if (!text.includes('github.com')) noRepo.push(`${def.id}:${form}`);
+    }
+
+    // The siblings named must genuinely read the same table.
+    const shape = (def.data || {}).shape;
+    const kin = reg.CHARTS.filter((c) => c !== def && c.data && c.data.shape === shape);
+    const block = full.split('read exactly the same table')[1] || '';
+    if (kin.length && !block) noSiblings.push(def.id);
+    if (kin.length) {
+      const named = kin.slice(0, 10).map((c) => c.title);
+      // The list is hard-wrapped, so a title can straddle a line break. This
+      // is a membership check, not a layout one — flatten the whitespace.
+      const listed = (block.split('- **Paste my table')[0] || '').replace(/\s+/g, ' ');
+      if (!named.every((t) => listed.includes(t))) wrongSiblings.push(def.id);
+      // Nothing outside the shape may be named as reading the same table.
+      const outsider = reg.CHARTS.find((c) => c.data && c.data.shape !== shape
+        && listed.includes(c.title) && !named.some((n) => n.includes(c.title)));
+      if (outsider) wrongSiblings.push(`${def.id}→${outsider.id}`);
+    }
+
+    // The full form must say where the data sits, in that renderer's own terms.
+    const want = NAMES[def.engine];
+    const rules = full.split('```html')[0];
+    if (want && !rules.includes(want)) noDataLocation.push(`${def.id}:${want}`);
+
+    // The prose is hard-wrapped for a chat window; assembled lists must be too.
+    // Fenced blocks are exempt and must stay exempt — a horizon chart's rows
+    // are 500-character CSV lines, and wrapping one would corrupt the data.
+    let fenced = false;
+    const over = rules.split('\n').filter((l) => {
+      if (l.startsWith('```')) { fenced = !fenced; return false; }
+      return !fenced && l.length > 100 && !l.includes('http');
+    });
+    if (over.length) longLines.push(`${def.id}:${over.length}`);
+  }
+
+  return { noEscape, noGallery, noRepo, noSiblings, wrongSiblings, noDataLocation, longLines };
+});
+
+check(escapeHatch.noEscape.length === 0, 'both forms say what to do if the chart is wrong', escapeHatch.noEscape.slice(0, 5).join(', '));
+check(escapeHatch.noGallery.length === 0, 'and point at the library to match the data against', escapeHatch.noGallery.slice(0, 5).join(', '));
+check(escapeHatch.noRepo.length === 0, 'and name where the source lives', escapeHatch.noRepo.slice(0, 5).join(', '));
+check(escapeHatch.noSiblings.length === 0, 'a chart with siblings lists them', escapeHatch.noSiblings.join(', '));
+check(escapeHatch.wrongSiblings.length === 0,
+  'and every chart it names really does read the same table', escapeHatch.wrongSiblings.slice(0, 5).join(', '));
+check(escapeHatch.noDataLocation.length === 0,
+  'the brief names the data by what the generated code calls it',
+  escapeHatch.noDataLocation.slice(0, 6).join(', '));
+check(escapeHatch.longLines.length === 0,
+  'assembled lists are wrapped like the rest of the prose', escapeHatch.longLines.slice(0, 5).join(', '));
+console.log(`  ${green('✓')} escape hatch — siblings, matcher and source in every prompt`);
+
+// The chart page copies its own prompt without a trip to the code panel.
+await page.goto(`${base}/studio.html?chart=treemap`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const stageBtn = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let copied = null;
+  navigator.clipboard.writeText = async (t) => { copied = t; };
+
+  const btn = document.querySelector('#btn-prompt');
+  if (!btn) return { missing: true };
+
+  // Reading the JS tab and clicking Prompt must not move the reader.
+  document.querySelector('.tab[data-tab="js"]').click();
+  await sleep(150);
+  btn.click();
+  await sleep(200);
+  const full = copied;
+  const stillOnJs = document.querySelector('.tab[data-tab="js"]').classList.contains('active');
+  const feedback = btn.textContent;
+
+  // It follows the Full / Data only choice like every other surface.
+  document.querySelector('.tab[data-tab="prompt"]').click();
+  await sleep(120);
+  document.querySelector('.prompt-mode[data-mode="data"]').click();
+  await sleep(150);
+  copied = null;
+  btn.click();
+  await sleep(200);
+  const short = copied;
+  document.querySelector('.prompt-mode[data-mode="full"]').click();
+
+  return {
+    missing: false, stillOnJs, feedback,
+    matchesPanel: full === window.openCharts.codePanel.code.prompt,
+    hasCode: (full || '').includes('```html'),
+    shortHasCode: (short || '').includes('```html'),
+    shorter: (short || '').length < (full || '').length,
+  };
+});
+check(!stageBtn.missing, 'the chart page has a prompt button of its own');
+check(stageBtn.matchesPanel && stageBtn.hasCode, 'it copies the same prompt the panel holds');
+check(stageBtn.stillOnJs, 'and does not move the reader off the tab they were reading');
+check(/Copied/.test(stageBtn.feedback), 'the button says it copied', stageBtn.feedback);
+check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data only choice');
+console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
+
+
+
+
+
+/* Suite 17 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
   for (const path of ['/index.html', '/studio.html?chart=sankey']) {
@@ -1852,7 +2293,7 @@ check(phoneDialog.listUsable, 'and the city list is still tall enough to use');
 await page.setViewportSize({ width: 1280, height: 900 });
 console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px, editor usable on a phone`);
 
-/* Suite 17 — nothing wrote to the console along the way. */
+/* Suite 18 — nothing wrote to the console along the way. */
 const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);

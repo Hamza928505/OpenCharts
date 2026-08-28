@@ -108,6 +108,16 @@ export function renderHelp(container, def, spec, onEditData) {
     + 'or <em>Standalone</em> for a single file that runs on its own.';
   ol.appendChild(stepCode);
 
+  // The way round for a reader who would rather not fill the table in at all.
+  // It is a fourth step because it replaces the first three, not because it
+  // follows them.
+  const stepPrompt = el('li');
+  stepPrompt.innerHTML =
+    '<strong>Or let an AI do it</strong> — hit <em>Prompt</em> above the chart, attach your '
+    + 'own spreadsheet, and it comes back as this chart with your numbers in it. '
+    + 'The <em>AI Prompt</em> tab below shows what gets copied.';
+  ol.appendChild(stepPrompt);
+
   steps.appendChild(ol);
   inner.appendChild(steps);
 

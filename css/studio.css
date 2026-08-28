@@ -439,19 +439,52 @@ img, canvas, svg { max-width: 100%; display: block; }
 .section-rule .line { flex: 1; height: 1px; background: var(--rule); }
 .section-rule .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
 
+/* The tile is a link with a copy button beside it. The button cannot live
+   inside the anchor, so the shell holds both — and the shell carries the hover
+   lift, because a card that rose 3px while its own button stayed put would
+   come apart on every hover. */
+.card-shell {
+  position: relative;
+  display: flex;
+  transition: transform .22s var(--ease);
+}
+.card-shell:hover { transform: translateY(-3px); }
+
 .card {
+  flex: 1; min-width: 0;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
   overflow: hidden;
   display: flex; flex-direction: column;
-  transition: transform .22s var(--ease), box-shadow .22s var(--ease), border-color .22s var(--ease);
+  transition: box-shadow .22s var(--ease), border-color .22s var(--ease);
 }
-.card:hover {
-  transform: translateY(-3px);
+.card-shell:hover .card {
   box-shadow: var(--shadow-lg);
   border-color: var(--rule-firm);
 }
+
+/* Sits over the top-right of the preview. Always present rather than revealed
+   on hover: a touch screen has no hover, and an action nobody can find is the
+   same as one that is not there. */
+.card-prompt {
+  position: absolute; top: .5rem; right: .5rem; z-index: 2;
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .26rem .5rem;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(3px);
+  color: var(--ink-faint);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em;
+  cursor: pointer;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
+}
+.card-shell:hover .card-prompt { color: var(--ink); border-color: var(--rule-firm); }
+.card-prompt:hover, .card-prompt:focus-visible {
+  color: var(--accent); border-color: var(--accent);
+  background: var(--surface);
+}
+.card-prompt.ok { color: var(--accent); border-color: var(--accent); }
 .card-canvas {
   height: 158px;
   background: var(--surface-2);
@@ -478,7 +511,7 @@ img, canvas, svg { max-width: 100%; display: block; }
   display: inline-flex; align-items: center; gap: .25rem;
   transition: gap .18s var(--ease);
 }
-.card:hover .card-open { gap: .5rem; }
+.card-shell:hover .card-open { gap: .5rem; }
 .empty { grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; color: var(--ink-faint); }
 .empty .display { font-size: 1.6rem; margin-bottom: .4rem; color: var(--ink-soft); }
 
@@ -1641,7 +1674,30 @@ input[type="range"]::-moz-range-thumb {
 }
 .tab:hover { color: var(--ink); background: var(--surface); }
 .tab.active { color: var(--ink); background: var(--surface); border-color: var(--rule); box-shadow: var(--shadow-sm); font-weight: 500; }
-.code-actions { margin-left: auto; display: flex; gap: .35rem; }
+.code-actions { margin-left: auto; display: flex; gap: .35rem; align-items: center; }
+
+/* Full / Data only, shown on the prompt tab alone. A segmented pair rather
+   than a checkbox: both options need naming, since "shorter" says nothing
+   about what is being left out. */
+.prompt-modes {
+  display: inline-flex; gap: 2px;
+  padding: 2px; margin-right: .15rem;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.prompt-modes[hidden] { display: none; }
+.prompt-mode {
+  padding: .22rem .5rem; border: 0; border-radius: calc(var(--r-sm) - 2px);
+  background: transparent; color: var(--ink-faint);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em;
+  cursor: pointer; white-space: nowrap;
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.prompt-mode:hover { color: var(--ink); }
+.prompt-mode.active {
+  background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow-sm); font-weight: 500;
+}
 
 .code-scroll {
   display: flex;
@@ -1661,7 +1717,20 @@ input[type="range"]::-moz-range-thumb {
   position: sticky; left: 0;
 }
 .gutter span { display: block; }
+.gutter[hidden] { display: none; }
 .code-body { padding: 1rem 1.1rem; margin: 0; color: var(--code-ink); white-space: pre; flex: 1; min-width: 0; }
+
+/* The AI prompt is prose, not source: it wraps rather than scrolling sideways.
+   The measure is 92ch and not less, because the prompt is already hard-wrapped
+   at 80 columns for the chat window it is going to be pasted into — a narrower
+   box would re-wrap those lines and leave every other one a stub. */
+.code-body.prose {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 92ch;
+  color: var(--ink);
+  line-height: 1.7;
+}
 
 /* syntax tokens */
 .t-key  { color: var(--tok-key); }

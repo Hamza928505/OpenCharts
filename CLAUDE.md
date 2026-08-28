@@ -328,6 +328,122 @@ that every chart resolves to both. `watch` is the part worth keeping honest:
 it names how that chart type misleads, rather than pretending the choice of
 chart is neutral.
 
+### The AI prompt
+
+The **AI Prompt** tab is the fifth code view, and the only one that is not
+code: it is the whole chart written as a brief to hand to an assistant along
+with somebody's own spreadsheet. `prompt.js` assembles it from what the studio
+already maintains, and **nothing in it is hand-written per chart**:
+
+| Part | Comes from |
+|---|---|
+| what the chart is, and how it misleads | `blurb` and `chart-help.js` |
+| the columns, and what each one holds | `expectedFormat(def)` — so the format described is by construction the one `checkTableShape` enforces |
+| how a *row* is read | `SHAPE_GUIDE` in `prompt.js`, one line per shape |
+| the table it is drawing right now | `def.toText(spec)` |
+| the working code | `generateCode(def, spec).standalone` |
+
+That last pairing is the point. Showing the current table *and* the code it
+produces demonstrates the substitution rather than describing it, which is the
+part an assistant otherwise gets wrong — so a chart whose `toText` is broken
+ships a broken prompt, and the suite checks for exactly that.
+
+**Two modes, and the default is the expensive one.** `buildPrompt(def, spec,
+code, mode)` takes `'full'` (format + code) or `'data'` (format only, ~2,800
+chars against ~12,300). `PROMPT_MODES` / `readPromptMode` / `writePromptMode`
+live in `prompt.js` so the studio switch and the gallery tiles read one answer.
+
+`full` stays the default on evidence, not preference:
+
+- **Without the code the assistant writes the chart from memory.** That renders
+  *a* chart, not this one — options, palette and helpers all drift.
+- **The template is not bulk to be trimmed.** It is mostly *drawing* code, not
+  data: `flow-map` emits 13.5KB of JavaScript carrying 0.8KB of data, and the
+  rest is `makeProjection`, `countryKey` and `isVisible`. Across the library
+  the spec is 6–38% of the emitted JS.
+- **A link cannot stand in for it.** The standalone does not exist as a file —
+  `engines.js` generates it per spec. What is in the repo is the definition
+  module, which needs `registry` + `engines` + `serialize` + `palette` to
+  become a page, so a GitHub link hands an assistant *more* to work out, and
+  only if it can fetch at all.
+
+`data` earns its place on the other side of that: when somebody only wants a
+spreadsheet reshaped to paste into the editor, the template is 70% of the
+message and every byte of it is overhead.
+
+**A prompt that knows one chart is a dead end**, so both forms end with a way
+out — and all of it is derived:
+
+- `siblings(def)` lists the charts on the *same shape*, which by construction
+  read the reader's CSV unchanged. It cannot name a chart that would not.
+- The gallery URL, because "paste a table, see what draws it" is a feature the
+  platform already has and the prompt had never mentioned.
+- `REPO_URL`, the one hard-coded URL in the file. Every other link is derived
+  from `location`, so it is right wherever the site is served. **Note that
+  `package.json` names `OpenCharts` while `git remote` says `Charts`;** this
+  follows the remote. Fixing that mismatch is a separate job.
+
+**`WHERE_DATA_LIVES` is keyed by renderer, and has to be.** `build()` runs
+*before* serialisation for the 39 Chart.js charts, so their template carries a
+finished `config` and no spec at all, while the hand-drawn ones carry the spec
+their `draw`/`mount` reads. A single "edit the spec" instruction would be wrong
+for 40 of the 98, and the suite checks each chart's brief names the identifier
+its own generated code actually uses.
+
+Three rules it follows:
+
+- **It asks for two outputs, not one.** The CSV is the way back into the studio
+  — paste it into the data editor and keep going; the page is the way out.
+  Offering only the code would make the platform a dead end.
+- **The brief must not restate itself.** `expected.grows` is deliberately not
+  printed: it duplicates the shape guide, and on `places` it lands as a
+  sentence fragment. The column list is captioned with *both* numbers because
+  the constraint and the example disagree more often than not — `places` reads
+  three columns and its example carries four, so printing only the minimum
+  captions a list of four with the words "3 columns".
+- **Assembled prose is wrapped, fenced data is not.** The file is authored at
+  80 columns, so anything built from data — a list of ten chart titles, a
+  blurb, a shape guide — goes through `wrap()` to match. Fenced blocks are
+  exempt and must stay exempt: a horizon chart's rows are 500-character CSV
+  lines and wrapping one would corrupt it. The suite measures both halves.
+- **The current table is truncated, out loud.** A box plot's 150 observations
+  demonstrate the layout no better than twelve, and the full data is in the
+  template regardless — so it is cut with a line saying how many rows went and
+  where they are.
+
+The prompt is built in `StudioApp.rebuild`, after `generateCode`, rather than
+inside it: it quotes the Standalone export, and it is a brief about the chart
+rather than a fifth view of its source. **Both forms are built on every
+rebuild** into `code.prompt` and `code.promptShort`, so the switch repaints
+rather than regenerating — the short one costs nothing beside the code
+generation already happening.
+
+**Three surfaces copy it, and exactly one resolves which form to copy.**
+`CodePanel.promptText()` is that one place — the tab's own Copy button, the
+`#btn-prompt` in the studio's stage bar, and the gallery's tile buttons all go
+through it or through `readPromptMode()`, so the Full / Data only choice cannot
+mean two different things on one page. The stage-bar button deliberately does
+*not* switch the code panel to the prompt tab: someone reading the JS did not
+ask to lose their place.
+
+**The gallery offers the same thing per tile**, as a `.card-prompt` button.
+Three things it has to get right, each checked:
+
+- **It is built on the click, never with the tile.** A prompt carries a whole
+  standalone export; generating ninety-eight to fill a grid nobody has clicked
+  would cost more than the rest of the page put together.
+- **The button is the link's sibling, not its child.** A tile is an `<a>`, and
+  an anchor may not contain a button — so `_card` returns a `.card-shell`
+  holding both. That also keeps the button clear of the anchor's own
+  `mousedown`/`click` handoff handlers, which would otherwise fire on the way
+  past. `.card-shell` carries the hover lift for the same reason: a card that
+  rose 3px while its own button stayed put would come apart on every hover.
+- **A matched table travels with it.** If the reader has pasted a table into
+  **Match my data**, `_copyPrompt` applies it before building — the same data
+  opening the tile would carry into the studio. The format *example* stays put
+  either way: it illustrates the shape, and replacing it with the reader's own
+  rows would leave the brief with no statement of the format at all.
+
 ### The data dialog
 
 `DataDialog.js` has three ways in and **one source of truth**: the grid holds
@@ -510,9 +626,10 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `CheckList.js` | Searchable list — many choices, for the place pickers and the sidebar city list |
 | `geodata.js` | Loads `data/countries.json` and `data/cities/<ISO2>.json` |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
-| `CodePanel.js` | HTML/CSS/JS/Standalone tabs, copy, download |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt tabs, copy, download |
+| `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
-| `GalleryApp.js` | Gallery grid with lazy live previews |
+| `GalleryApp.js` | Gallery grid with lazy live previews, and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |
 | `palette.js` | The one colour source for every chart |
 | `theme.js` | Light/dark, persisted; charts re-render on change |
@@ -557,8 +674,8 @@ legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, hover readouts, file import, the country and city
 pickers, place-name spelling, geo focus and globe rotation, share links and
-embeds, standalone exports, responsive breakpoints (including the editor on a
-390px phone), and console cleanliness.
+embeds, standalone exports, AI prompts, responsive breakpoints (including the
+editor on a 390px phone), and console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
@@ -598,6 +715,11 @@ nothing from the spec at all.
   wired up the drag — and that one leaked a pair of window listeners on every
   redraw. The suite now drags each of them and counts listeners added against
   listeners removed.
+- A prompt that describes the example while the chart draws something else is
+  worse than no prompt, because it looks right. The prompt suite perturbs every
+  chart's data and requires the prompt to change — falling back to perturbing
+  *names* for the three edge-list charts whose examples hold no numbers, since
+  skipping them would leave three charts free to hand out a stale brief.
 
 Exports are served over http from the project root during tests rather than
 via `setContent`, so relative imports and CDN scripts resolve the way they
@@ -666,6 +788,11 @@ design system in `css/studio.css` and `js/studio/toast.js` replaced them.
 4. Add `read` and `watch` lines to `js/studio/chart-help.js`, or confirm the
    category fallback says something true about this chart. The suite fails if
    neither resolves.
+
+The AI Prompt needs no step of its own — it is derived from the schema and the
+help lines, so steps 3 and 4 are what make it right. A `hint` that repeats its
+shape guide, or a `toText` that writes a table the chart cannot read back, both
+show up there before they show up anywhere else.
 
 Respect the serialisation constraints in "One build function, two outputs" —
 they are the only non-obvious rule in this codebase, and breaking them produces

@@ -8,13 +8,15 @@
  */
 
 import { CHARTS, CATEGORIES, CATEGORY_ORDER, CHART_COUNT, searchCharts, newSpec, engineTally } from './registry.js';
-import { renderChart, destroyInstance } from './engines.js';
+import { renderChart, destroyInstance, generateCode } from './engines.js';
 import { ALL_LIBRARIES } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
-import { parseTable } from './dataio.js';
+import { parseTable, applyData } from './dataio.js';
 import { chooseDataFile } from './fileimport.js';
 import { rankCharts, expectedColumnsFor, handOff } from './DataMatch.js';
+import { buildPrompt, readPromptMode } from './prompt.js';
+import { toast } from './toast.js';
 
 const PREVIEW_HEIGHT = 132;
 
@@ -274,6 +276,12 @@ export class GalleryApp {
   }
 
   _card(def) {
+    // The tile is a link, and a link may not contain a button — so the button
+    // is the link's sibling inside a shell, not a child of it. That also keeps
+    // it clear of the anchor's own mousedown/click handoff handlers below.
+    const shell = document.createElement('div');
+    shell.className = 'card-shell';
+
     const card = document.createElement('a');
     card.className = 'card';
     card.href = `studio.html?chart=${encodeURIComponent(def.id)}`;
@@ -316,8 +324,56 @@ export class GalleryApp {
     }
 
     card.append(canvas, body);
+
+    const prompt = document.createElement('button');
+    prompt.className = 'card-prompt';
+    prompt.type = 'button';
+    prompt.title = 'Copy a prompt for this chart — paste it into any AI along with your own spreadsheet';
+    prompt.setAttribute('aria-label', `Copy an AI prompt for ${def.title}`);
+    prompt.innerHTML = '<span aria-hidden="true">⧉</span> Prompt';
+    prompt.addEventListener('click', () => this._copyPrompt(def, prompt));
+
+    shell.append(card, prompt);
     this._observer.observe(canvas);
-    return card;
+    return shell;
+  }
+
+  /**
+   * Copy this chart's AI brief without opening it.
+   *
+   * Built on the click rather than with the tile: a prompt carries the whole
+   * standalone export, and generating ninety-eight of them to fill a grid
+   * nobody has clicked yet would cost more than the entire page does.
+   */
+  async _copyPrompt(def, btn) {
+    const label = btn.innerHTML;
+    try {
+      const spec = newSpec(def);
+      // A reader who pasted a table meant that data — the same thing opening
+      // the tile does with it. A table this chart cannot read leaves the
+      // example in place rather than half-applying it.
+      if (this.table) {
+        const res = applyData(def, spec, this.table);
+        if (res.ok && typeof def.onChange === 'function') def.onChange(spec);
+      }
+      // Whichever kind the reader last asked for in the studio. One choice
+      // answers for both surfaces, and the toast says which arrived.
+      const mode = readPromptMode();
+      const text = buildPrompt(def, spec, generateCode(def, spec), mode);
+      await navigator.clipboard.writeText(text);
+
+      btn.innerHTML = '<span aria-hidden="true">✓</span> Copied';
+      btn.classList.add('ok');
+      setTimeout(() => { btn.innerHTML = label; btn.classList.remove('ok'); }, 1800);
+      const what = mode === 'data' ? 'data-only prompt' : 'prompt';
+      toast(this.table
+        ? `${def.title} ${what} copied — it carries your table`
+        : `${def.title} ${what} copied — paste it into any AI with your data`, 'ok');
+    } catch {
+      // Clipboard access needs a secure context, and there is no text node to
+      // fall back on selecting here the way the code panel has.
+      toast('Could not copy the prompt — open the chart and use the AI Prompt tab', 'bad');
+    }
   }
 
   _onIntersect(entries) {

@@ -53,13 +53,87 @@ Server, and so on. There is no build step and nothing to install.
 
 ## Code output
 
-Each chart emits four views:
+Each chart emits five views:
 
 - **HTML** — the markup fragment (`<canvas>` / `<div>` plus the legend slot)
 - **CSS** — only the rules that chart actually uses
 - **JS** — the chart code, with the data and options inlined as literals
 - **Standalone** — a complete `<!DOCTYPE html>` page with all three inlined and
   the CDN script tags already in place. Download it and it runs.
+- **AI Prompt** — the same chart written as a brief you can hand to an
+  assistant along with your own spreadsheet.
+
+## Handing it to an AI
+
+Every chart comes with a prompt, reachable three ways:
+
+| Where | |
+|---|---|
+| **Gallery tile** | A **Prompt** button in the corner of every preview — copies without opening the chart |
+| **Chart page** | A **Prompt** button in the bar above the chart, beside Embed and Share |
+| **Code panel** | The **AI Prompt** tab, which shows the text and lets you switch between the two forms |
+
+Copy any of them, attach your own spreadsheet or CSV to ChatGPT, Claude or
+anything else, and what comes back is that chart drawing your numbers. All
+three copy the same text and honour the same Full / Data only choice.
+
+If you have a table loaded in **Match my data**, a tile's prompt carries it —
+the same table the tile would hand to the studio.
+
+It works because the prompt carries the three things such a request usually
+lacks:
+
+- **the format** — the columns this chart reads, what each one holds, and a
+  worked example, taken from the same schema the data editor validates against
+- **the current table** — what the code below it is drawing right now, so the
+  substitution is demonstrated rather than described
+- **the code** — the whole Standalone export, already working, with the
+  instruction to change nothing but the data
+
+It asks for two things back: the reshaped CSV, which you can paste straight
+into the data editor to keep working on it here, and the finished page.
+
+### When it is the wrong chart
+
+A brief that knows only one chart is a dead end the moment your data does not
+suit it, so every prompt carries a way out. It tells the assistant not to force
+your data in, and gives it two things to offer instead:
+
+- **The charts that read exactly the same table.** Derived from the schema, so
+  every one it names really does take your CSV unchanged — switching costs you
+  nothing.
+- **The library itself.** Paste your table into the gallery and it narrows to
+  every chart that can read it, so you can pick from what actually fits.
+
+It also says where the source is, that the data in the template is literal with
+nothing fetched or generated at runtime, and — per renderer — what the code
+calls the thing to edit, since the Chart.js charts carry a `config` and the
+hand-drawn ones carry a `spec`.
+
+### Full or data only
+
+The prompt tab has a **Full / Data only** switch, and the tiles follow whatever
+you last picked.
+
+| | Size | What comes back |
+|---|---|---|
+| **Full** | ~12,000 chars | A page that runs — the working code travels with it |
+| **Data only** | ~2,800 chars | Just your table, reshaped, ready to paste into the editor |
+
+**Data only** is for when the chart is not the problem — you have the data and
+you want it in the right shape. It drops the code and keeps the format, which
+is roughly a quarter of the size.
+
+It is not the default, because without the code the assistant writes the chart
+from its own memory of Chart.js or D3. That renders *a* chart; it does not
+render this one, and the options, palette and helpers all drift. And the code
+is not bulk to be trimmed — a flow map is 13.5KB of JavaScript carrying 0.8KB
+of data, and the rest is the projection and geo helpers nothing reconstructs
+from memory.
+
+The prompt follows whatever is on screen. Edit the colours, swap the data,
+change the axis — copy it afterwards and the brief describes that chart, not
+the library default.
 
 ## Not sure how to read a chart?
 
@@ -70,8 +144,8 @@ shifting baselines. A pie warns you that angles past five slices are guesswork.
 A treemap warns you that long thin rectangles are hard to compare with square
 ones.
 
-The same panel lays out the three-step loop for changing anything: your data,
-the controls, then take the code.
+The same panel lays out the loop for changing anything: your data, the
+controls, then take the code — or hand the whole job to an AI.
 
 ## Using your own data
 
@@ -245,7 +319,8 @@ while rendering nothing. For each chart it checks that it renders, that the
 canvas is not blank, that the data editor accepts its own example, that the
 chart survives that data, and that the generated code parses and declares its
 dependencies. It also loads seven exported standalone files and confirms they
-actually run.
+actually run, and checks that every chart's AI prompt carries that chart's own
+format, code and current data.
 
 ```bash
 npm test -- --only geo     # just the charts whose id contains "geo"
