@@ -16,6 +16,34 @@
  */
 
 export const CHART_HELP = {
+  'hexbin': {
+    read: 'Each hexagon covers a patch of the plane; its shade is how many points landed inside. Dark means crowded.',
+    watch: 'The hexagon size decides the picture. Make them large enough and every cloud looks like one smooth blob.',
+  },
+  'splom': {
+    read: 'Read one row at a time: the variable named on the left is the vertical axis in every panel across it. Look for panels with a slope.',
+    watch: 'With six variables this is thirty panels, and some will look correlated by chance alone. Treat it as a place to find a question, not an answer.',
+  },
+  'density-contour': {
+    read: 'Bands are lines of equal density, like contours on a map. Tightly packed bands are a steep climb into a peak.',
+    watch: 'The bandwidth is a choice, not a measurement. Too high invents one hill where there were two; too low turns every point into its own island.',
+  },
+  'word-cloud': {
+    read: 'Bigger words occur more often. Read the largest few and stop — that is all this chart reliably says.',
+    watch: 'Area, not length, encodes the count, and people judge area badly. Position and colour mean nothing at all here, and a long word looks larger than a short one of the same count.',
+  },
+  'dot-matrix': {
+    read: 'Count the dots. Each one is the same number of units, so a block twice as long is twice as much.',
+    watch: 'Past a few hundred dots nobody counts them and it becomes a bar chart with extra steps. Raise the units-per-dot instead.',
+  },
+  'tally-chart': {
+    read: 'Marks come in gates of five, the fifth struck across the other four. Count the gates, then the leftovers.',
+    watch: 'This is for counts you can still see — twenty, not two hundred. Beyond that the gates blur and a bar is more honest.',
+  },
+  'stem-leaf': {
+    read: 'The stem is the leading digits, each leaf one observation sharing it. The length of a row is a bar; the digits in it are the actual values.',
+    watch: 'It only works while the leaves fit on one line. A large batch runs off the edge, and the stem size has the same effect a bin width does on a histogram.',
+  },
   /* ── Line & Area ──────────────────────────────────────────────────────── */
   'line-basic': {
     read: 'Follow the line left to right. Height is the value; the slope between two points is the rate of change.',

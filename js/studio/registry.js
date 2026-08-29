@@ -10,6 +10,7 @@ import { lineCharts } from './charts/line.js';
 import { barCharts } from './charts/bar.js';
 import { partToWholeCharts } from './charts/part-to-whole.js';
 import { radarCharts, scatterCharts } from './charts/radar-scatter.js';
+import { scatterExtraCharts } from './charts/scatter-extra.js';
 import { distributionCharts } from './charts/distribution.js';
 import { hierarchyCharts } from './charts/hierarchy.js';
 import { flowCharts } from './charts/flow.js';
@@ -19,6 +20,7 @@ import { distributionExtraCharts } from './charts/distribution-extra.js';
 import { comparisonExtraCharts } from './charts/comparison-extra.js';
 import { networkCharts } from './charts/network.js';
 import { hierarchyExtraCharts } from './charts/hierarchy-extra.js';
+import { unitCharts } from './charts/unit-charts.js';
 import { kpiCharts } from './charts/kpi.js';
 import { financeCharts } from './charts/finance.js';
 import { geoCharts } from './charts/geo.js';
@@ -54,8 +56,10 @@ const ALL = [
   ...partToWholeCharts,
   ...radarCharts,
   ...scatterCharts,
+  ...scatterExtraCharts,
   ...distributionCharts,
   ...distributionExtraCharts,
+  ...unitCharts,
   ...hierarchyCharts,
   ...hierarchyExtraCharts,
   ...networkCharts,

@@ -601,6 +601,52 @@ export const DATA_SCHEMAS = {
     },
   },
 
+  /* Counting charts — one mark per unit -------------------------------------- */
+  'word-cloud': {
+    shape: 'items', key: 'words', valueField: 'weight',
+    example: 'term,count\nrefund,184\nshipping,152\npassword,141\ninvoice,128',
+    hint: 'Two columns: the word and how many times it occurs.',
+    toText: (s) => writeItems(s, 'words', 'weight'),
+  },
+  'dot-matrix': {
+    shape: 'items', key: 'items', valueField: 'value',
+    example: EX.labelValue,
+    hint: 'Two columns: a category and its count. One dot is drawn per unit.',
+    toText: (s) => writeItems(s, 'items', 'value'),
+  },
+  'tally-chart': {
+    shape: 'items', key: 'items', valueField: 'value',
+    example: EX.labelValue,
+    hint: 'Two columns: a category and its count. Counts are drawn as five-bar gates.',
+    toText: (s) => writeItems(s, 'items', 'value'),
+  },
+  'stem-leaf': {
+    shape: 'observations', key: 'groups',
+    example: EX.observations,
+    hint: 'Either one column per batch, or two columns of batch and value.',
+    toText: (s) => writeObservations(s, 'groups'),
+  },
+
+  /* Dense scatters ----------------------------------------------------------- */
+  'splom': {
+    shape: 'labelSeries',
+    example: 'item,Price,Rating,Reviews\nAster,1636,3.9,288\nBirch,940,4.4,512\nCedar,1280,3.1,96',
+    hint: 'A name, then one numeric column per variable. Every pair gets a panel.',
+    toText: (s) => writeLabelSeries(s),
+  },
+  ...Object.fromEntries(['hexbin', 'density-contour'].map((id) => [id, {
+    shape: 'labelValue', labelsKey: '_xs', valuesKey: '_ys',
+    example: 'x,y\n120,3.4\n210,4.1\n64,2.8',
+    hint: 'Two numeric columns: x and y.',
+    toText: (s) => csv([['x', 'y'], ...(s.points || []).map((p) => [p.x, p.y])]),
+    onData(spec) {
+      spec.points = (spec._xs || []).map((x, i) => ({
+        x: Number(x) || 0, y: (spec._ys || [])[i] || 0,
+      }));
+      delete spec._xs; delete spec._ys;
+    },
+  }])),
+
   /* Engine pie ---------------------------------------------------------------- */
   'engine-pie': {
     shape: 'items', key: 'series', valueField: 'value',
