@@ -347,6 +347,13 @@ const match = await page.evaluate(async () => {
       verdict: (document.querySelector('.match-verdict') || {}).textContent || '',
       banner: !!document.querySelector('.match-note'),
       ids: [...document.querySelectorAll('.card')].map((c) => new URL(c.href).searchParams.get('chart')),
+      // What each tile says it will read, so a chart offered a slice of the
+      // table can be held to the columns it named.
+      fits: Object.fromEntries([...document.querySelectorAll('.card-shell')].map((sh) => {
+        const link = sh.querySelector('.card');
+        const fit = sh.querySelector('.card-fit');
+        return [new URL(link.href).searchParams.get('chart'), fit ? fit.textContent : ''];
+      })),
     };
   };
 
@@ -377,8 +384,15 @@ check(match.flow.cards > 0 && match.flow.cards < match.total,
   `${match.flow.cards} of ${match.total}`);
 check(match.flow.ids.includes('sankey') && match.flow.ids.includes('chord'),
   'a from/to/value table finds the flow charts', match.flow.ids.join(','));
-check(!match.flow.ids.includes('pie') && !match.flow.ids.includes('histogram'),
-  'and does not offer charts that would read its names as zero');
+// A chart that cannot read the whole table is offered the columns of it that
+// it can, so pie and histogram do appear here — on `value`, never on `to`.
+// That is the promise the old check made by excluding them outright, stated as
+// what they read rather than as their absence.
+check(match.flow.fits.pie === 'reads from, value',
+  'a chart that reads part of a table is offered its value column',
+  match.flow.fits.pie);
+check(match.flow.fits.histogram === 'reads value',
+  'and a histogram is offered the numbers, not the names', match.flow.fits.histogram);
 check(match.flow.chips.join(',') === 'from,to,value',
   'the columns are named back to the reader', match.flow.chips.join(','));
 check(match.flow.banner, 'a filtered grid says so');
@@ -396,6 +410,63 @@ check(match.yearsFixed.cards > match.flow.cards,
   `${match.yearsFixed.cards} vs ${match.flow.cards}`);
 check(match.cleared === match.total, 'and the banner leads back to every chart',
   `${match.cleared} of ${match.total}`);
+
+/* A spreadsheet written for people rather than for a chart: a title row, a row
+ * of merged section banners, then the header — and more columns than any chart
+ * in the library reads. Every one of those was enough on its own to return an
+ * empty gallery from the page whose whole promise is to say what you can draw. */
+const wide = await page.evaluate(async () => {
+  const { parseTable, applyData } = await import('/js/studio/dataio.js');
+  const { rankCharts } = await import('/js/studio/DataMatch.js');
+  const { newSpec } = await import('/js/studio/registry.js');
+
+  const rows = [];
+  for (let i = 0; i < 40; i++) {
+    rows.push([`R${i}`, ['Ana', 'Ben', 'Cai'][i % 3], ['open', 'done'][i % 2],
+      50 + i, i * 2, 40 - i, (i * 1.5).toFixed(1), i % 7].join(','));
+  }
+  const table = parseTable('Quarterly rollout,,,,,,,\n'
+    + 'REGION,,,DETECTION,,,SCORES,\n'
+    + 'Region,Owner,Status,Frames,Hits,Misses,Score,Rank\n'
+    + rows.join('\n'));
+  const ranked = rankCharts(table);
+
+  // Offering a chart that cannot actually take the columns it was offered
+  // would be worse than offering nothing, so every projection is applied.
+  let landed = 0;
+  const stuck = [];
+  for (const entry of ranked.partial) {
+    const spec = newSpec(entry.def);
+    const before = JSON.stringify(spec);
+    const res = applyData(entry.def, spec, entry.table);
+    if (res.ok && JSON.stringify(spec) !== before) landed++;
+    else stuck.push(entry.def.id);
+  }
+  return {
+    skipped: table.skipped,
+    headers: table.headers.join(','),
+    rows: table.rows.length,
+    offered: ranked.fits.length + ranked.partial.length,
+    partial: ranked.partial.length,
+    missShapes: [...new Set(ranked.misses.map((m) => m.def.data.shape))].sort(),
+    landed,
+    stuck,
+  };
+});
+
+check(wide.skipped === 2 && wide.headers === 'Region,Owner,Status,Frames,Hits,Misses,Score,Rank',
+  'a title and a banner row above the table are dropped, not read as data',
+  `skipped ${wide.skipped}: ${wide.headers}`);
+check(wide.rows === 40, 'and every data row survives', `${wide.rows} rows`);
+check(wide.offered > 40, 'a wide export finds charts rather than an empty gallery',
+  `${wide.offered} offered, ${wide.partial} of them on a slice`);
+check(wide.landed === wide.partial, 'and the columns each was offered reach its spec',
+  wide.stuck.join(',') || `${wide.landed}/${wide.partial}`);
+check(wide.missShapes.join(',') === 'places,regions',
+  'only the maps hold out, because their columns have to name real places',
+  wide.missShapes.join(','));
+console.log(`  ${green('\u2713')} wide table — ${wide.offered} charts offered, `
+  + `${wide.landed} slices land, ${wide.skipped} title rows dropped`);
 
 /* Clicking through carries the table into the studio. */
 await page.evaluate(async () => {

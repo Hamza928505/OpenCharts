@@ -20,6 +20,16 @@ import { toast } from './toast.js';
 
 const PREVIEW_HEIGHT = 132;
 
+/**
+ * A column name on one line.
+ *
+ * A spreadsheet wraps a heading rather than widening the column, and that
+ * line break is really in the cell — `Corr H\n(H_real)`. It belongs in the
+ * table, which is the reader's own name for the column; it does not belong
+ * in a chip that is styled to be one line tall.
+ */
+const oneLine = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+
 export class GalleryApp {
   constructor() {
     this.grid = document.querySelector('#grid');
@@ -31,6 +41,11 @@ export class GalleryApp {
     this.live = new Map();
     /** The table a reader brought, once they bring one. */
     this.table = null;
+    /**
+     * chart id → the columns of `table` that chart can read, for the charts
+     * that cannot read all of them. Absent means it reads the table whole.
+     */
+    this.projected = new Map();
     this.fit = null;
 
     this._buildFilters();
@@ -68,7 +83,7 @@ export class GalleryApp {
       { n: CHART_COUNT, l: 'chart types' },
       { n: CATEGORIES.length, l: 'categories' },
       { n: (tally.canvas || 0) + (tally.native || 0) + (tally.dom || 0), l: 'library-free' },
-      { n: '4', l: 'code formats' },
+      { n: '5', l: 'ways to export' },
     ];
     host.innerHTML = stats.map((s) =>
       `<div class="hero-stat"><div class="n tnum">${s.n}</div><div class="l">${s.l}</div></div>`).join('');
@@ -116,6 +131,7 @@ export class GalleryApp {
       const raw = text.value.trim();
       if (!raw) {
         this.table = null;
+        this.projected = new Map();
         this.fit = null;
         read.innerHTML = '<p class="dlg-note">Paste something on the left and the gallery '
           + 'below narrows to the charts that can draw it.</p>';
@@ -133,9 +149,14 @@ export class GalleryApp {
 
       const ranked = rankCharts(table);
       this.table = table;
-      this.fit = new Set(ranked.fits.map((f) => f.def.id));
+      // A chart that cannot read all forty-five of somebody's columns can very
+      // often read four of them, and which four is worth keeping: it is what
+      // the tile says, what the studio opens on, and what the prompt quotes.
+      this.projected = new Map(ranked.partial.map((e) => [e.def.id, e.table]));
+      this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
       this._renderReading(read, table, ranked);
-      setStatus(`${ranked.fits.length} of ${CHART_COUNT} charts can read this.`, 'ok');
+      const total = this.fit.size;
+      setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
       this.render();
     };
 
@@ -173,31 +194,64 @@ export class GalleryApp {
   _renderReading(host, table, ranked) {
     const chips = table.headers.map((h, i) => {
       const role = ranked.shape.roles[i] || 'numbers';
-      return `<span class="match-col-chip ${role}"><b>${escapeHtml(h)}</b><span>${role}</span></span>`;
+      return `<span class="match-col-chip ${role}"><b>${escapeHtml(oneLine(h))}</b>`
+        + `<span>${role}</span></span>`;
     }).join('');
 
     // The grid below stays grouped by category, so name the categories rather
     // than a "top three" in an order the reader is not about to see.
-    const groups = [...new Set(ranked.fits.map((f) => f.def.category))];
+    const all = [...ranked.fits, ...ranked.partial];
+    const groups = [...new Set(all.map((f) => f.def.category))];
     const named = groups.slice(0, 4).join(', ')
       + (groups.length > 4 ? ` and ${groups.length - 4} more` : '');
+
+    // A wide export matches nothing whole and most things in part, so the
+    // count that leads is the one answering "what can I draw with this?".
+    const verdict = `<p class="match-verdict"><b>${all.length}</b> charts can read this`
+      + (groups.length ? ` — ${escapeHtml(named)}.` : '.') + '</p>';
+
+    let advice;
+    if (!all.length) {
+      advice = 'Nothing here reads a table this shape. Check the delimiter, or whether the '
+        + 'first row is a header.';
+    } else if (!ranked.partial.length) {
+      advice = 'Open any of them below and your table is already in it.';
+    } else if (!ranked.fits.length) {
+      advice = `No chart reads all ${table.headers.length} of your columns — none reads that `
+        + 'many. Each tile below names the ones it takes, and opens on those.';
+    } else {
+      advice = `<b>${ranked.fits.length}</b> read the table whole; the other `
+        + `<b>${ranked.partial.length}</b> read some of its columns, named on each tile.`;
+    }
+
     host.innerHTML =
       `<p class="match-shape">${escapeHtml(ranked.shape.summary)}</p>`
       + `<div class="match-cols">${chips}</div>`
-      + `<p class="match-verdict"><b>${ranked.fits.length}</b> charts can read this`
-      + (groups.length ? ` — ${escapeHtml(named)}.` : '.')
-      + `</p>`
-      + (ranked.fits.length
-        ? '<p class="dlg-note" style="margin-top:.4rem">Open any of them below and your table '
-          + 'is already in it.</p>'
-        : '<p class="dlg-note" style="margin-top:.4rem">Nothing reads a table this shape. '
-          + 'Check the delimiter, or whether the first row is a header.</p>')
+      + verdict
+      + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
+      // Dropping rows in silence would be worse than not dropping them: a
+      // reader who cannot find their first row should be told where it went.
+      + (table.skipped
+        ? `<p class="dlg-note" style="margin-top:.4rem">Skipped <b>${table.skipped}</b> `
+          + `row${table.skipped === 1 ? '' : 's'} of title above the table.</p>`
+        : '')
       // Years make a header row indistinguishable from data, so when the guess
       // came out "no header" the way to correct it is named rather than left
       // for the reader to find.
       + (table.hadHeader ? '' :
         '<p class="dlg-note" style="margin-top:.4rem">No header row was detected, so the '
         + 'columns above were named for you. Tick <b>First row is a header</b> if it is one.</p>');
+  }
+
+  /**
+   * The table this chart gets — the whole thing, or the columns it can read.
+   *
+   * One answer for the three surfaces that hand data to a chart: the tile's
+   * caption, the handoff to the studio, and the AI prompt. Left to themselves
+   * they would be free to disagree about which columns the reader was shown.
+   */
+  _tableFor(def) {
+    return this.projected.get(def.id) || this.table;
   }
 
   _buildFilters() {
@@ -265,6 +319,7 @@ export class GalleryApp {
     btn.textContent = 'Show all charts';
     btn.addEventListener('click', () => {
       this.table = null;
+      this.projected = new Map();
       this.fit = null;
       const text = document.querySelector('#match-text');
       if (text) text.value = '';
@@ -290,7 +345,7 @@ export class GalleryApp {
     // studio takes it on arrival. Set on mousedown as well as click so a
     // middle-click or a new tab carries it too.
     if (this.table) {
-      const carry = () => handOff(this.table);
+      const carry = () => handOff(this._tableFor(def));
       card.addEventListener('mousedown', carry);
       card.addEventListener('click', carry);
     }
@@ -312,13 +367,17 @@ export class GalleryApp {
       + `<span class="card-open">Open<span aria-hidden="true">→</span></span>`
       + `</div>`;
 
-    // When a table is loaded, say what this chart will make of its columns.
+    // When a table is loaded, say what this chart will make of its columns —
+    // the reader's own column names wherever only some of them are read, since
+    // naming the example's instead would promise a table they have not got.
     if (this.table) {
-      const cols = expectedColumnsFor(def);
+      const slice = this.projected.get(def.id);
+      const cols = (slice ? slice.headers : expectedColumnsFor(def)).map(oneLine);
       if (cols.length) {
         const fit = document.createElement('div');
-        fit.className = 'card-fit';
+        fit.className = 'card-fit' + (slice ? ' part' : '');
         fit.textContent = 'reads ' + cols.join(', ');
+        fit.title = cols.join(', ');
         body.appendChild(fit);
       }
     }
@@ -353,7 +412,7 @@ export class GalleryApp {
       // the tile does with it. A table this chart cannot read leaves the
       // example in place rather than half-applying it.
       if (this.table) {
-        const res = applyData(def, spec, this.table);
+        const res = applyData(def, spec, this._tableFor(def));
         if (res.ok && typeof def.onChange === 'function') def.onChange(spec);
       }
       // Whichever kind the reader last asked for in the studio. One choice

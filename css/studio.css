@@ -584,6 +584,9 @@ img, canvas, svg { max-width: 100%; display: block; }
   margin-top: .35rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Named in the reader's own words rather than the example's, because these
+ * are the columns of their table this chart will actually take. */
+.card-fit.part { color: var(--ink-soft); }
 
 @media (max-width: 900px) {
   .matchbar { padding-left: 1.15rem; padding-right: 1.15rem; }
