@@ -247,6 +247,22 @@ Three rules shape which columns:
 The suite holds the whole thing to one promise: every projection it offers is
 applied, and the data has to reach the spec. See "wide table" in `test/run.mjs`.
 
+**And the tiles draw it.** `_specFor(def)` applies the same table the tile
+names, so a matched gallery previews the reader's own rows rather than ninety
+charts of somebody else's numbers — the question they asked was what *their*
+data looks like. Two rules, both checked:
+
+- **A fresh clone per tile.** `applyData` writes into the spec it is given and
+  `onChange` normalises in place, so a shared one would let one chart's idea
+  of the data reach the next.
+- **A chart that cannot take the table keeps its example.** A spec half
+  written before the read failed draws worse than the example it replaced, and
+  a blank tile in a grid of ninety says nothing about which chart went wrong.
+
+`index.html` exposes the instance as `window.openChartsGallery`, the way
+`studio.html` exposes `window.openCharts`, so the suite can ask the page what
+a tile is drawing instead of guessing from its pixels.
+
 The table reaches the studio through `sessionStorage` (`handOff` /
 `takeHandOff`), because a table does not fit in a URL, and is taken exactly
 once — reloading the studio is a fresh start, not a repeat of somebody's paste.
@@ -690,7 +706,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt tabs, copy, download |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
-| `GalleryApp.js` | Gallery grid with lazy live previews, and the per-tile prompt button |
+| `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |
 | `palette.js` | The one colour source for every chart |
 | `theme.js` | Light/dark, persisted; charts re-render on change |

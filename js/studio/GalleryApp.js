@@ -451,6 +451,39 @@ export class GalleryApp {
     });
   }
 
+  /**
+   * The spec a tile draws: the reader's own data where they brought some, the
+   * chart's example otherwise.
+   *
+   * A grid that says "these ninety charts can read your table" and then draws
+   * ninety charts of somebody else's numbers is answering a question nobody
+   * asked. The columns are the ones the tile names, so what is previewed, what
+   * opens in the studio and what the prompt quotes are one table.
+   *
+   * Two things it has to get right:
+   *
+   *   - **A fresh clone per tile.** `applyData` writes into the spec it is
+   *     given and `onChange` normalises it in place, so a shared one would let
+   *     one chart's idea of the data reach the next.
+   *   - **A chart that cannot take the table keeps its example.** A spec that
+   *     was half written before the read failed draws worse than the example
+   *     it replaced, and a blank tile in a grid of ninety says nothing about
+   *     which chart went wrong.
+   */
+  _specFor(def) {
+    const table = this.table && this._tableFor(def);
+    if (!table) return newSpec(def);
+    const spec = newSpec(def);
+    try {
+      const res = applyData(def, spec, table);
+      if (!res.ok) return newSpec(def);
+      if (typeof def.onChange === 'function') def.onChange(spec);
+      return spec;
+    } catch {
+      return newSpec(def);
+    }
+  }
+
   _mount(host, id) {
     const def = CHARTS.find((c) => c.id === id);
     if (!def) return;
@@ -458,7 +491,8 @@ export class GalleryApp {
     requestAnimationFrame(() => {
       if (!host.isConnected) return;
       try {
-        const inst = renderChart(def, host, newSpec(def), { height: PREVIEW_HEIGHT, compact: true });
+        const inst = renderChart(def, host, this._specFor(def),
+          { height: PREVIEW_HEIGHT, compact: true });
         this.live.set(id, inst);
       } catch (err) {
         host.innerHTML = `<div style="font-size:11px;color:var(--ink-faint);text-align:center;padding:1rem">${escapeHtml(err.message)}</div>`;

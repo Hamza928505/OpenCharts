@@ -201,7 +201,9 @@
 <script type="module">
   import { GalleryApp } from './js/studio/GalleryApp.js';
   import { renderCredits } from './js/studio/GalleryApp.js';
-  new GalleryApp();
+  // Exposed the way the studio exposes its own, so the suite can ask the page
+  // what a tile is actually drawing rather than guess from its pixels.
+  window.openChartsGallery = new GalleryApp();
   renderCredits(document.querySelector('#foot-libs'), document.querySelector('#foot-tally'));
 </script>
 

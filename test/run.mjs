@@ -468,6 +468,58 @@ check(wide.missShapes.join(',') === 'places,regions',
 console.log(`  ${green('\u2713')} wide table — ${wide.offered} charts offered, `
   + `${wide.landed} slices land, ${wide.skipped} title rows dropped`);
 
+/* A grid that says ninety charts can read your table, and then draws ninety
+ * charts of somebody else's numbers, is answering a question nobody asked. */
+const previews = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openChartsGallery;
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const def = CHARTS.find((c) => c.id === 'bar-vertical');
+
+  // What the tile draws with nothing brought: the chart's own example.
+  const example = JSON.stringify(app._specFor(def).labels);
+
+  const box = document.querySelector('#match-text');
+  box.value = 'City,Rides,Refunds\nOslo,120,4\nLima,340,11\nCairo,90,7';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(500);
+  const hdr = document.querySelector('#match-header');
+  if (!hdr.checked) { hdr.checked = true; hdr.dispatchEvent(new Event('change', { bubbles: true })); }
+  await sleep(400);
+
+  const mine = app._specFor(def);
+  // A chart that cannot read the table has to keep its example rather than
+  // draw half of one — the maps are the honest misses here.
+  const map = CHARTS.find((c) => c.id === 'choropleth');
+  const mapSpec = app._specFor(map);
+  const mapExample = JSON.stringify(app.projected.get(map.id) || null);
+
+  document.querySelector('#grid').scrollIntoView();
+  await sleep(1800);
+  return {
+    example,
+    labels: JSON.stringify(mine.labels),
+    series: (mine.series || []).map((x) => x.label).join(','),
+    values: JSON.stringify((mine.series || [])[0]?.data),
+    mapKeptExample: !!mapSpec && mapExample === 'null',
+    live: [...document.querySelectorAll('.card-shell')]
+      .filter((sh) => sh.querySelector('canvas, svg, .waffle-grid')).length,
+  };
+});
+
+check(previews.labels === '["Oslo","Lima","Cairo"]',
+  'a matched table is what the gallery tiles actually draw', previews.labels);
+check(previews.labels !== previews.example,
+  'and not the chart\'s own example', `${previews.labels} vs ${previews.example}`);
+check(previews.series === 'Rides,Refunds' && previews.values === '[120,340,90]',
+  'with the reader\'s own series names and numbers',
+  `${previews.series} / ${previews.values}`);
+check(previews.mapKeptExample,
+  'a chart that cannot read the table keeps its example rather than drawing half of one');
+check(previews.live > 0, 'and the tiles still mount', `${previews.live} live`);
+console.log(`  ${green('\u2713')} live previews — tiles draw the reader's table, `
+  + `${previews.live} mounted`);
+
 /* Clicking through carries the table into the studio. */
 await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
