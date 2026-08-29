@@ -601,6 +601,120 @@ export const DATA_SCHEMAS = {
     },
   },
 
+  /* Counting charts — one mark per unit -------------------------------------- */
+  'word-cloud': {
+    shape: 'items', key: 'words', valueField: 'weight',
+    example: 'term,count\nrefund,184\nshipping,152\npassword,141\ninvoice,128',
+    hint: 'Two columns: the word and how many times it occurs.',
+    toText: (s) => writeItems(s, 'words', 'weight'),
+  },
+  'dot-matrix': {
+    shape: 'items', key: 'items', valueField: 'value',
+    example: EX.labelValue,
+    hint: 'Two columns: a category and its count. One dot is drawn per unit.',
+    toText: (s) => writeItems(s, 'items', 'value'),
+  },
+  'tally-chart': {
+    shape: 'items', key: 'items', valueField: 'value',
+    example: EX.labelValue,
+    hint: 'Two columns: a category and its count. Counts are drawn as five-bar gates.',
+    toText: (s) => writeItems(s, 'items', 'value'),
+  },
+  'stem-leaf': {
+    shape: 'observations', key: 'groups',
+    example: EX.observations,
+    hint: 'Either one column per batch, or two columns of batch and value.',
+    toText: (s) => writeObservations(s, 'groups'),
+  },
+
+  /* Dense scatters ----------------------------------------------------------- */
+  'splom': {
+    shape: 'labelSeries',
+    example: 'item,Price,Rating,Reviews\nAster,1636,3.9,288\nBirch,940,4.4,512\nCedar,1280,3.1,96',
+    hint: 'A name, then one numeric column per variable. Every pair gets a panel.',
+    toText: (s) => writeLabelSeries(s),
+  },
+  ...Object.fromEntries(['hexbin', 'density-contour'].map((id) => [id, {
+    shape: 'labelValue', labelsKey: '_xs', valuesKey: '_ys',
+    example: 'x,y\n120,3.4\n210,4.1\n64,2.8',
+    hint: 'Two numeric columns: x and y.',
+    toText: (s) => csv([['x', 'y'], ...(s.points || []).map((p) => [p.x, p.y])]),
+    onData(spec) {
+      spec.points = (spec._xs || []).map((x, i) => ({
+        x: Number(x) || 0, y: (spec._ys || [])[i] || 0,
+      }));
+      delete spec._xs; delete spec._ys;
+    },
+  }])),
+
+  /* Wrapped axes and grids --------------------------------------------------- */
+  'radial-line': {
+    shape: 'labelSeries',
+    example: 'month,2024,2025\nJan,3.6,4.2\nFeb,3.9,4.6\nMar,5.0,5.8',
+    hint: 'A period name, then one column per series. The last row joins back to the first.',
+    toText: (s) => writeLabelSeries(s),
+  },
+  'cycle-plot': {
+    shape: 'labelSeries',
+    example: 'month,2023,2024,2025\nJan,44,46,48\nFeb,41,43,44\nMar,36,37,38',
+    hint: 'A season name, then one column per cycle — the trend inside each season is drawn across those columns.',
+    toText: (s) => writeLabelSeries(s),
+  },
+  'dot-plot': {
+    shape: 'labelSeries',
+    example: 'role,Berlin,London\nSupport,42,46\nDesign,58,64\nData,66,74',
+    hint: 'A category, then one column per series. Each gets a dot on the row.',
+    toText: (s) => writeLabelSeries(s),
+  },
+  'radial-column': {
+    shape: 'labelValue',
+    example: 'direction,speed\nN,18\nNE,11\nE,8\nSE,13\nS,22\nW,36',
+    hint: 'Two columns: a category and its value.',
+    toText: (s) => writeLabelValue(s),
+  },
+  'nested-area': {
+    shape: 'items', key: 'items', valueField: 'value',
+    example: 'source,value\nAll sources,604\nFossil,494\nOil,190\nCoal,161',
+    hint: 'Two columns: a label and its size. Largest is drawn outermost.',
+    toText: (s) => writeItems(s, 'items', 'value'),
+  },
+  'time-table': {
+    shape: 'matrix', rowsKey: 'rows', colsKey: 'cols',
+    example: 'room,09,10,11,12\nStudio A,12,12,,\nStudio B,,,6,6\nLab,4,,,14',
+    hint: 'A row label, then one column per slot. Leave a cell blank for nothing scheduled.',
+    toText: (s) => {
+      const head = ['row', ...(s.cols || [])];
+      const grid = (s.rows || []).map((r, y) => {
+        const line = [r];
+        (s.cols || []).forEach((_, x) => {
+          const cell = (s.cells || []).find((c) => Number(c.x) === x && Number(c.y) === y);
+          line.push(cell ? cell.v : '');
+        });
+        return line;
+      });
+      return csv([head, ...grid]);
+    },
+  },
+  'alluvial': {
+    shape: 'links', key: 'flows', nodesKey: 'nodes',
+    example: 'from,to,value\nFree trial,Activated,4200\nFree trial,Lapsed,2600\nActivated,Paid,2400',
+    hint: 'From, to, and how many moved. Add a column for a longer path — '
+      + 'Trial, Active, Paid, 320 is 320 going Trial → Active → Paid.',
+    toText: (s) => writeLinks(s, 'flows'),
+  },
+  'chord-nonribbon': {
+    shape: 'edges',
+    example: EX.edges,
+    hint: 'Two columns: source and target. Nodes are derived from the edges.',
+    toText: writeEdges,
+  },
+  'dendrogram-radial': {
+    shape: 'tree', key: 'tree',
+    example: EX.tree,
+    hint: 'One level per column, or a Parent > Child path in one cell, with the value last.',
+    toText: (s) => writeTree(s, 'tree'),
+  },
+
   /* Engine pie ---------------------------------------------------------------- */
   'engine-pie': {
     shape: 'items', key: 'series', valueField: 'value',

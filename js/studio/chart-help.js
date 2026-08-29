@@ -16,6 +16,70 @@
  */
 
 export const CHART_HELP = {
+  'radial-line': {
+    read: 'Distance from the centre is the value; going clockwise walks one full cycle. The line closes because the cycle does.',
+    watch: 'The same value covers more area further out, so the outer rings look bigger than they are. Only use it where the wrap-around actually means something.',
+  },
+  'radial-column': {
+    read: 'Each column grows outward from the inner circle. Longer is more.',
+    watch: 'The columns fan out, so an outer bar is drawn wider than an inner one of the same value. Comparing two columns on opposite sides is guesswork.',
+  },
+  'nested-area': {
+    read: 'Area is the value and the figures sit one inside another, so a part is literally contained by its whole.',
+    watch: 'People read the width, not the area, and so overestimate the small ones. Nesting also implies containment — do not nest categories that are not actually subsets.',
+  },
+  'dendrogram-radial': {
+    read: 'The root is at the centre and depth runs outward; every leaf sits on the rim. Follow a branch out to see what is under it.',
+    watch: 'Angle carries no meaning, so two leaves near each other on the rim may be nowhere near each other in the tree. Only the connecting lines say what belongs together.',
+  },
+  'alluvial': {
+    read: 'Block height is how many are in that state; ribbon thickness is how many moved between two states. Follow one ribbon left to right to trace a group.',
+    watch: 'The vertical order of blocks is chosen to reduce crossings, not to rank them. Reading it as an ordering is the usual mistake.',
+  },
+  'chord-nonribbon': {
+    read: 'Each curve is one connection between two nodes on the rim. Node size is how many connections it has.',
+    watch: 'The curves have no thickness, so this says who is connected and nothing about how much. Bundling makes the middle dense on purpose — count at the rim, not the centre.',
+  },
+  'cycle-plot': {
+    read: 'Each little line is one season\u2019s trend across the years; the flat line through it is that season\u2019s mean. Compare the means across seasons, and the slopes within them.',
+    watch: 'It answers two questions at once and they can disagree — a season can be the highest and the only one falling. Read the level and the slope separately.',
+  },
+  'dot-plot': {
+    read: 'Every row shares one horizontal axis; each dot is one series. The spread within a row is the gap between series.',
+    watch: 'The axis rarely starts at zero here, which is fine for comparing positions and wrong for reading ratios off it.',
+  },
+  'time-table': {
+    read: 'Rows are things, columns are slots, a block means something is scheduled. Block size is the value where that is switched on.',
+    watch: 'The empty cells carry as much of the message as the full ones. A grid that looks sparse because the data is missing reads identically to one that is genuinely free.',
+  },
+  'hexbin': {
+    read: 'Each hexagon covers a patch of the plane; its shade is how many points landed inside. Dark means crowded.',
+    watch: 'The hexagon size decides the picture. Make them large enough and every cloud looks like one smooth blob.',
+  },
+  'splom': {
+    read: 'Read one row at a time: the variable named on the left is the vertical axis in every panel across it. Look for panels with a slope.',
+    watch: 'With six variables this is thirty panels, and some will look correlated by chance alone. Treat it as a place to find a question, not an answer.',
+  },
+  'density-contour': {
+    read: 'Bands are lines of equal density, like contours on a map. Tightly packed bands are a steep climb into a peak.',
+    watch: 'The bandwidth is a choice, not a measurement. Too high invents one hill where there were two; too low turns every point into its own island.',
+  },
+  'word-cloud': {
+    read: 'Bigger words occur more often. Read the largest few and stop — that is all this chart reliably says.',
+    watch: 'Area, not length, encodes the count, and people judge area badly. Position and colour mean nothing at all here, and a long word looks larger than a short one of the same count.',
+  },
+  'dot-matrix': {
+    read: 'Count the dots. Each one is the same number of units, so a block twice as long is twice as much.',
+    watch: 'Past a few hundred dots nobody counts them and it becomes a bar chart with extra steps. Raise the units-per-dot instead.',
+  },
+  'tally-chart': {
+    read: 'Marks come in gates of five, the fifth struck across the other four. Count the gates, then the leftovers.',
+    watch: 'This is for counts you can still see — twenty, not two hundred. Beyond that the gates blur and a bar is more honest.',
+  },
+  'stem-leaf': {
+    read: 'The stem is the leading digits, each leaf one observation sharing it. The length of a row is a bar; the digits in it are the actual values.',
+    watch: 'It only works while the leaves fit on one line. A large batch runs off the edge, and the stem size has the same effect a bin width does on a histogram.',
+  },
   /* ── Line & Area ──────────────────────────────────────────────────────── */
   'line-basic': {
     read: 'Follow the line left to right. Height is the value; the slope between two points is the rate of change.',
