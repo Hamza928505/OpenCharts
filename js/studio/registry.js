@@ -11,6 +11,9 @@ import { barCharts } from './charts/bar.js';
 import { partToWholeCharts } from './charts/part-to-whole.js';
 import { radarCharts, scatterCharts } from './charts/radar-scatter.js';
 import { scatterExtraCharts } from './charts/scatter-extra.js';
+import { radialExtraCharts } from './charts/radial-extra.js';
+import { flowExtraCharts } from './charts/flow-extra.js';
+import { comparisonMoreCharts } from './charts/comparison-more.js';
 import { distributionCharts } from './charts/distribution.js';
 import { hierarchyCharts } from './charts/hierarchy.js';
 import { flowCharts } from './charts/flow.js';
@@ -62,10 +65,13 @@ const ALL = [
   ...unitCharts,
   ...hierarchyCharts,
   ...hierarchyExtraCharts,
+  ...radialExtraCharts,
   ...networkCharts,
   ...flowCharts,
+  ...flowExtraCharts,
   ...comparisonCharts,
   ...comparisonExtraCharts,
+  ...comparisonMoreCharts,
   ...financeCharts,
   ...geoCharts,
   ...kpiCharts,

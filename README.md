@@ -4,7 +4,7 @@
 [![Charts](https://img.shields.io/badge/charts-98-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
-A library of **105 chart types**. Every one opens in a studio where the data,
+A library of **114 chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
@@ -348,7 +348,7 @@ Finance, Geo, KPI & Micro, and Custom Engine.
 ```bash
 npm install          # once — pulls Playwright
 npx playwright install chromium
-npm test             # renders all 105 charts and checks them
+npm test             # renders all 114 charts and checks them
 ```
 
 The suite runs in a real headless browser, because two thirds of the library

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-OpenCharts is a chart library of **105 chart types**, all reachable through one
+OpenCharts is a chart library of **114 chart types**, all reachable through one
 studio page where they can be edited live and copied as HTML, CSS and JS.
 
 - `index.html` — the gallery. Renders every chart live (lazily, via
@@ -18,7 +18,7 @@ studio page where they can be edited live and copied as HTML, CSS and JS.
 files from `file://` will not work — the browser blocks module imports. Use
 `python -m http.server 8000` or any static server. There is still no build step.
 
-Charts run on five renderers — Chart.js (39), raw Canvas 2D (42), D3 (18), the
+Charts run on five renderers — Chart.js (39), raw Canvas 2D (48), D3 (21), the
 dependency-free OpenCharts engine (5) and one DOM/CSS chart — across 15
 categories. The studio treats them all uniformly.
 
