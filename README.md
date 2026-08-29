@@ -1,7 +1,7 @@
 # OpenCharts
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-6C63D8.svg)](LICENSE)
-[![Charts](https://img.shields.io/badge/charts-98-16916A.svg)](#the-two-pages)
+[![Charts](https://img.shields.io/badge/charts-114-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
 A library of **114 chart types**. Every one opens in a studio where the data,
@@ -11,10 +11,25 @@ it update as you edit — so the code you copy is the chart you built.
 ## Start from your data
 
 The gallery asks the question the other way round too. **Match my data** at the
-top of the index takes a pasted table or a spreadsheet and narrows the 98
+top of the index takes a pasted table or a spreadsheet and narrows the 114
 charts to the ones that can actually read it — a `from, to, value` table finds
-the Sankey and the chord diagram, a label and three numeric columns finds
-seventy. Open any of them and your table is already in it.
+the Sankey and the chord diagram, a label and three numeric columns finds a
+hundred and six. Every tile then draws *your* rows rather than its own example,
+so you are choosing between charts of your data. Open one and your table is
+already in it.
+
+**A chart that cannot read your whole table is offered the part of it it can.**
+A real export is forty-five columns of an experiment — an id, a date, a
+category and forty numbers — and no chart in the library reads a table that
+shape, because none reads forty-five columns. Asking every chart about the
+whole thing used to return an empty gallery, which is not an answer. Each tile
+now names the columns it takes, in your words, and opens on exactly those. The
+maps are the honest exception: any three columns satisfy their arithmetic and
+would draw a blank world, so they say no rather than pretend.
+
+A spreadsheet written for people rarely starts at its header — there is a title
+in A1, often a row of merged section banners under it. Those are skipped, and
+the reader is told how many rows went.
 
 Nothing is uploaded. The file is read in the browser, and the table travels to
 the studio in session storage rather than over a network.
@@ -292,7 +307,7 @@ spreadsheet cannot expand until the tab dies.
 
 ## Reading a chart by hovering it
 
-Every chart says what it is showing when you point at it — all 98, not just the
+Every chart says what it is showing when you point at it — all 114, not just the
 39 that Chart.js gives tooltips to for free. A canvas chart reports the shapes
 it painted so they can be hit-tested; an SVG chart tags its marks. Radial charts
 test the actual wedge rather than a bounding box, so pointing at a slice gives
@@ -334,8 +349,8 @@ Charts are built on whichever engine suits them; the badge on each tile says whi
 | Engine | Count | Notes |
 |---|---|---|
 | Chart.js | 39 | Plus the sankey, matrix, treemap and boxplot plugins |
-| Canvas 2D | 36 | Hand-drawn, no charting library at all |
-| D3 | 17 | SVG output, including all the maps and the globe |
+| Canvas 2D | 48 | Hand-drawn, no charting library at all |
+| D3 | 21 | SVG output, including all the maps and the globe |
 | OpenCharts | 5 | The dependency-free engine in `js/core` + `js/charts` |
 | DOM / CSS | 1 | The waffle chart is just styled divs |
 

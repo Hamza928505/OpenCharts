@@ -4,6 +4,14 @@ One-off scripts that generate committed files. Nothing here runs at page load
 and the site never imports it — the output is committed so the no-build-step
 promise holds.
 
+The one exception is `build-wiki.mjs`, whose output lives in the separate
+`OpenCharts.wiki` repository. Pass it a clone:
+
+```bash
+git clone https://github.com/Hamza928505/OpenCharts.wiki.git
+node tools/build-wiki.mjs OpenCharts.wiki
+```
+
 | Script | Writes | Rerun when |
 |---|---|---|
 | `place-names.mjs` | nothing (the spelling rules the others import) | — |
@@ -13,6 +21,7 @@ promise holds.
 | `bake-data.mjs` | nothing (a library + a printer) | — |
 | `write-sample-data.mjs` | `js/studio/charts/_data.js` | you want to change the data charts open with |
 | `build-favicon.mjs` | `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` | the brand mark in `css/studio.css` changes |
+| `build-wiki.mjs` | the GitHub wiki's four reference pages, in a clone you pass it | any chart is added, renamed, re-blurbed or re-shaped |
 
 ## The data charts open with
 

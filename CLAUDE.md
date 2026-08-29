@@ -92,6 +92,31 @@ Versions there are pinned to the exact builds in `lib/`. **Updating a file in
 this site never tested.** A chart declares its Chart.js plugins by key
 (`plugins: ['matrix']`), which must match a key in `LIBRARIES`.
 
+### The wiki is generated too
+
+`tools/build-wiki.mjs` writes the four reference pages of the GitHub wiki —
+Home, Chart Catalogue, Data Formats, Reading a Chart — plus the sidebar, from
+the registry, `expectedFormat()` and `chart-help.js`. They restate what the
+code already holds, so hand-maintaining them means they drift: sixteen charts
+landed in one afternoon and every count on every page was wrong, down to the
+per-category tallies.
+
+```bash
+git clone https://github.com/Hamza928505/OpenCharts.wiki.git
+node tools/build-wiki.mjs OpenCharts.wiki
+cd OpenCharts.wiki && git commit -am 'Regenerate' && git push
+```
+
+Two things it deliberately does not do. **`FAQ.md` is not generated** — it is
+prose about what goes wrong and nothing in it comes from the registry. And the
+one-sentence description of each data shape lives in `SHAPE_BLURB` in the tool
+rather than being taken from `SHAPE_GUIDE` in `prompt.js`: that one is written
+to instruct an assistant mid-task and reads oddly as a reference entry. Every
+count, title, blurb, engine, column list and help line is derived.
+
+The tool refuses to write if any chart resolves to no `read`/`watch` pair,
+which is the same rule the suite enforces for the studio.
+
 ### Geo charts
 
 The six charts in the `Geo` category fetch `world-atlas` boundaries at runtime
@@ -464,8 +489,9 @@ out — and all of it is derived:
 *before* serialisation for the 39 Chart.js charts, so their template carries a
 finished `config` and no spec at all, while the hand-drawn ones carry the spec
 their `draw`/`mount` reads. A single "edit the spec" instruction would be wrong
-for 40 of the 98, and the suite checks each chart's brief names the identifier
-its own generated code actually uses.
+for 44 of the 114 — the 39 on Chart.js and the 5 on the custom engine, neither
+of which emits a `spec` at all — and the suite checks each chart's brief names
+the identifier its own generated code actually uses.
 
 Three rules it follows:
 
