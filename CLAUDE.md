@@ -212,6 +212,41 @@ whether a chart is a *good* way to show the data.** It decides whether the
 chart can read it, which is a question with an answer; ranking beyond that
 would be an opinion dressed as a result.
 
+**A chart that cannot read the whole table is asked whether it can read part
+of it.** `checkTableShape` answers "does this table match this chart's shape?",
+which is the right question for a file someone exported *for* a chart and the
+wrong one for the file most people have. A real export is 45 columns of an
+experiment — an id, a date, a category, forty numbers — and no chart in the
+library reads a table that shape, because none reads 45 columns. So asking
+every chart about the whole table returned **nothing at all**, from the one
+page whose entire promise is to say what you can draw. A reader holding that
+file is not told "no"; they are told the tool does not work.
+
+So `rankCharts` returns three lists rather than two — `fits`, `partial`,
+`misses` — and a `partial` entry carries the projected `table` and the
+`using` column indices that produced it. The line still holds: a projection is
+offered only where that chart's own `checkTableShape` passes on it, and the
+columns are named on the tile so the reader sees exactly what was picked.
+Three rules shape which columns:
+
+- **`classifyColumns` asks three questions, not two.** `words` and `numbers`
+  are strict, because `checkTableShape` fails a value column on a *single*
+  cell that will not read as a number. `categorical` is the third: a column
+  of measurements with a placeholder in 8% of its cells passes "holds words"
+  and is a number in disguise, and an id distinct in every row passes it too
+  and draws one ribbon per row. `wordShare` and a distinct-value ceiling are
+  what tell them apart.
+- **The node shapes take their width from the data.** For `links`,
+  `dimensions` and `tree` every column but the last is a stage, so the width
+  follows from how many categorical columns exist — not from how wide the
+  table is. `edges` picks categorical columns too but keeps its exact width.
+- **`places` and `regions` are never projected.** Any three columns satisfy
+  their arithmetic and would draw an empty map. A miss that says "this needs
+  place names" beats a fit that renders a blank world.
+
+The suite holds the whole thing to one promise: every projection it offers is
+applied, and the data has to reach the spec. See "wide table" in `test/run.mjs`.
+
 The table reaches the studio through `sessionStorage` (`handOff` /
 `takeHandOff`), because a table does not fit in a URL, and is taken exactly
 once — reloading the studio is a fresh start, not a repeat of somebody's paste.
@@ -219,6 +254,30 @@ once — reloading the studio is a fresh start, not a repeat of somebody's paste
 its example and then jump-cuts.
 
 ### Certainty about the header row
+
+**A spreadsheet written for people does not start at its header.** It starts
+with a title in A1, and often a row of merged section banners under it —
+`DETECTION` over three columns, `STEREO RAW` over four, with gaps between.
+Both are rows in the file and neither is data, so header detection saw prose
+over prose, concluded there was no header, and named the columns `Label,
+Series 1, …`; every column then held those two rows of words, so none read as
+numbers and no chart could take the table. `preambleRows` drops them and
+`parseTable` reports how many as `skipped`, which the matcher says out loud —
+a reader who cannot find their first row should be told where it went. The
+rule is narrow: a preamble row fills materially fewer cells than the widest
+row, and rows are dropped only when what is left underneath reads as a header
+over data, so a ragged first row of real data is kept.
+
+Two smaller things in the same path, both of which turned one real file into
+nonsense before anything downstream could help:
+
+- **`sniffDelimiter` lets a line that does not split sit out the vote** rather
+  than end it. Scoring the candidates from a one-cell title row concluded
+  there was no delimiter in the file and fell through to splitting on
+  whitespace.
+- **`splitRecords` reads the whole text, not a line at a time**, so a quoted
+  cell holding a line break stays one cell. A heading wrapped onto two lines
+  shifted every row under it, and the table gained rows nobody typed.
 
 `parseTable(text, expected)` takes `true` or `false` from a caller that
 **knows**, and only guesses otherwise. This is not a convenience:
@@ -674,10 +733,11 @@ measures layout, and jsdom would pass while rendering nothing.
 Eighteen suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
-the charts that read it, hover readouts, file import, the country and city
-pickers, place-name spelling, geo focus and globe rotation, share links and
-embeds, standalone exports, AI prompts, responsive breakpoints (including the
-editor on a 390px phone), and console cleanliness.
+the charts that read it, reading a wide real-world export with a title above
+it, hover readouts, file import, the country and city pickers, place-name
+spelling, geo focus and globe rotation, share links and embeds, standalone
+exports, AI prompts, responsive breakpoints (including the editor on a 390px
+phone), and console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so

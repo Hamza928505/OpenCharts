@@ -38,22 +38,107 @@ function splitLine(line, delim) {
 /**
  * Guess the delimiter from the first few lines: whichever candidate appears
  * the most consistently per line wins.
+ *
+ * Lines that do not split at all sit out the vote rather than ending it. An
+ * exported spreadsheet opens with a title row — one cell of prose above the
+ * table — and scoring the candidates from that row concluded there was no
+ * delimiter in the file, then fell through to splitting on whitespace, which
+ * shredded every real column before anything downstream saw it.
  */
 function sniffDelimiter(lines) {
   const candidates = ['\t', ',', ';', '|'];
   let best = null;
   let bestScore = 0;
   for (const d of candidates) {
-    const counts = lines.slice(0, 8).map((l) => splitLine(l, d).length);
+    const counts = lines.slice(0, 12).map((l) => splitLine(l, d).length).filter((c) => c > 1);
     if (!counts.length) continue;
     const first = counts[0];
-    if (first < 2) continue;
     const consistent = counts.every((c) => c === first);
     const score = (consistent ? 100 : 0) + first;
     if (score > bestScore) { bestScore = score; best = d; }
   }
+  if (best) return best;
   // Fall back to whitespace for hand-typed input.
-  return best || /\s{2,}|\s/.test(lines[0] || '') ? (best || /\s+/) : ',';
+  return /\s{2,}|\s/.test(lines[0] || '') ? /\s+/ : ',';
+}
+
+/**
+ * Split the whole text into records, honouring a quoted field that spans
+ * newlines.
+ *
+ * Splitting into lines first and parsing each one is wrong for any cell holding
+ * a line break — a wrapped note, an address — and a spreadsheet exports those
+ * quoted, exactly as CSV says to. Every row after such a cell shifts by one and
+ * the table quietly gains rows nobody typed.
+ *
+ * A quote only opens a field at the *start* of one, which is what stops a stray
+ * inch mark (`5" pipe`) swallowing the rest of the file.
+ */
+function splitRecords(text, delim) {
+  const rows = [];
+  let row = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else quoted = false;
+      } else cur += ch;
+    } else if (ch === '"' && cur === '') {
+      quoted = true;
+    } else if (ch === delim) {
+      row.push(cur); cur = '';
+    } else if (ch === '\n') {
+      row.push(cur); rows.push(row); row = []; cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur);
+  rows.push(row);
+  return rows
+    .map((r) => r.map((c) => c.trim()))
+    .filter((r) => r.some((c) => c.length));
+}
+
+/** The most rows of title and banner that can sit above a table. */
+const MAX_PREAMBLE = 6;
+
+/**
+ * How many leading rows to drop before the table proper begins.
+ *
+ * A spreadsheet written for people rarely starts at its header. It starts with
+ * a title in A1, and often a second row of merged section banners — `DETECTION`
+ * over three columns, `STEREO RAW` over four — with gaps between them. Both are
+ * rows in the file and neither is data, so the header detection below saw prose
+ * over prose, concluded there was no header at all, and named the columns
+ * `Label, Series 1, …`. Every column then held those two rows of words, so no
+ * column read as numbers and not one chart in the library could take the table.
+ *
+ * The rule is narrow on purpose. A preamble row is one that fills materially
+ * fewer cells than the widest row does, and rows are dropped only when what is
+ * left underneath reads as a header over data. A ragged first row of genuine
+ * data — a tree whose first path is one level deep — fails that second test and
+ * is kept.
+ */
+function preambleRows(grid) {
+  const filled = (r) => r.reduce((n, c) => n + (String(c) === '' ? 0 : 1), 0);
+  const body = Math.max(...grid.map(filled));
+  // Below four columns "fills fewer cells" says nothing, and two rows leave no
+  // room for a preamble and a header and a line of data.
+  if (body < 4 || grid.length < 3) return 0;
+
+  let i = 0;
+  while (i < grid.length - 2 && i < MAX_PREAMBLE && filled(grid[i]) < body * 0.8) i++;
+  if (!i) return 0;
+
+  const head = grid[i];
+  const under = grid[i + 1];
+  const headIsWords = head.every((c) => c === '' || !looksNumeric(c));
+  const underHasNumber = under.some((c) => c !== '' && looksNumeric(c));
+  return headIsWords && underHasNumber ? i : 0;
 }
 
 /**
@@ -107,23 +192,33 @@ const num = (v, fallback = 0) => {
  *   Otherwise the column names this chart reads, from
  *   `expectedFormat(def).columns`, which are consulted for tables holding no
  *   numbers at all, where the shape of the data cannot say which row is which.
- * @returns {{ headers: string[], rows: string[][], hadHeader: boolean }}
+ * @returns {{ headers: string[], rows: string[][], hadHeader: boolean, skipped: number }}
+ *   `skipped` is how many title or banner rows were dropped from above the
+ *   table, so a caller can say so rather than leave the reader wondering where
+ *   the first rows of their file went.
  */
 export function parseTable(text, expected) {
-  const lines = String(text || '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length);
+  const body = String(text || '').replace(/\r\n?/g, '\n');
+  const lines = body.split('\n').map((l) => l.trim()).filter((l) => l.length);
 
-  if (!lines.length) return { headers: [], rows: [], hadHeader: false };
+  if (!lines.length) return { headers: [], rows: [], hadHeader: false, skipped: 0 };
 
+  // The delimiter is sniffed from lines, but the records are read from the
+  // whole text, so a quoted cell holding a line break stays one cell.
   const delim = sniffDelimiter(lines);
-  const grid = lines.map((l) => (delim instanceof RegExp ? l.split(delim) : splitLine(l, delim)))
-    .map((cells) => cells.map((c) => c.trim()));
+  const grid = delim instanceof RegExp
+    ? lines.map((l) => l.split(delim).map((c) => c.trim()))
+    : splitRecords(body, delim);
 
   const width = Math.max(...grid.map((r) => r.length));
   grid.forEach((r) => { while (r.length < width) r.push(''); });
+
+  // A title and a row of merged section banners are rows in the file and
+  // neither is data. Drop them before anything reasons about which row is the
+  // header — a caller passing `false` has told us there is no header to find,
+  // so it is telling us about the rows it already holds and nothing is dropped.
+  const skipped = expected === false ? 0 : preambleRows(grid);
+  if (skipped) grid.splice(0, skipped);
 
   // Header detection: the top row is all words, and the row under it has a
   // number somewhere.
@@ -144,6 +239,7 @@ export function parseTable(text, expected) {
       headers: grid[0].map((_, i) => (i === 0 ? 'Label' : `Series ${i}`)),
       rows: grid,
       hadHeader: false,
+      skipped,
     };
   }
   let hadHeader = expected === true && grid.length > 1;
@@ -166,7 +262,7 @@ export function parseTable(text, expected) {
     ? grid[0].map((h, i) => h || `Column ${i + 1}`)
     : grid[0].map((_, i) => (i === 0 ? 'Label' : `Series ${i}`));
 
-  return { headers, rows: hadHeader ? grid.slice(1) : grid, hadHeader };
+  return { headers, rows: hadHeader ? grid.slice(1) : grid, hadHeader, skipped };
 }
 
 /** Render a { headers, rows } table back to CSV, for the editor's initial value. */
