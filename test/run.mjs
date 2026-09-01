@@ -751,8 +751,10 @@ const dialog = await page.evaluate(async () => {
   };
 });
 check(dialog.startsOnGrid, 'the editor opens on the table, not the textarea');
-check(dialog.tabs.join('|') === 'Table|Paste text|Open a file',
-  'a non-geo chart offers three ways in', dialog.tabs.join('|'));
+// Four ways in, plus Shape — which is not a way in at all: it works on what
+// the other four brought, which is why it sits last.
+check(dialog.tabs.join('|') === 'Table|Paste text|Open a file|From a link|Shape',
+  'a non-geo chart offers four ways in and one way to reshape', dialog.tabs.join('|'));
 check(dialog.gridHeight > 250, 'the grid is genuinely large', `${dialog.gridHeight}px`);
 check(dialog.headAligned, 'the grid header sits over its own columns');
 check(dialog.gridFillsWidth, 'the grid uses the width it is given');
@@ -3324,6 +3326,147 @@ check(liveA11y.rows === 4 && /Q1,520,440/.test(liveA11y.first),
   'the studio shows the same numbers it would export', `${liveA11y.rows} rows, ${liveA11y.first}`);
 check(liveA11y.overflow <= 1, 'and the table does not widen the page', `${liveA11y.overflow}px`);
 console.log(`  ${green('✓')} accessible output — 114 described and tabulated, ${a11yAll.tableShare}% of the export`);
+
+/* Suite 23 — fetching a table from a link, and refusing what is not one. */
+
+/* Synthetic responses rather than committed fixtures, the same reasoning that
+ * keeps suite 10 building its .xlsx in the browser: a fixture on disk is a
+ * second thing to keep true. */
+await page.route('**/oc-test-csv', (route) => route.fulfill({
+  status: 200,
+  contentType: 'text/csv',
+  body: 'region,2023,2024\nNorth,520,680\nSouth,410,505\nEast,377,441',
+}));
+await page.route('**/oc-test-page', (route) => route.fulfill({
+  status: 200,
+  contentType: 'text/html',
+  body: '<!DOCTYPE html><html><body><h1>Sign in</h1></body></html>',
+}));
+await page.route('**/oc-test-missing', (route) => route.fulfill({ status: 404, body: 'nope' }));
+await page.route('**/oc-test-binary', (route) => route.fulfill({
+  status: 200,
+  contentType: 'application/octet-stream',
+  // A NUL in the first bytes is what tells the sniffer this is not text.
+  body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02, 0x03]),
+}));
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+const link = await page.evaluate(async (origin) => {
+  const { readDataUrl } = await import('/js/studio/fileimport.js');
+  const take = async (u) => {
+    const r = await readDataUrl(u);
+    return r.ok ? { ok: true, text: r.text } : { ok: false, message: r.message };
+  };
+  return {
+    csv: await take(`${origin}/oc-test-csv`),
+    page: await take(`${origin}/oc-test-page`),
+    missing: await take(`${origin}/oc-test-missing`),
+    binary: await take(`${origin}/oc-test-binary`),
+    // Schemes that are not somebody's spreadsheet.
+    js: await take('javascript:alert(1)'),
+    file: await take('file:///etc/passwd'),
+    data: await take('data:text/csv,a,b%0A1,2'),
+    empty: await take('   '),
+    junk: await take('not a url at all'),
+  };
+}, base);
+
+check(link.csv.ok, 'a published CSV is read', link.csv.ok ? 'ok' : link.csv.message);
+check(link.csv.ok && link.csv.text.includes('North'),
+  'and its rows arrive intact', (link.csv.text || '').slice(0, 40));
+
+check(!link.page.ok && /web page/i.test(link.page.message),
+  'a web page is refused as a web page', link.page.message);
+check(!link.page.ok && /publish to web/i.test(link.page.message),
+  'and the message says what to do instead');
+check(!link.missing.ok && /404/.test(link.missing.message),
+  'a 404 is reported with its status', link.missing.message);
+check(!link.binary.ok, 'binary content is refused', link.binary.message);
+
+check(!link.js.ok && /https/i.test(link.js.message), 'javascript: links are refused', link.js.message);
+check(!link.file.ok, 'file: links are refused', link.file.message);
+check(!link.data.ok, 'data: links are refused', link.data.message);
+check(!link.empty.ok, 'an empty address asks for one', link.empty.message);
+check(!link.junk.ok && /web address/i.test(link.junk.message),
+  'and nonsense is named as nonsense', link.junk.message);
+
+/* Cookies are never sent. A URL is a request for a public file, not a way to
+ * reach a page the reader happens to be signed into. */
+let sawCookie = null;
+await page.route('**/oc-test-cookie', (route) => {
+  sawCookie = route.request().headers().cookie || '';
+  route.fulfill({ status: 200, contentType: 'text/csv', body: 'a,b\n1,2' });
+});
+await page.context().addCookies([{
+  name: 'oc_session', value: 'secret', url: base,
+}]);
+await page.evaluate(async (origin) => {
+  const { readDataUrl } = await import('/js/studio/fileimport.js');
+  await readDataUrl(`${origin}/oc-test-cookie`);
+}, base);
+check(!sawCookie, 'the fetch carries no cookies', `cookie header: ${JSON.stringify(sawCookie)}`);
+await page.context().clearCookies();
+
+/* And the editor offers it.
+ *
+ * The fetch itself is asserted above, against `readDataUrl` directly, rather
+ * than driven through this panel: a routed stub answers reliably from a fresh
+ * page and stops answering once two dozen suites have navigated this one, and
+ * a test that is sometimes right is worse than one that is narrower. What is
+ * checked here is the wiring — the tab, the field, and the button — which is
+ * the part the module test cannot see.
+ */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2300);
+const linkTab = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+
+  const tabs = [...document.querySelectorAll('.dlg-tab')].map((t) => t.textContent.trim());
+  const tab = [...document.querySelectorAll('.dlg-tab')].find((t) => /From a link/.test(t.textContent));
+  if (!tab) return { tabs, opened: false };
+  tab.click();
+  await sleep(300);
+
+  const input = document.querySelector('.link-input');
+  const fetchBtn = [...document.querySelectorAll('.dlg .btn')]
+    .find((b) => b.textContent.trim() === 'Fetch');
+  const panel = input ? input.closest('.pick') : null;
+
+  return {
+    tabs,
+    opened: true,
+    hasInput: !!input,
+    inputType: input ? input.type : '',
+    hasButton: !!fetchBtn,
+    // The one promise this panel must not make: it does fetch, and it says so.
+    saysItFetches: !!panel && /fetch/i.test(panel.textContent),
+    // And the file tab's promise has to survive beside it.
+    fileTabStillPromises: (() => {
+      const f = [...document.querySelectorAll('.dlg-tab')].find((t) => /Open a file/.test(t.textContent));
+      if (!f) return false;
+      f.click();
+      const p = document.querySelector('.dlg-panels');
+      return /never sent anywhere/i.test(p.textContent);
+    })(),
+  };
+});
+check(linkTab.opened, 'the editor offers a link tab', linkTab.tabs.join('|'));
+check(linkTab.hasInput && linkTab.inputType === 'url', 'with an address field',
+  `type=${linkTab.inputType}`);
+check(linkTab.hasButton, 'and a button that does the fetching');
+check(linkTab.saysItFetches, 'the panel says out loud that it makes a request');
+check(linkTab.fileTabStillPromises,
+  'and the file tab still promises nothing is sent anywhere');
+
+await page.unroute('**/oc-test-csv');
+await page.unroute('**/oc-test-page');
+await page.unroute('**/oc-test-missing');
+await page.unroute('**/oc-test-binary');
+await page.unroute('**/oc-test-cookie');
+console.log(`  ${green('✓')} links — CSV read, pages and schemes refused, no cookies sent`);
 
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

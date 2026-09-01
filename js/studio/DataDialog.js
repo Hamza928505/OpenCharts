@@ -23,7 +23,7 @@ import {
 import { flagIcon } from './flags.js';
 import { applyOrigin } from './motion.js';
 import { ask } from './confirm.js';
-import { readDataFile, ACCEPTED } from './fileimport.js';
+import { readDataFile, readDataUrl, ACCEPTED } from './fileimport.js';
 import { toast } from './toast.js';
 
 const el = (tag, cls, text) => {
@@ -199,6 +199,7 @@ export function openDataDialog(def, spec, onApply, seedText) {
 
   /* Tab 4 — a file straight off disk */
   addTab('file', 'Open a file', buildFileTab());
+  addTab('link', 'From a link', buildLinkTab());
 
   /* ── the paste tab ──────────────────────────────────────────────────── */
 

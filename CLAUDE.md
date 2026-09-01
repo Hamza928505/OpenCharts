@@ -595,7 +595,10 @@ the 1MB a general-purpose library costs, and the no-dependency promise holds.
 **It reads files people were sent by someone else, so the file is hostile until
 proven otherwise.** Every check exists because of a specific failure:
 
-- Nothing is uploaded and no request is made while reading.
+- Nothing is uploaded and no request is made while reading. That still holds
+  for `readDataFile`; the one place the studio fetches a reader's data is
+  `readDataUrl`, which is a separate tab for exactly this reason — see
+  "Reading a table from a link".
 - **The bytes decide the format, not the name.** A ZIP called `sales.csv` is
   refused. Old `.xls` is recognised precisely so the message can say "save it
   as .xlsx" rather than failing obscurely.

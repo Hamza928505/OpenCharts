@@ -339,10 +339,21 @@ export async function readDataFile(file) {
     return err('That file could not be read. It may have been moved or deleted.');
   }
 
-  const bytes = new Uint8Array(buffer);
-  const kind = sniff(bytes);
   const name = (file.name || '').toLowerCase();
   const looksXlsx = name.endsWith('.xlsx') || name.endsWith('.xlsm');
+  return fromBytes(buffer, looksXlsx);
+}
+
+/**
+ * Everything the reader knows about a block of bytes, whoever handed them over.
+ *
+ * Shared by the file picker and the URL reader deliberately: a table fetched
+ * from a stranger's server deserves every check a table dragged off a disk
+ * gets, and two copies of these rules would drift the moment one was fixed.
+ */
+async function fromBytes(buffer, looksXlsx) {
+  const bytes = new Uint8Array(buffer);
+  const kind = sniff(bytes);
 
   if (kind === 'ole') {
     return err('That is an old .xls file, which this reader does not open. '
@@ -384,6 +395,132 @@ export async function readDataFile(file) {
     text,
     kind: looksXlsx ? 'text (despite the .xlsx name)' : 'text',
   };
+}
+
+/* ── reading from a URL ──────────────────────────────────────────────────── */
+
+/** Bytes past this are refused mid-stream rather than after the fact. */
+const MAX_REMOTE = 10 * 1024 * 1024;
+
+/**
+ * Fetch a table from a URL, once.
+ *
+ * **This is the only thing in the studio that makes a network request for the
+ * reader's data, and it happens only when they type a URL and press a button.**
+ * What comes back is parsed into the grid and becomes literal values in the
+ * spec, exactly as a paste would. Nothing is linked: the exported chart holds
+ * numbers, not an address, so a copied chart cannot break later because
+ * somebody else's server moved. A live, re-fetching chart is a different
+ * feature with a different bargain, and this is deliberately not it.
+ *
+ * Four refusals, each for something that actually happens:
+ *
+ * - **Only http and https.** `file:`, `data:` and `javascript:` are not
+ *   sources of somebody's spreadsheet.
+ * - **No credentials.** Cookies are not sent, so a URL cannot be used to pull
+ *   a page the reader happens to be logged into and drop it in a chart.
+ * - **A web page is not a table.** The common mistake is pasting the address
+ *   of a Google Sheet, which answers with HTML. Saying so — and saying what
+ *   to do instead — beats parsing a login page into a bar chart.
+ * - **Size is capped while streaming**, not after, so a server answering with
+ *   an endless body cannot run the tab out of memory before the check.
+ *
+ * @returns {Promise<{ok: true, text: string, kind: string} | {ok: false, message: string}>}
+ */
+export async function readDataUrl(rawUrl) {
+  const input = String(rawUrl || '').trim();
+  if (!input) return err('Paste a link to a CSV or spreadsheet first.');
+
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    return err('That is not a web address. It should start with https://');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return err(`${url.protocol} links are not read. Use an https:// address.`);
+  }
+
+  let res;
+  try {
+    res = await fetch(url.href, {
+      // The reader's cookies are not part of this. A URL is a request for a
+      // public file, not a way to reach a page they happen to be signed into.
+      credentials: 'omit',
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+  } catch {
+    // A cross-origin fetch without CORS headers fails here with nothing
+    // useful attached, and it is by far the most common outcome — so the
+    // message names the likely cause rather than shrugging.
+    return err('That address could not be fetched. Either it is unreachable, or the '
+      + 'server does not allow other sites to read it (CORS). A published CSV link '
+      + 'usually works; a link to a page usually does not.');
+  }
+
+  if (!res.ok) return err(`That address answered ${res.status} ${res.statusText || ''}`.trim() + '.');
+
+  const declared = Number(res.headers.get('content-length') || 0);
+  if (declared > MAX_REMOTE) {
+    return err(`That file is ${(declared / 1048576).toFixed(1)}MB. The limit is 10MB.`);
+  }
+
+  let buffer;
+  try {
+    buffer = await readCapped(res, MAX_REMOTE);
+  } catch (e) {
+    return err(e.message || 'That address could not be read.');
+  }
+  if (!buffer.byteLength) return err('That address returned nothing.');
+
+  const path = url.pathname.toLowerCase();
+  const type = (res.headers.get('content-type') || '').toLowerCase();
+
+  // A page, not a table. Checked before the generic text path so the advice
+  // can be specific instead of "this does not look like a table".
+  const head = new TextDecoder('utf-8').decode(new Uint8Array(buffer).subarray(0, 512)).trim();
+  if (/^<(!doctype html|html|\?xml)/i.test(head) || type.startsWith('text/html')) {
+    return err('That address returned a web page, not data. If it is a Google Sheet, '
+      + 'use File → Share → Publish to web and choose CSV, then paste that link.');
+  }
+
+  const out = await fromBytes(buffer, path.endsWith('.xlsx') || path.endsWith('.xlsm'));
+  if (!out.ok) return out;
+  return { ok: true, text: out.text, kind: out.kind };
+}
+
+/**
+ * Read a response body, giving up the moment it passes a limit.
+ *
+ * `arrayBuffer()` would buffer the whole thing first and only then let anyone
+ * measure it, which is no protection at all against a server that answers
+ * forever. Falls back to it where streams are unavailable, having already
+ * checked the declared length.
+ */
+async function readCapped(res, limit) {
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > limit) throw new Error('That file is larger than the 10MB limit.');
+    return buf;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      reader.cancel();
+      throw new Error('That file is larger than the 10MB limit.');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.byteLength; }
+  return out.buffer;
 }
 
 /** Everything this accepts, for an <input accept="…">. */
