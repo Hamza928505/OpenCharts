@@ -10,6 +10,7 @@
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe } from './cdn.js';
+import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 
 export const ENGINE_LABEL = {
@@ -75,6 +76,12 @@ function heightFor(def, opts) {
  */
 export function renderChart(def, host, spec, opts = {}) {
   host.innerHTML = '';
+  // A canvas is a rectangle of pixels and an SVG of paths is barely better, so
+  // the host carries the name. Set here rather than per renderer: it is the
+  // one line every engine passes through, and it is the same label the
+  // exported markup gets, from the same function.
+  host.setAttribute('role', 'img');
+  host.setAttribute('aria-label', chartLabel(def, spec));
   const engine = engineOf(def);
   const width = Math.max(120, host.clientWidth || host.offsetWidth || 600);
   const height = heightFor(def, opts);
@@ -153,6 +160,7 @@ export function renderChart(def, host, spec, opts = {}) {
       const { data, config } = def.native.build(spec, ctxInfo);
       const chart = new def.native.Class(canvas, { data, ...config });
       if (!opts.compact && chart.enableTooltip) chart.enableTooltip();
+      annotate();
       return { engine, chart, canvas };
     } catch (err) {
       return failure(host, err.message);
@@ -165,6 +173,7 @@ export function renderChart(def, host, spec, opts = {}) {
     try {
       def.dom.mount(host, spec, ctxInfo);
       if (!opts.compact) attachTips(host);
+      annotate();
     } catch (err) {
       failure(host, err.message);
     }
@@ -257,6 +266,9 @@ export function renderLegend(container, items, inst) {
 /* ── Code generation ─────────────────────────────────────────────────────── */
 
 const BASE_CSS = `.chart-card {
+  /* The card is a figure now, and a figure carries a browser default
+     margin of 1em 40px that the card never wanted. */
+  margin: 0;
   background: #ffffff;
   border: 1px solid #e3e0d7;
   border-radius: 16px;
@@ -398,7 +410,15 @@ function helperSource(block) {
   return helpers.map((fn) => toFunctionSource(fn)).join('\n\n') + '\n\n';
 }
 
-/** The HTML fragment a chart needs. */
+/**
+ * The HTML fragment a chart needs.
+ *
+ * Wrapped in a `<figure>` carrying a description and the data as a table,
+ * because a canvas is a blank box to a screen reader and this generator is
+ * what puts charts on other people's sites. Both are derived — see
+ * `a11y.js` — so a chart cannot ship an accessible layer that disagrees with
+ * what it draws.
+ */
 function buildHTML(def, spec) {
   const engine = engineOf(def);
   const legend = def.legend ? def.legend(spec) : null;
@@ -406,12 +426,18 @@ function buildHTML(def, spec) {
 
   if (def.html) return def.html(spec, { hasLegend });
 
+  // The mark itself carries the short label, so a reader landing on the
+  // graphic hears what it is; the long description hangs off the figure.
+  const label = escapeText(chartLabel(def, spec));
   const inner = (engine === 'd3' || engine === 'dom')
-    ? `  <div id="chart"></div>`
-    : `  <div class="chart-wrap">\n    <canvas id="chart"></canvas>\n  </div>`;
+    ? `  <div id="chart" role="img" aria-label="${label}"></div>`
+    : `  <div class="chart-wrap">\n    <canvas id="chart" role="img" aria-label="${label}"></canvas>\n  </div>`;
+
+  const table = tableMarkup(def, spec);
 
   return [
-    `<div class="chart-card">`,
+    `<figure class="chart-card" aria-describedby="chart-desc">`,
+    `  <p id="chart-desc" class="visually-hidden">${escapeText(chartSummary(def, spec))}</p>`,
     inner,
     hasLegend ? `  <div class="legend" id="legend"></div>` : null,
     `</div>`,

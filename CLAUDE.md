@@ -612,6 +612,87 @@ proven otherwise.** Every check exists because of a specific failure:
 Suite 10 builds a real .xlsx in the browser rather than committing a fixture,
 then feeds the reader six hostile shapes and requires each to be refused.
 
+### Accessible output
+
+Every chart here draws to a canvas or an SVG, and both are opaque to a screen
+reader — a `<canvas>` is a rectangle of pixels with nothing inside it to read.
+Until this landed the studio exported charts that were, to a blind reader, a
+blank box, and it exported them *into other people's sites*, which makes it a
+defect in the product's own output rather than a missing nicety.
+
+`a11y.js` gives every chart two things, and **nothing in either is written per
+chart**:
+
+- **A description.** Assembled from `title`, `blurb`, the shape of the data and
+  the `read` line in `chart-help.js`. That last one earns its place because it
+  is the only part of the help text that describes the *encoding*, which is
+  exactly what a reader who cannot see the encoding is missing.
+- **The data as a table**, from `def.toText(spec)` — the writer the suite
+  already holds to a round trip. A chart that gains a good `toText` gains a
+  good table for free, and one with a broken `toText` shows up here before
+  anywhere else, the same bargain the AI prompt makes.
+
+Both are emitted by `buildHTML` in `engines.js`, so the preview and the export
+cannot disagree, and `renderChart` puts the same label on the live host.
+
+Four decisions worth keeping:
+
+- **Per-point keyboard navigation is not attempted.** It is the other half of
+  what Highcharts does, and a canvas has no per-point DOM to focus; building a
+  parallel one for 114 charts would be a second renderer to keep in step. A
+  table is the honest answer for a library this shape, and it is the fallback
+  Highcharts itself offers.
+- **The table is not truncated.** The prompt cuts its table because the full
+  data sits in the template beside it. Here the table *is* the data, and
+  trimming it would hide rows from precisely the readers with no other way to
+  reach them.
+- **Hidden by clipping, never by `display: none`.** Both `display: none` and
+  `visibility: hidden` take text out of the accessibility tree along with the
+  layout, which would delete the description this whole feature is about.
+- **The table scrolls in its own box.** It is pasted into somebody else's page,
+  and a forty-column table that widens *their* layout is their bug and our
+  fault.
+
+It costs **17.6% of the standalone export** on average, 2.3KB. The AI prompt
+grew with it — the full form went from roughly 13,900 to 17,900 characters —
+because the prompt quotes the real export. That is the right trade: an
+assistant handed this template reproduces an accessible chart.
+
+### Reading a table from a link
+
+`readDataUrl` in `fileimport.js` fetches a published CSV or spreadsheet once,
+into the grid, where it becomes literal values exactly as a paste would. **The
+chart never keeps the address**, so an exported chart cannot break later
+because somebody else's server moved. A live, re-fetching chart is a different
+feature with a different bargain and is deliberately not this.
+
+**It lives in its own tab.** "Open a file" promises that nothing is uploaded
+and no request is made, and it keeps that promise; this one makes exactly one
+request, and only when a reader types an address and presses a button. Putting
+them in one panel would have made the first promise quietly untrue — the suite
+checks that the file tab still says it.
+
+It shares every byte-level rule with the file reader through `fromBytes`,
+because a table fetched from a stranger's server deserves each check a table
+dragged off a disk gets. On top of those:
+
+- **Only `http` and `https`.** `file:`, `data:` and `javascript:` are not
+  sources of somebody's spreadsheet.
+- **No credentials.** Cookies are never sent, so a URL cannot be used to pull a
+  page the reader happens to be signed into and drop it in a chart. The suite
+  sets a cookie and asserts the request went without it.
+- **A web page is refused as a web page.** The common mistake is pasting a
+  Google Sheet's address, which answers with HTML; the message says to publish
+  it as CSV instead. Parsing a sign-in page into a bar chart is worse than
+  refusing it.
+- **Size is capped while streaming.** `arrayBuffer()` buffers everything before
+  anyone can measure it, which is no protection against a server that answers
+  forever, so the body is read through a reader that gives up at 10MB.
+
+A cross-origin fetch with no CORS headers fails with nothing useful attached
+and is by far the most common outcome, so the error names that cause rather
+than shrugging.
+
 ### Help content
 
 `chart-help.js` holds a `read` and a `watch` line per chart, with a

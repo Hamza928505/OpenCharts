@@ -20,6 +20,7 @@ import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 import { takeHandOff } from './DataMatch.js';
 import { applyData } from './dataio.js';
 import { initMotion, markChanged } from './motion.js';
+import { tableMarkup } from './a11y.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -93,6 +94,7 @@ export class StudioApp {
     this.stageTitle = $('#stage-title');
     this.idxEl      = $('#chart-idx');
     this.searchEl   = $('#rail-search');
+    this.dataEl     = $('#chart-data');
   }
 
   _idFromUrl() {
@@ -516,6 +518,7 @@ export class StudioApp {
     code.prompt = buildPrompt(this.def, this.spec, code, 'full');
     code.promptShort = buildPrompt(this.def, this.spec, code, 'data');
     this.codePanel.setCode(code, this.def.id);
+    if (this.dataEl) this.dataEl.innerHTML = tableMarkup(this.def, this.spec);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
     if (this.helpEl) renderHelp(this.helpEl, this.def, this.spec, () => this.editData());
   }

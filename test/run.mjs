@@ -3194,6 +3194,137 @@ check(quiet.placed, 'but a dialog is still placed where it was opened from');
 await page.emulateMedia({ reducedMotion: 'no-preference' });
 console.log(`  ${green('✓')} motion — sheen tracks, ripple from the press point, quiet when asked`);
 
+/* Suite 22 — a chart somebody can use without seeing it. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+/* Every chart, not most of them: the whole point is that a reader does not
+ * have to find out which of the 114 happens to be readable. */
+const a11yAll = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const a11y = await import('/js/studio/a11y.js');
+
+  const noDesc = [];
+  const noTable = [];
+  const noLabel = [];
+  const unscrolled = [];
+  const thinDesc = [];
+  let tableBytes = 0;
+  let standaloneBytes = 0;
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const code = eng.generateCode(def, spec);
+
+    if (!/id="chart-desc"/.test(code.html)) noDesc.push(def.id);
+    if (!/<details class="chart-data">/.test(code.html)) noTable.push(def.id);
+    if (!/role="img" aria-label="[^"]+"/.test(code.html)) noLabel.push(def.id);
+    // A wide table must scroll in its own box or it widens the page it was
+    // pasted into — somebody else's page, which makes it their bug.
+    if (!/class="chart-data-scroll"/.test(code.html)) unscrolled.push(def.id);
+
+    const desc = a11y.chartSummary(def, spec);
+    if (!desc || desc.length < 60 || !desc.includes(def.title)) thinDesc.push(def.id);
+
+    const m = code.standalone.match(/<details class="chart-data">[\s\S]*?<\/details>/);
+    tableBytes += m ? m[0].length : 0;
+    standaloneBytes += code.standalone.length;
+  }
+
+  return {
+    charts: reg.CHARTS.length,
+    noDesc, noTable, noLabel, unscrolled, thinDesc,
+    tableShare: +((tableBytes / standaloneBytes) * 100).toFixed(1),
+  };
+});
+check(!a11yAll.noDesc.length, 'every chart exports a description',
+  `${a11yAll.noDesc.length} without: ${a11yAll.noDesc.slice(0, 4).join(', ')}`);
+check(!a11yAll.noTable.length, 'and its data as a table',
+  `${a11yAll.noTable.length} without: ${a11yAll.noTable.slice(0, 4).join(', ')}`);
+check(!a11yAll.noLabel.length, 'and an accessible name on the graphic itself',
+  a11yAll.noLabel.slice(0, 4).join(', '));
+check(!a11yAll.unscrolled.length, 'the table scrolls in its own box',
+  a11yAll.unscrolled.slice(0, 4).join(', '));
+check(!a11yAll.thinDesc.length, 'every description names its chart and says something',
+  a11yAll.thinDesc.slice(0, 4).join(', '));
+check(a11yAll.tableShare < 30, 'the accessible layer stays a minority of the export',
+  `${a11yAll.tableShare}% of the standalone`);
+
+/* The table has to carry the chart's real numbers, not a plausible shape.
+ * This is the same class of bug the data round-trip catches: markup that is
+ * present, well-formed and about the wrong data. */
+const truthful = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const a11y = await import('/js/studio/a11y.js');
+  const def = reg.getChart('bar-vertical');
+
+  const spec = reg.newSpec(def);
+  const before = a11y.chartTable(def, spec);
+
+  // Perturb the data; the table must follow it.
+  spec.series[0].data = [111, 222, 333, 444];
+  if (typeof def.onChange === 'function') def.onChange(spec);
+  const after = a11y.chartTable(def, spec);
+
+  const flat = (t) => t.rows.map((r) => r.join(',')).join(' | ');
+  return {
+    beforeHas520: flat(before).includes('520'),
+    afterHas111: flat(after).includes('111'),
+    afterDropped520: !flat(after).includes('520'),
+    headers: after.headers.join(','),
+  };
+});
+check(truthful.beforeHas520, 'the table starts from the chart’s own data');
+check(truthful.afterHas111 && truthful.afterDropped520,
+  'and follows it when the data changes', JSON.stringify(truthful));
+check(/label/.test(truthful.headers), 'with the columns named', truthful.headers);
+
+/* Hidden from the eye, not from the reader. `display:none` and
+ * `visibility:hidden` both take text out of the accessibility tree, which
+ * would delete the description this whole suite is about. */
+const hiding = await page.evaluate(async () => {
+  const eng = await import('/js/studio/engines.js');
+  const reg = await import('/js/studio/registry.js');
+  const def = reg.getChart('bar-vertical');
+  const css = eng.generateCode(def, reg.newSpec(def)).css;
+  const block = (css.match(/\.visually-hidden\s*\{[^}]*\}/) || [''])[0];
+  return {
+    present: !!block,
+    usesClip: /clip-path|clip:/.test(block),
+    hidesWrong: /display:\s*none|visibility:\s*hidden/.test(block),
+  };
+});
+check(hiding.present, 'the export ships the hidden-text rule');
+check(hiding.usesClip && !hiding.hidesWrong,
+  'and hides by clipping, so screen readers still reach it', JSON.stringify(hiding));
+
+/* The studio shows the same table it ships, from the same function. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+const liveA11y = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const det = document.querySelector('#chart-data details');
+  if (det) det.open = true;
+  await sleep(250);
+  const host = document.querySelector('#chart-host');
+  const cells = [...document.querySelectorAll('#chart-data tbody tr')]
+    .map((tr) => [...tr.children].map((c) => c.textContent).join(','));
+  return {
+    role: host.getAttribute('role'),
+    label: host.getAttribute('aria-label'),
+    rows: cells.length,
+    first: cells[0] || '',
+    overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+  };
+});
+check(liveA11y.role === 'img', 'the live chart is named as an image', String(liveA11y.role));
+check(/Vertical Bar/.test(liveA11y.label || ''), 'with the chart’s own title', String(liveA11y.label));
+check(liveA11y.rows === 4 && /Q1,520,440/.test(liveA11y.first),
+  'the studio shows the same numbers it would export', `${liveA11y.rows} rows, ${liveA11y.first}`);
+check(liveA11y.overflow <= 1, 'and the table does not widen the page', `${liveA11y.overflow}px`);
+console.log(`  ${green('✓')} accessible output — 114 described and tabulated, ${a11yAll.tableShare}% of the export`);
+
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one
