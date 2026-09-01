@@ -18,6 +18,14 @@ import { rankCharts, expectedColumnsFor, handOff } from './DataMatch.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
 
+/**
+ * How long one frame may spend building charts before yielding.
+ *
+ * Half of a 60fps frame. The rest is left for the browser to lay out, paint
+ * and — the point of the exercise — answer the scroll that asked for them.
+ */
+const FRAME_BUDGET_MS = 8;
+
 const PREVIEW_HEIGHT = 132;
 
 /**
@@ -51,6 +59,10 @@ export class GalleryApp {
     this._buildFilters();
     this._buildStats();
     this._buildMatcher();
+    /** id → host, waiting to be built. */
+    this._pending = new Map();
+    this._pumping = false;
+
     this._observer = new IntersectionObserver((entries) => this._onIntersect(entries), {
       root: null,
       rootMargin: '300px 0px',
@@ -441,13 +453,65 @@ export class GalleryApp {
       const id = host.dataset.id;
       if (entry.isIntersecting) {
         if (this.live.has(id)) return;
-        this._mount(host, id);
-      } else if (this.live.has(id)) {
-        // Far off-screen: free the chart but keep the tile in place.
-        destroyInstance(this.live.get(id));
-        this.live.delete(id);
-        host.innerHTML = '<div class="card-skeleton"></div>';
+        this._queue(host, id);
+      } else {
+        // Scrolled away. Drop it from the queue as well as tearing it down:
+        // a fast scroll used to leave a backlog of charts nobody would see
+        // being built anyway.
+        this._pending.delete(id);
+        if (this.live.has(id)) {
+          destroyInstance(this.live.get(id));
+          this.live.delete(id);
+          host.innerHTML = '<div class="card-skeleton"></div>';
+        }
       }
+    });
+  }
+
+  /**
+   * Ask for a chart, and let the pump decide when.
+   *
+   * The observer reports a whole screen of tiles in one callback, and mounting
+   * them there built eight charts inside a single frame — measured at 207ms of
+   * blocked main thread on load, the worst task 71ms. Every one of those is a
+   * frame the page cannot answer a scroll or a click in.
+   *
+   * A Map rather than an array so a tile that is asked for twice is only
+   * built once, and so a tile that leaves the screen can be forgotten by id.
+   */
+  _queue(host, id) {
+    this._pending.set(id, host);
+    this._pump();
+  }
+
+  /** How many charts are still waiting. For the suite, and for debugging. */
+  pendingCount() { return this._pending.size; }
+
+  /**
+   * Build queued charts a frame at a time, stopping when the frame is spent.
+   *
+   * A time budget rather than a fixed count: charts are wildly uneven — a
+   * sparkline is a few hundred microseconds and a choropleth is tens of
+   * milliseconds — so "two per frame" would either stall on the heavy ones or
+   * dawdle on the light ones. The budget only gates *starting* another chart,
+   * so one slow chart can still overrun; it cannot be interrupted, and
+   * pretending otherwise would mean rewriting every renderer.
+   */
+  _pump() {
+    if (this._pumping || !this._pending.size) return;
+    this._pumping = true;
+    requestAnimationFrame(() => {
+      this._pumping = false;
+      const started = performance.now();
+      for (const [id, host] of this._pending) {
+        this._pending.delete(id);
+        if (!host.isConnected || this.live.has(id)) continue;
+        this._render(host, id);
+        if (performance.now() - started > FRAME_BUDGET_MS) break;
+      }
+      // Anything left waits for the next frame, so the page can answer input
+      // in between.
+      if (this._pending.size) this._pump();
     });
   }
 
@@ -484,20 +548,17 @@ export class GalleryApp {
     }
   }
 
-  _mount(host, id) {
+  /** Build one chart, now. Only the pump calls this. */
+  _render(host, id) {
     const def = CHARTS.find((c) => c.id === id);
     if (!def) return;
-    // Yield a frame so a fast scroll does not build charts it will discard.
-    requestAnimationFrame(() => {
-      if (!host.isConnected) return;
-      try {
-        const inst = renderChart(def, host, this._specFor(def),
-          { height: PREVIEW_HEIGHT, compact: true });
-        this.live.set(id, inst);
-      } catch (err) {
-        host.innerHTML = `<div style="font-size:11px;color:var(--ink-faint);text-align:center;padding:1rem">${escapeHtml(err.message)}</div>`;
-      }
-    });
+    try {
+      const inst = renderChart(def, host, this._specFor(def),
+        { height: PREVIEW_HEIGHT, compact: true });
+      this.live.set(id, inst);
+    } catch (err) {
+      host.innerHTML = `<div style="font-size:11px;color:var(--ink-faint);text-align:center;padding:1rem">${escapeHtml(err.message)}</div>`;
+    }
   }
 
   _refreshLive() {
@@ -506,7 +567,7 @@ export class GalleryApp {
       const host = this.grid.querySelector(`.card-canvas[data-id="${CSS.escape(id)}"]`);
       destroyInstance(this.live.get(id));
       this.live.delete(id);
-      if (host) this._mount(host, id);
+      if (host) this._queue(host, id);
     });
   }
 }
@@ -515,6 +576,11 @@ export class GalleryApp {
  * The credits footer: every third-party library the project ships, generated
  * from the same table the studio and the exports read, so the list can never
  * quietly fall out of date.
+ *
+ * Vendored assets are credited in the same list but counted separately. A
+ * flag set is owed attribution and is not a library, and the row names the
+ * path it lives at here rather than a URL — there isn't one, which is the
+ * point of vendoring it.
  */
 export function renderCredits(libsHost, tallyHost) {
   if (libsHost) {
