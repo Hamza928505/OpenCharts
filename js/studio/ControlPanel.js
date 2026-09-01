@@ -22,6 +22,7 @@ import {
 } from './geodata.js';
 import { flagIcon } from './flags.js';
 import { confusablePairs, describePairs, simulate, CVD_KINDS } from './cvd.js';
+import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
 
@@ -97,7 +98,7 @@ const parseLabels = (text) =>
 
 /* ── colour picker popover ───────────────────────────────────────────────── */
 
-function attachColourPicker(swatch, initial, onPick) {
+function attachColourPicker(swatch, initial, onPick, onClear) {
   // A native <input type="color"> gives the OS picker for free; the swatch
   // strip above it covers the common case in one click.
   const input = document.createElement('input');
@@ -135,6 +136,18 @@ function attachColourPicker(swatch, initial, onPick) {
       'width:20px;height:20px;background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red);';
     custom.addEventListener('click', (ev) => { ev.stopPropagation(); input.click(); });
     pop.appendChild(custom);
+
+    // Somewhere that has a default worth returning to needs a way back to it.
+    // Only offered where the caller has one — a series colour is always a
+    // colour, but an annotation's is "whatever the chart's ink is" until
+    // somebody says otherwise.
+    if (typeof onClear === 'function') {
+      const auto = el('button', 'palette-auto', 'Auto');
+      auto.type = 'button';
+      auto.title = 'Back to the default colour';
+      auto.addEventListener('click', (ev) => { ev.stopPropagation(); onClear(); close(); });
+      pop.appendChild(auto);
+    }
 
     swatch.style.position = 'relative';
     swatch.appendChild(pop);
@@ -430,6 +443,126 @@ function widgetColors(ctrl, spec, notify) {
   wrap.append(strip, warn, sim);
   paint();
   wrap._repaint = paint;
+  return wrap;
+}
+
+/**
+ * Notes on the chart — the one control every chart in the library carries.
+ *
+ * **The panel holds what a note says; the chart holds where it goes.** Two
+ * number fields are a poor way to find the spot a label looks right in, and a
+ * good way to make somebody count pixels — so position is dragged on the plate
+ * and never appears here. The hint below the list is the only thing that says
+ * so, which is why it is not optional.
+ *
+ * Adding is three buttons rather than a type dropdown plus an Add: picking
+ * what to add *is* the action, and one click should do it.
+ */
+function widgetAnnotations(ctrl, spec, notify) {
+  const key = ctrl.key || 'annotations';
+  const wrap = field(ctrl.label || 'Notes on the chart');
+  const list = el('div', 'annot-list');
+  const adder = el('div', 'annot-add');
+
+  /** The live array, created on first use so an unannotated spec stays clean. */
+  const ensure = () => {
+    let items = getPath(spec, key);
+    if (!Array.isArray(items)) { items = []; setPath(spec, key, items); }
+    return items;
+  };
+  const current = () => (Array.isArray(getPath(spec, key)) ? getPath(spec, key) : []);
+
+  /** A structural change repaints the list; a typed character does not. */
+  const changed = (repaint) => { if (repaint) paint(); notify(); };
+
+  function row(a, i) {
+    const kind = ANNOTATION_TYPES.find((t) => t.type === a.type) || ANNOTATION_TYPES[0];
+    const node = el('div', 'annot-row');
+    node.dataset.i = String(i);
+
+    const glyph = el('span', 'annot-kind', kind.glyph);
+    glyph.title = kind.label;
+    node.appendChild(glyph);
+
+    const text = el('input', 'input annot-text');
+    text.type = 'text';
+    text.value = a.text || '';
+    text.placeholder = a.type === 'note' ? 'Say what it marks' : 'Label (optional)';
+    text.addEventListener('input', () => { a.text = text.value; changed(false); });
+    node.appendChild(text);
+
+    // One button whose job depends on the kind. A rule and a band need to turn
+    // ninety degrees; a note needs to be able to point at something.
+    const flip = el('button', 'annot-btn');
+    flip.type = 'button';
+    if (a.type === 'note') {
+      flip.textContent = '↗';
+      flip.classList.toggle('is-on', !!a.arrow);
+      flip.title = a.arrow ? 'Remove the arrow' : 'Point an arrow at something';
+      flip.addEventListener('click', () => {
+        a.arrow = a.arrow ? null : defaultArrow(a);
+        changed(true);
+      });
+    } else {
+      const upright = a.axis === 'x';
+      flip.textContent = upright ? '↕' : '↔';
+      flip.title = upright ? 'Vertical — click to lay it flat' : 'Horizontal — click to stand it up';
+      flip.addEventListener('click', () => {
+        a.axis = upright ? 'y' : 'x';
+        changed(true);
+      });
+    }
+    node.appendChild(flip);
+
+    const dot = el('span', 'palette-dot annot-dot');
+    dot.style.background = a.color || 'transparent';
+    if (!a.color) dot.classList.add('is-auto');
+    dot.title = a.color || 'Default colour';
+    attachColourPicker(dot, a.color || '#6C63D8',
+      (hex) => { a.color = hex; changed(true); },
+      () => { delete a.color; changed(true); });
+    node.appendChild(dot);
+
+    const del = el('button', 'annot-btn annot-del', '✕');
+    del.type = 'button';
+    del.title = 'Remove';
+    del.addEventListener('click', () => {
+      current().splice(i, 1);
+      changed(true);
+    });
+    node.appendChild(del);
+
+    return node;
+  }
+
+  function paint() {
+    list.innerHTML = '';
+    const items = current();
+    if (!items.length) {
+      const blank = el('p', 'annot-empty', 'Nothing marked yet.');
+      list.appendChild(blank);
+    } else {
+      items.forEach((a, i) => list.appendChild(row(a, i)));
+    }
+    hint.hidden = !items.length;
+  }
+
+  const hint = el('p', 'annot-hint', 'Drag it on the chart to place it.');
+
+  ANNOTATION_TYPES.forEach((t) => {
+    const add = el('button', 'btn btn-sm annot-new', `+ ${t.label}`);
+    add.type = 'button';
+    add.title = t.hint;
+    add.addEventListener('click', () => {
+      const items = ensure();
+      items.push(newAnnotation(t.type, items.length));
+      changed(true);
+    });
+    adder.appendChild(add);
+  });
+
+  wrap.append(list, adder, hint);
+  paint();
   return wrap;
 }
 
@@ -886,6 +1019,7 @@ const WIDGETS = {
   color:   widgetColor,
   colors:  widgetColors,
   values:  widgetValues,
+  annotations: widgetAnnotations,
 };
 
 /* ── panel ───────────────────────────────────────────────────────────────── */

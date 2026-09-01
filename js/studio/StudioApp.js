@@ -21,6 +21,7 @@ import { takeHandOff } from './DataMatch.js';
 import { applyData } from './dataio.js';
 import { initMotion, markChanged } from './motion.js';
 import { tableMarkup } from './a11y.js';
+import { attachAnnotationDrag, plateOf } from './annotate.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -499,7 +500,16 @@ export class StudioApp {
   rebuild() {
     if (!this.def) return;
     destroyInstance(this.inst);
+    if (this._stopAnnotDrag) this._stopAnnotDrag();
     this.inst = renderChart(this.def, this.host, this.spec);
+
+    // A note is placed by dragging it, not by typing two numbers, so the
+    // binding is re-made whenever the plate under it is. Torn down first:
+    // four of the five renderers draw into the host itself, which outlives
+    // the rebuild and would otherwise collect a listener per edit.
+    this._stopAnnotDrag = attachAnnotationDrag(
+      plateOf(this.host), this.spec.annotations || [], () => this._onEdit(),
+    );
 
     const items = this.def.legend ? this.def.legend(this.spec) : null;
     renderLegend(this.legendEl, items, this.inst);

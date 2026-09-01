@@ -2466,6 +2466,164 @@ body[data-focus="1"] .stage-data { display: none; }
   from { outline-color: transparent; outline-offset: 6px; }
 }
 
+/* ── Annotations ──────────────────────────────────────────────────────────
+ *
+ * A note, a rule and a shaded band, laid over the plate as DOM rather than
+ * painted into the canvas — see `annotate.js` for why.
+ *
+ * The overlay's own rules are restated here rather than imported from
+ * `ANNOTATION_CSS`, for the same reason `.stage-data .chart-data` restates the
+ * accessible table's: that block is written for somebody else's page, so it
+ * carries literal hex and a `prefers-color-scheme` query. The studio has a
+ * theme *toggle*, which a media query cannot see, so in here the colours have
+ * to be tokens.
+ */
+.oc-annots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--sans);
+}
+
+.oc-annot-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.oc-annot-leads line {
+  stroke: var(--oc-annot-color, var(--ink-soft));
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+}
+
+.oc-annot-line { position: absolute; }
+.oc-annot-line.is-up { left: 0; right: 0; border-top: 1.5px dashed var(--oc-annot-color, var(--ink-soft)); }
+.oc-annot-line.is-across { top: 0; bottom: 0; border-left: 1.5px dashed var(--oc-annot-color, var(--ink-soft)); }
+
+.oc-annot-band { position: absolute; background: var(--oc-annot-color, var(--accent)); opacity: .1; }
+.oc-annot-band.is-up { left: 0; right: 0; }
+.oc-annot-band.is-across { top: 0; bottom: 0; }
+
+.oc-annot-edge { position: absolute; }
+
+.oc-annot-head {
+  position: absolute;
+  width: 7px; height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--oc-annot-color, var(--ink-soft));
+}
+
+.oc-annot-label {
+  position: absolute;
+  max-width: 45%;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--oc-annot-color, var(--ink));
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  white-space: pre-line;
+}
+.oc-annot-label.is-note { transform: translate(-50%, -50%); }
+.oc-annot-label.on-up { right: 2px; transform: translateY(-100%); }
+.oc-annot-label.on-across { top: 2px; transform: translateX(-50%); }
+.oc-annot-label.on-band-across { top: 2px; transform: translateX(-50%); }
+.oc-annot-label.on-band-up { left: 2px; transform: translateY(-50%); }
+/* An unlabelled note still has to be findable, or it cannot be dragged to
+   where its label is going to be needed. */
+.oc-annot-label.is-blank { color: var(--ink-faint); border: 1px dashed var(--rule-firm); }
+
+/* Grabbable only in the studio.
+ *
+ * This is the whole mechanism, and it is deliberately CSS rather than a flag
+ * passed into the overlay: the export never loads this stylesheet, so its
+ * annotations are inert without anything having to know it is an export. The
+ * gallery draws into `.card-canvas`, so its tiles stay inert too. */
+.chart-host .oc-annot { pointer-events: auto; }
+.chart-host .oc-annot-label { cursor: grab; }
+.chart-host .oc-annot-band { cursor: grab; }
+.chart-host .oc-annot-head { cursor: grab; }
+/* Set on the plate, which is `.chart-wrap` on a Chart.js chart and the host
+   itself on the other four — so the class is matched wherever it lands. It is
+   only ever written by the drag, which only ever runs here. */
+.is-annot-dragging .oc-annot { cursor: grabbing; }
+
+/* A rule is a border on a zero-height box, which is a two-pixel target. The
+   pseudo-element widens the grab without moving the line. */
+.chart-host .oc-annot-line::before { content: ''; position: absolute; }
+.chart-host .oc-annot-line.is-up::before { left: 0; right: 0; top: -6px; height: 13px; cursor: ns-resize; }
+.chart-host .oc-annot-line.is-across::before { top: 0; bottom: 0; left: -6px; width: 13px; cursor: ew-resize; }
+
+.chart-host .oc-annot-edge.is-across { top: 0; bottom: 0; width: 13px; margin-left: -6.5px; cursor: ew-resize; }
+.chart-host .oc-annot-edge.is-up { left: 0; right: 0; height: 13px; margin-top: -6.5px; cursor: ns-resize; }
+
+/* ── The Notes control ───────────────────────────────────────────────────── */
+.annot-list { display: flex; flex-direction: column; gap: .35rem; }
+
+.annot-row { display: flex; align-items: center; gap: .28rem; }
+.annot-kind {
+  flex: 0 0 16px;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+/* `.input` is 100% wide by default, which in a flex row is a floor, not a
+   width — the same trap `.rail .search` fell into. */
+.annot-text { flex: 1 1 auto; min-width: 0; padding: .3rem .45rem; font-size: 12px; }
+
+.annot-btn {
+  flex: 0 0 22px;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 1px solid var(--rule-firm); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink-soft);
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+.annot-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
+.annot-btn:active { transform: scale(.92); }
+.annot-btn.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+.annot-del:hover { color: var(--bad); border-color: var(--bad); }
+
+/* Squared off to the same 22px as the two buttons beside it, so the trailing
+   controls read as one row rather than three sizes. */
+.annot-dot {
+  flex: 0 0 22px;
+  width: 22px; height: 22px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--rule-firm);
+}
+/* "Auto" is not a colour, so it must not look like one — and it must not look
+   like a disabled button either, which a plain empty square does. */
+.annot-dot.is-auto {
+  background: repeating-linear-gradient(
+    -45deg, var(--surface-2), var(--surface-2) 3px, var(--rule-firm) 3px, var(--rule-firm) 6px
+  );
+}
+
+.annot-add { display: flex; gap: .3rem; margin-top: .5rem; }
+.annot-new { flex: 1 1 0; min-width: 0; justify-content: center; padding: .3rem .3rem; }
+
+.annot-empty,
+.annot-hint {
+  margin: .45rem 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.annot-empty { margin: 0; }
+
+/* The colour popover's way back to no colour at all. */
+.palette-auto {
+  grid-column: span 8;
+  padding: .3rem;
+  border: 1px solid var(--rule-firm); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink-soft);
+  font-family: var(--sans); font-size: 11px;
+  cursor: pointer;
+}
+.palette-auto:hover { color: var(--ink); border-color: var(--ink-faint); }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 /* Laptop: the controls column stops earning its width. */

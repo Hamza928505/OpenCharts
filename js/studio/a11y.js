@@ -27,6 +27,7 @@
 
 import { helpFor } from './chart-help.js';
 import { parseTable, looksNumeric } from './dataio.js';
+import { describeAnnotations } from './annotate.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -109,6 +110,12 @@ export function chartSummary(def, spec) {
 
   const help = helpFor(def);
   if (help && help.read) parts.push(help.read.trim());
+
+  // Whatever the author wrote on the chart. An annotation is them saying what
+  // the picture is *for*, which makes it the last thing that should be
+  // available only to the people who can see it.
+  const marked = describeAnnotations(spec && spec.annotations);
+  if (marked) parts.push(marked);
 
   parts.push('The underlying data follows as a table.');
   return parts.join(' ');

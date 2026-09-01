@@ -953,6 +953,86 @@ check(!hover.silent.length,
   'every self-drawn chart offers a hover readout', hover.silent.slice(0, 8).join(', '));
 check(!hover.empty.length,
   'no chart offers a blank tooltip', hover.empty.slice(0, 8).join(', '));
+
+/* Declaring the data is only half of it: something has to show it.
+ *
+ * The readout is a child of the chart's host, and `renderChart` empties the
+ * host before every render — which is what every control edit in the studio
+ * does. Guarding the element behind the same "already attached" flag as the
+ * listener meant hover worked on first paint and was dead from the first edit
+ * onward, on all 70 self-drawn charts. The checks above never saw it, because
+ * a mark carrying `data-tip` says nothing about whether a tooltip exists. */
+const hoverLives = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;opacity:0';
+  document.body.appendChild(host);
+
+  // One chart per self-drawn engine; the other two bring their own tooltips.
+  const pick = {};
+  for (const def of reg.CHARTS) {
+    if (def.engine !== 'chartjs' && def.engine !== 'native' && !pick[def.engine]) pick[def.engine] = def.id;
+  }
+
+  const out = {};
+  for (const [engine, id] of Object.entries(pick)) {
+    const def = reg.getChart(id);
+    let inst = null;
+    const live = () => [...host.querySelectorAll('[role="tooltip"]')].filter((n) => n.parentElement === host);
+
+    // Render three times over, the way an edited chart is.
+    const counts = [];
+    for (let k = 0; k < 3; k++) {
+      inst = eng.renderChart(def, host, reg.newSpec(def));
+      for (let i = 0; i < 30 && !host.querySelector('[data-tip], canvas'); i++) await sleep(100);
+      await sleep(220);
+      counts.push(live().length);
+    }
+
+    // And after all that, a hover still has to put a value on screen. Aimed at
+    // a mark the chart itself reported rather than swept blindly.
+    let showed = null;
+    if (engine === 'canvas') {
+      const canvas = host.querySelector('canvas');
+      const box = canvas.getBoundingClientRect();
+      const r = (canvas.__ocRegions || []).find((s) => s.w != null) || (canvas.__ocRegions || [])[0];
+      if (r) {
+        const cx = box.left + (r.w != null ? r.x + r.w / 2 : r.cx);
+        const cy = box.top + (r.h != null ? r.y + r.h / 2 : r.cy);
+        canvas.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy }));
+      }
+    } else {
+      const mark = host.querySelector('[data-tip]');
+      const box = mark.getBoundingClientRect();
+      mark.dispatchEvent(new MouseEvent('mousemove', {
+        bubbles: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2,
+      }));
+    }
+    await sleep(60);
+    const node = live()[0];
+    showed = node && getComputedStyle(node).opacity !== '0' ? node.textContent.trim() : '';
+
+    out[engine] = { id, counts: counts.join(','), showed: showed.slice(0, 40), nodes: live().length };
+    eng.destroyInstance(inst);
+    host.innerHTML = '';
+  }
+
+  host.remove();
+  return out;
+});
+
+const gone = Object.entries(hoverLives).filter(([, v]) => v.counts !== '1,1,1');
+const mute = Object.entries(hoverLives).filter(([, v]) => !v.showed);
+check(!gone.length, 'the hover readout survives a chart being re-rendered',
+  gone.map(([k, v]) => `${k} (${v.id}): ${v.counts}`).join(', '));
+check(!mute.length, 'and still shows a value once it has been',
+  mute.map(([k, v]) => `${k} (${v.id})`).join(', '));
+check(Object.values(hoverLives).every((v) => v.nodes === 1),
+  'exactly one readout per chart, however often it is rebuilt',
+  Object.entries(hoverLives).map(([k, v]) => `${k}:${v.nodes}`).join(' '));
 console.log(`  ${hover.silent.length ? red('✗') : green('✓')} hover — ${hover.silent.length} charts silent of ${(hover.engines.canvas || 0) + (hover.engines.d3 || 0) + (hover.engines.dom || 0)} self-drawn`);
 
 /* Suite 11 — opening a file, and refusing the ones that are not one. */
@@ -2404,6 +2484,9 @@ check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data on
 console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
 
 
+
+
+
 /* Suite 17 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
@@ -3623,6 +3706,299 @@ check(shapeUi.previewRows[0] === shapeUi.gridRows[0],
 check(shapeUi.undoOn && shapeUi.afterUndo === 120,
   'a reshape can be undone back to the whole file', `${shapeUi.afterUndo} rows after undo`);
 console.log(`  ${green('✓')} shape — group, filter, bin, sort and limit, applied as an edit`);
+
+/* Suite 25 — a chart that says what it means.
+ *
+ * Annotations are positioned as a fraction of the plate rather than in data
+ * coordinates, which is what let all 114 charts have them without a single
+ * renderer changing. The price of that reach is that one overlay has to be
+ * right on five engines at once, so this suite asks each of them separately.
+ */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+const annots = await page.evaluate(async () => {
+  const a = await import('/js/studio/annotate.js');
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { chartSummary } = await import('/js/studio/a11y.js');
+
+  const NOTES = [
+    { type: 'note', x: 0.3, y: 0.2, text: 'Peak week', arrow: { x: 0.44, y: 0.4 } },
+    { type: 'line', axis: 'y', at: 0.35, text: 'Target' },
+    { type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3', color: '#CE5229' },
+  ];
+
+  // One chart per rendering engine — the overlay has to land the same way on
+  // all five, and two of them emit no spec for anything to hang off.
+  const perEngine = {};
+  for (const def of reg.CHARTS) if (!perEngine[def.engine]) perEngine[def.engine] = def.id;
+
+  const code = {};
+  for (const [engine, id] of Object.entries(perEngine)) {
+    const def = reg.getChart(id);
+    const plain = eng.generateCode(def, reg.newSpec(def));
+    const spec = reg.newSpec(def);
+    spec.annotations = JSON.parse(JSON.stringify(NOTES));
+    const marked = eng.generateCode(def, spec);
+    // Where the spec literal ends and the annotations begin.
+    const specBlock = marked.js.slice(
+      marked.js.indexOf('const spec = '), marked.js.indexOf('const annotations'),
+    );
+    code[engine] = {
+      id,
+      free: !/drawAnnotations|oc-annots/.test(plain.js + plain.css),
+      declares: /function drawAnnotations/.test(marked.js) && /const annotations = /.test(marked.js),
+      calls: (marked.js.split('\n').find((l) => /^\s*drawAnnotations\(/.test(l)) || '').trim(),
+      specCarries: /annotations/.test(specBlock),
+      styled: /\.oc-annots \{/.test(marked.css),
+    };
+  }
+
+  // A note is somebody's own words landing in somebody else's page, so it has
+  // to arrive as text. Asked of the overlay rather than of its source: the
+  // word `innerHTML` appears in the comment saying not to use it.
+  const box = document.createElement('div');
+  box.style.cssText = 'position:absolute;left:-9999px;width:400px;height:300px';
+  document.body.appendChild(box);
+  a.drawAnnotations(box, [{ type: 'note', x: 0.5, y: 0.5, text: '<img src=x onerror="boom()">' }]);
+  const markup = {
+    asText: box.querySelector('.oc-annot-label').textContent === '<img src=x onerror="boom()">',
+    noElement: !box.querySelector('img'),
+  };
+  // ...and an empty list takes the layer away rather than leaving a husk.
+  a.drawAnnotations(box, []);
+  markup.clears = !box.querySelector('.oc-annots');
+  box.remove();
+
+  // Two of a kind must not land on top of each other, or a second click of
+  // `+ Note` looks like a click that did nothing.
+  const first = a.newAnnotation('note', 0);
+  const second = a.newAnnotation('note', 1);
+
+  return {
+    code,
+    markup,
+    cascades: first.x !== second.x || first.y !== second.y,
+    clamped: a.newAnnotation('note', 0) && (() => {
+      const wild = { type: 'note', x: 4, y: -2, text: '' };
+      // Clamping happens where it is read, so ask the describer.
+      return a.describeAnnotation(wild);
+    })(),
+    // y is measured from the top, but nobody says a line is "65% down".
+    saysUp: a.describeAnnotation({ type: 'line', axis: 'y', at: 0.35, text: 'Target' }),
+    saysAcross: a.describeAnnotation({ type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3' }),
+    saysWhere: a.describeAnnotation({ type: 'note', x: 0.3, y: 0.2, text: 'Peak week' }),
+    unlabelled: a.describeAnnotation({ type: 'band', axis: 'x', from: 0.1, to: 0.2, text: '' }),
+    quiet: a.describeAnnotations([]),
+
+    // Every chart in the library, not a chosen few.
+    allHaveControl: reg.CHARTS.filter((c) => !(c.controls || []).some((x) => x.type === 'annotations'))
+      .map((c) => c.id),
+    controlIsLast: reg.CHARTS.filter((c) => {
+      const list = c.controls || [];
+      return list[list.length - 1].type !== 'annotations';
+    }).map((c) => c.id),
+
+    // The words reach a reader who cannot see any of it.
+    summary: (() => {
+      const def = reg.getChart('bar-vertical');
+      const spec = reg.newSpec(def);
+      spec.annotations = JSON.parse(JSON.stringify(NOTES));
+      return chartSummary(def, spec);
+    })(),
+  };
+});
+
+const engines = Object.entries(annots.code);
+check(engines.every(([, v]) => v.free), 'a chart nobody annotated carries none of it',
+  engines.filter(([, v]) => !v.free).map(([k]) => k).join(', '));
+check(engines.every(([, v]) => v.declares && v.calls), 'every engine emits the overlay and calls it',
+  engines.filter(([, v]) => !(v.declares && v.calls)).map(([k, v]) => `${k}: ${v.calls || 'no call'}`).join(' | '));
+check(engines.every(([, v]) => v.styled), 'and the styles that draw it',
+  engines.filter(([, v]) => !v.styled).map(([k]) => k).join(', '));
+check(engines.every(([, v]) => !v.specCarries),
+  'annotations are emitted beside the spec, never inside it',
+  engines.filter(([, v]) => v.specCarries).map(([k]) => k).join(', '));
+check(annots.markup.asText && annots.markup.noElement,
+  'a note reaches the page as text, never as markup', JSON.stringify(annots.markup));
+check(annots.markup.clears, 'and an emptied list takes the layer with it');
+check(annots.cascades, 'two new notes do not land on the same spot');
+check(!annots.allHaveControl.length, 'every chart in the library can be annotated',
+  annots.allHaveControl.slice(0, 5).join(', '));
+check(!annots.controlIsLast.length, 'and the control sits last, after the chart is built',
+  annots.controlIsLast.slice(0, 5).join(', '));
+check(/65% up/.test(annots.saysUp), 'a rule is described the way up a chart is read', annots.saysUp);
+check(/55% to 75% across/.test(annots.saysAcross), 'and a band by the span it covers', annots.saysAcross);
+check(/top left/.test(annots.saysWhere), 'a note is placed in words, not coordinates', annots.saysWhere);
+check(/shaded band/.test(annots.unlabelled), 'an unlabelled mark is still announced', annots.unlabelled);
+check(annots.quiet === '', 'a chart with no notes says nothing about them');
+check(/Peak week/.test(annots.summary) && /Target/.test(annots.summary) && /Q3/.test(annots.summary),
+  'the accessible description carries every note', annots.summary.slice(-160));
+
+/* The export has to actually draw them, in a real document, on every engine —
+ * and it must not be draggable there, because the editor's stylesheet is the
+ * only thing that makes one grabbable. */
+const drawn = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const NOTES = [
+    { type: 'note', x: 0.3, y: 0.2, text: 'Peak week', arrow: { x: 0.44, y: 0.4 } },
+    { type: 'line', axis: 'y', at: 0.35, text: 'Target' },
+    { type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3', color: '#CE5229' },
+  ];
+  const perEngine = {};
+  for (const def of reg.CHARTS) if (!perEngine[def.engine]) perEngine[def.engine] = def.id;
+  return Object.entries(perEngine).map(([engine, id]) => {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.annotations = JSON.parse(JSON.stringify(NOTES));
+    return { engine, id, html: eng.generateCode(def, spec).standalone };
+  });
+});
+
+for (const { engine, id, html } of drawn) {
+  const route = `/annotated-${engine}.html`;
+  generated.set(route, html);
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(base + route, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(1400);
+  const state = await probe.evaluate(() => {
+    const layer = document.querySelector('.oc-annots');
+    if (!layer) return { layer: false };
+    const label = layer.querySelector('.oc-annot-label');
+    const band = layer.querySelector('.oc-annot-band');
+    return {
+      layer: true,
+      hidden: layer.getAttribute('aria-hidden') === 'true',
+      labels: [...layer.querySelectorAll('.oc-annot-label')].map((n) => n.textContent).join('|'),
+      // A label with no width was appended to something that is not on screen.
+      painted: label.getBoundingClientRect().width > 10,
+      lead: layer.querySelectorAll('.oc-annot-leads line').length,
+      inert: getComputedStyle(label).pointerEvents === 'none',
+      tinted: band.style.getPropertyValue('--oc-annot-color') === '#CE5229',
+    };
+  });
+  await probe.close();
+  check(state.layer && state.painted && state.labels === 'Peak week|Target|Q3' && !errs.length,
+    `an exported ${engine} chart draws its notes`,
+    errs[0] || JSON.stringify(state));
+  check(state.inert, `and they cannot be dragged out of an export (${engine})`);
+  check(state.hidden && state.lead === 1 && state.tinted,
+    `arrow, colour and aria-hidden survive the export (${engine})`, JSON.stringify(state));
+}
+
+/* And in the studio, where the position is found by moving it. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+const editing = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const { plateOf } = await import('/js/studio/annotate.js');
+
+  const add = (re) => [...document.querySelectorAll('.annot-new')].find((b) => re.test(b.textContent));
+  add(/Note/).click();
+  await sleep(300);
+  add(/Band/).click();
+  await sleep(300);
+
+  const placed = JSON.parse(JSON.stringify(app.spec.annotations));
+  const rows = document.querySelectorAll('.annot-row').length;
+
+  // Typing a label reaches the plate without the panel being rebuilt under it.
+  const input = document.querySelector('.annot-row .annot-text');
+  input.focus();
+  input.value = 'Peak week';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(350);
+  const onPlate = [...plateOf(document.getElementById('chart-host'))
+    .querySelectorAll('.oc-annot-label')].map((n) => n.textContent);
+  const keptFocus = document.activeElement === input;
+
+  // Drag the note. Position is the one thing the sidebar does not edit.
+  const plate = plateOf(document.getElementById('chart-host'));
+  const rect = plate.getBoundingClientRect();
+  const note = plate.querySelector('.oc-annot-label.is-note');
+  const noteBox = note.getBoundingClientRect();
+  const before = { x: app.spec.annotations[0].x, y: app.spec.annotations[0].y };
+  const from = { x: noteBox.left + noteBox.width / 2, y: noteBox.top + noteBox.height / 2 };
+
+  note.dispatchEvent(new PointerEvent('pointerdown', {
+    bubbles: true, cancelable: true, clientX: from.x, clientY: from.y, pointerId: 1,
+  }));
+  window.dispatchEvent(new PointerEvent('pointermove', {
+    bubbles: true, clientX: from.x + rect.width * 0.25, clientY: from.y + rect.height * 0.2, pointerId: 1,
+  }));
+  window.dispatchEvent(new PointerEvent('pointerup', {
+    bubbles: true, clientX: from.x + rect.width * 0.25, clientY: from.y + rect.height * 0.2, pointerId: 1,
+  }));
+  await sleep(400);
+  const after = { x: app.spec.annotations[0].x, y: app.spec.annotations[0].y };
+
+  // A drag must give back every listener it took — the rule five leaking maps
+  // taught this codebase — and a rebuild must not stack a second binding.
+  const realAdd = window.addEventListener;
+  const realRemove = window.removeEventListener;
+  let added = 0; let removed = 0;
+  window.addEventListener = function (...a) { if (a[0].startsWith('pointer')) added++; return realAdd.apply(this, a); };
+  window.removeEventListener = function (...a) { if (a[0].startsWith('pointer')) removed++; return realRemove.apply(this, a); };
+  for (let k = 0; k < 3; k++) {
+    app.rebuild();
+    const mark = plateOf(document.getElementById('chart-host')).querySelector('.oc-annot-label.is-note');
+    const box = mark.getBoundingClientRect();
+    mark.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, clientX: box.left + 2, clientY: box.top + 2, pointerId: 1,
+    }));
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, clientX: box.left + 2, clientY: box.top + 2, pointerId: 1,
+    }));
+  }
+  window.addEventListener = realAdd;
+  window.removeEventListener = realRemove;
+
+  // Removing puts the plate back the way it was.
+  // Re-queried each time: removing a row repaints the list, so the buttons
+  // captured before the first click are no longer the ones on screen.
+  const count = app.spec.annotations.length;
+  for (let k = 0; k < count; k++) {
+    const del = document.querySelector('.annot-del');
+    if (del) del.click();
+    await sleep(120);
+  }
+  await sleep(400);
+  const cleared = plateOf(document.getElementById('chart-host')).querySelector('.oc-annots');
+
+  return {
+    rows,
+    kinds: placed.map((a) => a.type).join(','),
+    onPlate,
+    keptFocus,
+    moved: after.x !== before.x && after.y !== before.y,
+    inBounds: after.x >= 0 && after.x <= 1 && after.y >= 0 && after.y <= 1,
+    rounded: String(after.x).replace(/^\d+\.?/, '').length <= 3,
+    added,
+    removed,
+    count,
+    cleared: !cleared,
+    left: app.spec.annotations.length,
+  };
+});
+
+check(editing.rows === 2 && editing.kinds === 'note,band',
+  'the panel adds exactly the kind of note that was asked for', editing.kinds);
+check(editing.onPlate.includes('Peak week'), 'a label typed in the panel reaches the plate',
+  editing.onPlate.join(' | '));
+check(editing.keptFocus, 'and typing it does not throw the cursor out of the field');
+check(editing.moved && editing.inBounds, 'a note is dragged into place on the chart',
+  JSON.stringify(editing));
+check(editing.rounded, 'the position it records is one somebody can read in the spec view');
+check(editing.added > 0 && editing.added === editing.removed,
+  'a drag gives back every listener it took, however often the chart is rebuilt',
+  `${editing.added} added, ${editing.removed} removed`);
+check(editing.cleared && editing.left === 0, 'removing the last note takes the overlay with it');
+console.log(`  ${green('✓')} annotations — note, rule and band on all five engines`);
 
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

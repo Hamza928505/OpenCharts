@@ -478,6 +478,18 @@ Both functions are serialised into exported code, so neither may reference
 anything outside its own body. Regions are searched newest first: later marks
 are drawn on top, so where two overlap the visible one wins.
 
+**The readout is rebuilt, never remembered.** It is a *child* of the chart's
+host, and the host is emptied by `renderChart` before every render and by a D3
+or DOM `mount` on every redraw. The listener is bound to the host, which
+survives all of that. Guarding both behind one "already attached" flag left a
+live handler writing into a node that had been thrown away — so hover worked on
+first paint and was **dead from the first control edit onward, on all 70
+self-drawn charts**, in the studio and in every D3 export (whose `render()`
+empties the host on resize). Both helpers now ask a local `readout()` for the
+node, which recreates it whenever `parentElement !== host`; only the binding is
+flagged. The two builders are twins rather than one helper because each is
+serialised alone.
+
 The suite fails if any self-drawn chart records no regions and carries no
 `data-tip`, which is what stops a new chart shipping silent. That check could
 not see the bug above — a mark carrying `data-tip` says nothing about whether a
@@ -612,6 +624,88 @@ records what each value read before the rebuild and marks only the ones that
 moved. Flashing the whole row on every keystroke would make the signal mean
 nothing — the point is to say *which* number changed. A rebuild with no change
 marks nothing at all, which the suite checks explicitly.
+
+### Annotations
+
+A label on the peak, a line at the target, a shaded stripe over the quarter
+that went wrong. Datawrapper's signature feature, and the thing that separates
+a chart from an explanation — nothing here could say any of it, so every chart
+the studio exported drew the numbers and left the point unmade.
+
+**An annotation is positioned as a fraction of the plate, not in data
+coordinates**, and that one decision is what made it affordable. Anchoring a
+note to "the March value" means every renderer exposing its scales: a new
+contract across 48 canvas charts, 21 D3 mounts and the 39 on Chart.js, each of
+which computes its scales privately *inside the very function that gets
+serialised*. Anchoring it to "42% across, 18% down" asks the renderer for
+nothing, so all 114 charts gained annotations without a single `draw` or
+`mount` being touched. The trade is real and worth saying out loud: move the
+data and the note stays where it was. That is why position is **dragged on the
+chart** rather than typed as two numbers — placing it is a glance, and
+re-placing it after an edit is the same glance again.
+
+**It is DOM over the plate, not ink in the canvas.** Three things follow, and
+each of them is the reason:
+
+- It works identically on all five renderers, including the two — Chart.js and
+  the custom engine — that emit no `spec` for anything to hook into.
+- Percentages reflow by themselves, so a resize costs no redraw. Which is also
+  why the overlay survives `render()` on a canvas chart, where only the canvas
+  is cleared, and has to be repainted *inside* `render()` on a D3 or DOM one,
+  where the mount empties its host. `drawAnnotations` rebuilds rather than
+  guarding on a flag, for exactly that reason.
+- **The label is real text.** Accessible output landed one feature earlier; a
+  note painted into a canvas would be invisible to precisely the readers it had
+  just started serving. So the words reach them through `chartSummary` —
+  `describeAnnotations` writes the sentence — and the overlay itself is
+  `aria-hidden`, or a Chart.js export would announce every note twice while a
+  D3 one announced none (a host carrying `role="img"` is a leaf, and swallows
+  its descendants).
+
+Three kinds, and no more: `note` (a label anywhere, with an optional arrow to
+what it is about), `line` (a rule across the plate) and `band` (a shaded
+stripe). `axis` on the last two names the axis it is pinned to, the way every
+charting library keys a rule to a scale — `'x'` runs across and therefore draws
+*vertically* — and the control says "Vertical" and "Horizontal" so nobody has
+to hold that in mind.
+
+Five rules the implementation follows, all checked:
+
+- **A chart nobody annotated pays nothing.** The overlay function, the
+  annotations literal and `ANNOTATION_CSS` are emitted only when the spec
+  carries some, so the other exports are byte-for-byte what they were. Annotated,
+  it costs 2.3KB of CSS and 5.3KB of JS.
+- **They are emitted beside the spec, never inside it.** `specForCode` strips
+  `annotations` on the way out, because `draw` and `mount` read the spec and
+  neither has ever heard of an annotation — and on the two renderers that emit
+  no spec at all, a `const` of its own is the only way to carry them.
+- **The studio stylesheet is what makes one grabbable**, not a flag passed into
+  the overlay. `.chart-host .oc-annot { pointer-events: auto }` lives in
+  `studio.css`, which an export never loads and the gallery's `.card-canvas`
+  tiles are not matched by — so an exported annotation is inert without
+  anything having to know it is an export.
+- **The drag binds to the plate, not to the layer.** The overlay is rebuilt on
+  every frame of the drag *and* by every D3 redraw, so a listener on it would
+  be thrown away by the first thing that moved. Window listeners live for the
+  length of one drag and are removed by the function that added them — the
+  discipline five leaking maps taught this codebase, and the suite counts them
+  across repeated rebuilds.
+- **A note reaches the page through `textContent`.** It is somebody's own words
+  landing in somebody else's site.
+
+Two smaller things. `plateOf()` answers "which element is the chart's box?" —
+`.chart-wrap` on Chart.js and the custom engine, the host itself on the other
+three — and `renderChart` now gives the live wrap that same class, so the
+preview and the export cannot hold two different ideas of where the plate is.
+And positions round to three decimals, because the Spec view is a thing a
+person reads and `0.4183673469387755` is not.
+
+`transform.js` is the closest cousin here and the contrast is deliberate: a
+transform is an *edit*, applied once and written into the grid as literal
+values, while an annotation is *state on the spec*, re-read on every render.
+The difference is that a transform produces numbers, which the library's one
+hard rule says a renderer must be handed rather than derive; an annotation
+produces no numbers at all.
 
 ### Text colour
 
@@ -1136,7 +1230,8 @@ is `d3.geoOrthographic`. Two rules for it:
 `js/studio/ControlPanel.js` renders widgets from `controls: []`. Each entry has
 a `group` (heading), a `type`, and a dot-path `key` into the spec. Types:
 `series`, `colors`, `values`, `labels`, `toggle`, `seg`, `slider`, `select`,
-`text`, `countries`, `cities`, `color`. Consecutive entries sharing a `group`
+`text`, `countries`, `cities`, `color`, `annotations`. Consecutive entries
+sharing a `group`
 are drawn under one numbered heading.
 
 **Two widgets, one subject.** `countries` and `cities` are siblings: the map is
@@ -1175,6 +1270,9 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `toast.js` | Transient notices |
 | `tooltip.js` | Hover readouts for the canvas, SVG and DOM charts |
 | `motion.js` | Pointer-driven motion — the sheen, the ripple, the dialog's origin |
+| `annotate.js` | Notes, rules and bands laid over the plate, and the drag that places them |
+| `a11y.js` | The chart as text — its description and its data as a table |
+| `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |
@@ -1209,14 +1307,18 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-Eighteen suites cover the registry, every chart (render + non-blank canvas +
+Twenty-six suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
 it, hover readouts, file import, the country and city pickers, place-name
 spelling, geo focus and globe rotation, share links and embeds, standalone
 exports, AI prompts, responsive breakpoints (including the editor on a 390px
-phone), and console cleanliness.
+phone), flags and country metadata, the colour-vision check, the spec view
+and undo, the collapsible rail and focus mode, interaction motion, accessible chart
+output, reading a table from a link, reshaping a table, annotating a chart,
+and console
+cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
@@ -1366,6 +1468,12 @@ The AI Prompt needs no step of its own — it is derived from the schema and the
 help lines, so steps 3 and 4 are what make it right. A `hint` that repeats its
 shape guide, or a `toText` that writes a table the chart cannot read back, both
 show up there before they show up anywhere else.
+
+Annotations need no step either, and for a stronger reason: they are laid over
+the plate rather than drawn by the renderer, so `registry.js` attaches the
+control and a new chart can be annotated before anyone has thought about it.
+The suite asserts that of every chart in the library, which is the check that
+keeps it true.
 
 Respect the serialisation constraints in "One build function, two outputs" —
 they are the only non-obvious rule in this codebase, and breaking them produces
