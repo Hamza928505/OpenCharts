@@ -1360,7 +1360,7 @@ const pickers = await page.evaluate(async () => {
   await pickCombo(countryField, 'Franc');
   await sleep(900);
   const specCountries = (window.openCharts.spec.opts.countries || []).slice();
-  const chipNames = [...countryField.querySelectorAll('.country-chip > span')].map((c) => c.textContent);
+  const chipNames = [...countryField.querySelectorAll('.country-chip-name')].map((c) => c.textContent);
 
   // Both are highlighted on the map, not just the first.
   const paths = [...document.querySelectorAll('#chart-host svg path')];
@@ -1498,6 +1498,30 @@ const names = await page.evaluate(async () => {
     }
   }
 
+  /* A name may be neither English nor the local language: `Ḩātim` is the
+   * gazetteer's scientific transliteration of حاتم and is not a spelling
+   * anybody types. Where a country's own script is not Latin, every Latin
+   * name is a romanisation, so the plainest one is the right one — and the
+   * rule that decides this is the tool's, imported rather than restated. */
+  const { NON_LATIN_SCRIPT, foldRomanisation } = await import('/tools/place-names.mjs');
+  const unfolded = [];
+  for (const iso of ['JO', 'IR', 'IN', 'RU', 'JP', 'CN', 'GR', 'IL', 'EG', 'KP']) {
+    for (const city of await loadCities(iso)) {
+      if (foldRomanisation(city.name) !== city.name) unfolded.push(`${iso}: ${city.name}`);
+    }
+  }
+
+  /* The other half of the same rule, and the reason it is keyed by country
+   * rather than by character: `ā` is a romanisation in `Ḩātim` and a native
+   * letter in Latvian, `ş` is native Turkish, `‘` is the Hawaiian ʻokina.
+   * Folding these would be the same bug pointing the other way. */
+  const nativeMarks = [];
+  for (const [iso, want] of [['LV', 'Alūksne'], ['TR', 'Akkuş'], ['RO', 'Adămuş'], ['US', '‘Ewa Beach']]) {
+    const found = (await loadCities(iso)).some((c) => c.name === want);
+    nativeMarks.push(`${iso} ${want}: ${found ? 'kept' : 'LOST'}`);
+    if (NON_LATIN_SCRIPT.has(iso)) nativeMarks.push(`${iso} wrongly listed as non-Latin`);
+  }
+
   const same = (a, b) => countryKey(a) === countryKey(b);
   return {
     abbreviated,
@@ -1505,6 +1529,8 @@ const names = await page.evaluate(async () => {
     codeless,
     shared,
     foreignCities,
+    unfolded,
+    nativeMarks,
     trinidad: (findCountryEntry(countries, 'Trinidad and Tobago') || {}).cities || 0,
     congo: (findCountryEntry(countries, 'Congo') || {}).iso2,
     drc: (findCountryEntry(countries, 'Democratic Republic of the Congo') || {}).iso2,
@@ -1526,6 +1552,10 @@ check(!names.codeless.length, 'every country carries an ISO code', names.codeles
 check(!names.shared.length, 'no two countries claim one ISO code by accident', names.shared.join(', '));
 check(!names.foreignCities.length, 'no city name is left in another script',
   names.foreignCities.slice(0, 5).join(', '));
+check(!names.unfolded.length, 'no city is left in scientific transliteration',
+  `${names.unfolded.length} left, e.g. ${names.unfolded.slice(0, 4).join(', ')}`);
+check(names.nativeMarks.every((r) => r.endsWith('kept')),
+  'and a native diacritic is never folded away', names.nativeMarks.join(' | '));
 check(names.trinidad > 0, 'Trinidad and Tobago reaches its own city list',
   `${names.trinidad} cities`);
 check(names.congo === 'CG' && names.drc === 'CD',
@@ -2372,9 +2402,6 @@ check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data on
 console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
 
 
-
-
-
 /* Suite 17 — responsive layout produces no horizontal overflow. */
 for (const width of [390, 768, 1280]) {
   await page.setViewportSize({ width, height: 900 });
@@ -2425,8 +2452,177 @@ check(phoneDialog.listUsable, 'and the city list is still tall enough to use');
 await page.setViewportSize({ width: 1280, height: 900 });
 console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px, editor usable on a phone`);
 
-/* Suite 18 — nothing wrote to the console along the way. */
-const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
+/* Suite 18 — flags, country metadata, and the pickers that show them. */
+const flagData = await page.evaluate(async () => {
+  const [flagsRes, metaRes, atlasRes] = await Promise.all([
+    fetch('/data/flags.json').then((r) => r.json()),
+    fetch('/data/country-meta.json').then((r) => r.json()),
+    fetch('/data/countries.json').then((r) => r.json()),
+  ]);
+
+  // A base64 PNG starts with the encoded eight-byte signature. Anything that
+  // does not is an error page that got committed as a flag.
+  const isPng = (b64) => typeof b64 === 'string' && b64.startsWith('iVBORw0KGgo');
+  const bad = Object.entries(flagsRes).filter(([, v]) => !isPng(v)).map(([k]) => k);
+
+  // Every country the picker can list needs a picture, or the set has a hole
+  // exactly where a reader would notice one.
+  const atlasCodes = atlasRes.map(([, iso2]) => iso2).filter(Boolean);
+  const missing = atlasCodes.filter((c) => !flagsRes[c]);
+
+  return {
+    flags: Object.keys(flagsRes).length,
+    bad,
+    missing,
+    meta: Object.keys(metaRes).length,
+    withLocal: Object.values(metaRes).filter((m) => m.local).length,
+    withIso3: Object.values(metaRes).filter((m) => /^[A-Z]{3}$/.test(m.iso3)).length,
+    regions: [...new Set(Object.values(metaRes).map((m) => m.region))].sort(),
+  };
+});
+check(flagData.flags > 190, 'the flag set covers both country lists', `${flagData.flags} flags`);
+check(!flagData.bad.length, 'every flag is a real PNG', flagData.bad.slice(0, 5).join(', '));
+check(!flagData.missing.length, 'no country on the map is left without a flag', flagData.missing.join(', '));
+check(flagData.meta === 194, 'the metadata covers 194 countries', String(flagData.meta));
+check(flagData.withIso3 === flagData.meta, 'every country has an ISO3 code', `${flagData.withIso3}/${flagData.meta}`);
+check(flagData.withLocal > 100, 'most countries carry a local-language name', String(flagData.withLocal));
+check(flagData.regions.length === 5, 'countries are grouped into five regions', flagData.regions.join(', '));
+
+// A fresh page, so the module registry is empty: the "not loaded yet" branch
+// below cannot be reached on a page whose pickers have already pulled the set.
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const flagApi = await page.evaluate(async () => {
+  const flags = await import('/js/studio/flags.js');
+  const geo = await import('/js/studio/geodata.js');
+
+  // An icon asked for before the set has loaded must still fill itself in —
+  // the path every picker takes, since none of them awaits a flag.
+  const early = flags.flagIcon('FR');
+  const beforeLoad = early.style.backgroundImage || '';
+  await flags.loadFlags();
+  const afterLoad = early.style.backgroundImage || '';
+
+  const countries = await geo.loadCountries();
+  const de = countries.find((c) => c.iso2 === 'DE');
+  const items = geo.countryItems(countries);
+  const deItem = items.find((i) => i.value === (de && de.name));
+
+  await geo.loadCountryMeta();
+  return {
+    beforeLoad,
+    fillsIn: afterLoad.includes('data:image/png'),
+    src: (flags.flagSrc('FR') || '').slice(0, 21),
+    unknownIsNull: flags.flagSrc('ZZ') === null && flags.flagSrc('') === null,
+    // The atlas name is what the map answers to and must survive the merge.
+    deName: de && de.name,
+    deLocal: de && de.local,
+    deIso3: de && de.iso3,
+    deRegion: de && de.region,
+    itemIcon: deItem && deItem.icon,
+    itemSearch: deItem && deItem.search,
+    localCity: geo.localCityName('JP', 'Tokyo'),
+    localMiss: geo.localCityName('GB', 'Nowhere-on-Sea'),
+  };
+});
+check(!flagApi.beforeLoad, 'an icon starts empty rather than guessing');
+check(flagApi.fillsIn, 'and paints itself when the set arrives');
+check(flagApi.src === 'data:image/png;base64', 'a flag is a self-contained data URI', flagApi.src);
+check(flagApi.unknownIsNull, 'an unknown code gets no flag rather than a broken one');
+check(flagApi.deName === 'Germany', 'the atlas name survives the metadata merge', String(flagApi.deName));
+check(flagApi.deLocal === 'Deutschland', 'a country carries its local name', String(flagApi.deLocal));
+check(flagApi.deIso3 === 'DEU' && flagApi.deRegion === 'Europe', 'and its ISO3 and region',
+  `${flagApi.deIso3} / ${flagApi.deRegion}`);
+check(flagApi.itemIcon === 'DE', 'a picker item carries the code, not the picture', String(flagApi.itemIcon));
+check(/Deutschland/.test(flagApi.itemSearch || ''), 'and is findable by its local name');
+check(flagApi.localCity === '東京', 'a curated city resolves its local spelling', String(flagApi.localCity));
+check(flagApi.localMiss === '', 'and an unlisted city is left alone rather than guessed');
+
+/* An asset is not a dependency. No chart may claim the flag set, and it must
+ * not inflate the library count the gallery footer prints. */
+const assetRules = await page.evaluate(async () => {
+  const cdn = await import('/js/studio/cdn.js');
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const claimed = CHARTS
+    .filter((d) => cdn.dependenciesFor(d).some((l) => l.kind === 'asset'))
+    .map((d) => d.id);
+  return {
+    assets: cdn.ALL_ASSETS.length,
+    claimed,
+    inLibraries: cdn.ALL_LIBRARIES.some((l) => l.kind === 'asset'),
+    cdnOnly: cdn.cdnOnly(cdn.ALL_ASSETS).length,
+    scripts: cdn.scriptsOnly(cdn.ALL_ASSETS).length,
+    hasLocal: cdn.ALL_ASSETS.every((a) => !!a.local && !a.url),
+  };
+});
+check(assetRules.assets > 0, 'the flag set is disclosed as a vendored asset');
+check(!assetRules.claimed.length, 'no chart declares it as a dependency', assetRules.claimed.join(', '));
+check(!assetRules.inLibraries, 'and it does not inflate the library count');
+check(!assetRules.cdnOnly && !assetRules.scripts, 'a vendored asset is never emitted as a script tag');
+check(assetRules.hasLocal, 'it is credited by path, because it has no URL');
+
+/* And the pickers actually show them. */
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+const flagUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const out = {};
+
+  const chipFlag = document.querySelector('.country-chip .flag');
+  out.chipHasFlag = !!chipFlag
+    && (getComputedStyle(chipFlag).backgroundImage || '').includes('data:image/png');
+  // The lesson `.empty` taught: a class colliding with a site-wide one turned
+  // every chip into a 150px ellipse, and nothing threw. A flag is one small
+  // box or it is a bug, so measure it rather than trust that the rule applied.
+  const box = chipFlag && chipFlag.getBoundingClientRect();
+  out.flagBox = box ? [Math.round(box.width), Math.round(box.height)] : null;
+  out.chipHeight = chipFlag
+    ? Math.round(chipFlag.closest('.country-chip').getBoundingClientRect().height) : 0;
+  // The chip's name must still be readable on its own.
+  const nameEl = document.querySelector('.country-chip .country-chip-name');
+  out.chipName = nameEl ? nameEl.textContent : null;
+
+  const cbx = document.querySelector('.controls .cbx');
+  const input = cbx.querySelector('.cbx-input');
+  input.focus();
+  input.value = 'Deutschland';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(220);
+  const row = cbx.querySelector('.cbx-item');
+  out.localSearchHit = row ? row.querySelector('.cbx-item-label').textContent.trim() : null;
+  const rowFlag = row && row.querySelector('.flag');
+  out.rowHasFlag = !!rowFlag
+    && (getComputedStyle(rowFlag).backgroundImage || '').includes('data:image/png');
+  out.rowHeight = row ? Math.round(row.getBoundingClientRect().height) : 0;
+  out.subShown = row ? (row.querySelector('.cbx-item-sub') || {}).textContent : null;
+  input.value = '';
+  input.blur();
+  await sleep(250);
+
+  // The sidebar city list shows local spellings where the curated list has one.
+  const subs = [...document.querySelectorAll('.clist-sub')].map((n) => n.textContent);
+  out.citySubs = subs.length;
+  out.citySubSample = subs[0] || '';
+  return out;
+});
+check(flagUi.chipHasFlag, 'a country chip carries its flag');
+check(flagUi.chipName === 'Jordan', 'and its name is still readable on its own', String(flagUi.chipName));
+check(flagUi.flagBox && flagUi.flagBox[1] > 6 && flagUi.flagBox[1] <= 20 && flagUi.flagBox[0] <= 26,
+  'a flag is one small box, not a stretched panel', JSON.stringify(flagUi.flagBox));
+check(flagUi.chipHeight > 0 && flagUi.chipHeight < 40, 'the chip stays one line tall', `${flagUi.chipHeight}px`);
+check(flagUi.localSearchHit === 'Germany', 'typing a local name finds the atlas country', String(flagUi.localSearchHit));
+check(flagUi.rowHasFlag, 'a dropdown row carries its flag');
+check(flagUi.subShown === 'Deutschland', 'and shows the local name beside the atlas one', String(flagUi.subShown));
+check(flagUi.rowHeight > 0 && flagUi.rowHeight < 40, 'a dropdown row stays one line tall', `${flagUi.rowHeight}px`);
+check(flagUi.citySubs > 0, 'the city list shows local spellings',
+  `${flagUi.citySubs} shown, e.g. ${flagUi.citySubSample}`);
+console.log(`  ${green('✓')} flags — ${flagData.flags} flags, ${flagData.meta} countries, `
+  + `${flagUi.citySubs} local city names in the list`);
+
+/* Suite 26 — nothing wrote to the console along the way. */
+// `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
+// to check the message, and the browser logs every failed fetch — so the one
+// error this suite provokes deliberately is not evidence of a broken page.
+const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_|oc-test-|404 \(Not Found\)/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);
 

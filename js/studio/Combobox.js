@@ -20,13 +20,20 @@ const el = (tag, cls, text) => {
 };
 
 /**
+ * An item may carry an `icon` and a `sub`. Neither means anything to this
+ * widget: `icon` is an opaque token handed straight to the caller's own
+ * `renderIcon`, so a country picker can draw a flag without this file
+ * learning what a country is, and `sub` is a second, quieter label — the
+ * local-language name, where there is one.
+ *
  * @param {object} opts
- * @param {Array<{value:string,label:string,note?:string}>} opts.items
+ * @param {Array<{value:string,label:string,note?:string,icon?:string,sub?:string,search?:string}>} opts.items
  * @param {string}   [opts.value]       currently selected value
  * @param {string}   [opts.placeholder]
  * @param {string}   [opts.emptyText]   shown when nothing matches
  * @param {boolean}  [opts.allowEmpty]  offer an explicit 'none' choice
  * @param {string}   [opts.emptyLabel]  what that choice is called
+ * @param {Function} [opts.renderIcon]  (item.icon) => Element | null
  * @param {Function} opts.onSelect      (value, item) => void
  * @returns {{ el: HTMLElement, setItems: Function, setValue: Function, focus: Function }}
  */
@@ -74,7 +81,15 @@ export function createCombobox(opts) {
     filtered.slice(0, MAX_VISIBLE).forEach((item, i) => {
       const row = el('div', 'cbx-item' + (i === active ? ' active' : '') + (item.value === value ? ' picked' : ''));
       row.setAttribute('role', 'option');
+      if (opts.renderIcon && item.icon) {
+        const icon = opts.renderIcon(item.icon);
+        if (icon) row.appendChild(icon);
+      }
+      // A sibling of the label, never a child of it: the label's text is read
+      // as the item's name, and burying a second name inside it makes a row
+      // called `Munich` answer to `MunichMunchen`.
       row.appendChild(el('span', 'cbx-item-label', item.label));
+      if (item.sub) row.appendChild(el('span', 'cbx-item-sub', item.sub));
       if (item.note) row.appendChild(el('span', 'cbx-item-note', item.note));
       // mousedown, not click: the input's blur would close the list first.
       row.addEventListener('mousedown', (e) => { e.preventDefault(); pick(item); });
@@ -93,8 +108,11 @@ export function createCombobox(opts) {
     const contains = [];
     for (const item of items) {
       const l = item.label.toLowerCase();
-      if (l.startsWith(needle)) starts.push(item);
-      else if (l.includes(needle)) contains.push(item);
+      // `search` widens the haystack without widening what is shown, so
+      // typing `Deutschland` finds the row the map labels `Germany`.
+      const hay = (item.search || item.label).toLowerCase();
+      if (l.startsWith(needle) || hay.startsWith(needle)) starts.push(item);
+      else if (hay.includes(needle)) contains.push(item);
     }
     filtered = starts.concat(contains);
     // Keep the escape hatch reachable even mid-search.

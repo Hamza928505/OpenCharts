@@ -9,7 +9,7 @@
 
 import { CHARTS, CATEGORIES, CATEGORY_ORDER, CHART_COUNT, searchCharts, newSpec, engineTally } from './registry.js';
 import { renderChart, destroyInstance, generateCode } from './engines.js';
-import { ALL_LIBRARIES } from './cdn.js';
+import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
 import { parseTable, applyData } from './dataio.js';
@@ -519,9 +519,10 @@ export class GalleryApp {
 export function renderCredits(libsHost, tallyHost) {
   if (libsHost) {
     libsHost.innerHTML = '';
-    ALL_LIBRARIES.forEach((lib) => {
+    [...ALL_LIBRARIES, ...ALL_ASSETS].forEach((lib) => {
       const row = document.createElement('div');
       row.className = 'foot-lib';
+      const where = lib.url || lib.local || '';
       row.innerHTML =
         `<div class="foot-lib-head">`
         + `<a href="${escapeHtml(lib.homepage)}" target="_blank" rel="noopener noreferrer">${escapeHtml(lib.name)}</a>`
@@ -529,7 +530,7 @@ export function renderCredits(libsHost, tallyHost) {
         + `<span class="pill">${escapeHtml(lib.license)}</span>`
         + `</div>`
         + `<p class="foot-lib-role">${escapeHtml(lib.role)}</p>`
-        + `<code class="foot-lib-url" title="${escapeHtml(lib.url)}">${escapeHtml(lib.url)}</code>`;
+        + `<code class="foot-lib-url" title="${escapeHtml(where)}">${escapeHtml(where)}</code>`;
       libsHost.appendChild(row);
     });
   }

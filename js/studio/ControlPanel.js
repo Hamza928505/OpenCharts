@@ -16,7 +16,11 @@ import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
 import { createCombobox } from './Combobox.js';
 import { createCheckList } from './CheckList.js';
-import { loadCountries, loadCities, countryItems, findCountryEntry } from './geodata.js';
+import {
+  loadCountries, loadCities, countryItems, findCountryEntry,
+  loadCountryMeta, localCityName,
+} from './geodata.js';
+import { flagIcon } from './flags.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
 
@@ -601,10 +605,16 @@ function widgetCountries(ctrl, spec, notify) {
   const chips = el('div', 'country-chips');
   wrap.appendChild(chips);
 
+  /** Atlas name → ISO2, so a chip can find its own flag. Empty until loaded. */
+  const isoByName = new Map();
+
   const box = createCombobox({
     items: [],
     placeholder: ctrl.placeholder || 'Loading countries…',
     emptyText: 'No country by that name',
+    // The item's `icon` is an ISO2 code; turning it into a picture is this
+    // call site's job, because this is the one that knows it lists countries.
+    renderIcon: (iso2) => flagIcon(iso2),
     onSelect: (value) => {
       if (!value) return;
       const list = getPath(spec, ctrl.key) || [];
@@ -630,7 +640,13 @@ function widgetCountries(ctrl, spec, notify) {
     }
     list.forEach((name, i) => {
       const chip = el('span', 'country-chip');
-      chip.appendChild(el('span', null, name));
+      // `iso` is filled in once the country list has loaded — a chip painted
+      // before then is a name with no flag, not a broken one.
+      const iso = isoByName.get(name);
+      if (iso) chip.appendChild(flagIcon(iso));
+      // Named, because the flag is a bare span in here too and `> span` used
+      // to be a reliable way of saying "the country".
+      chip.appendChild(el('span', 'country-chip-name', name));
       const x = el('button', 'country-chip-x', '✕');
       x.type = 'button';
       x.title = `Remove ${name}`;
@@ -647,7 +663,9 @@ function widgetCountries(ctrl, spec, notify) {
   }
 
   loadCountries().then((all) => {
+    all.forEach((c) => { if (c.iso2) isoByName.set(c.name, c.iso2); });
     box.setItems(countryItems(all, { onlyWithCities: !!ctrl.onlyWithCities }));
+    paint();
     // Normalise whatever the spec held to the atlas's own spelling, so a saved
     // config that said "USA" now shows — and matches — the real feature.
     const list = getPath(spec, ctrl.key) || [];
@@ -697,6 +715,7 @@ function widgetCities(ctrl, spec, notify) {
   const list = createCheckList({
     placeholder: 'Search cities…',
     emptyText: 'Choose a country above and its cities appear here.',
+    renderIcon: (iso2) => flagIcon(iso2),
     onChange: (picked) => apply(picked),
   });
   wrap.appendChild(list.el);
@@ -761,6 +780,9 @@ function widgetCities(ctrl, spec, notify) {
   /* ── load ─────────────────────────────────────────────────────────────── */
 
   loadCountries().then(async (all) => {
+    // Local spellings are decoration, so the list must not wait on them
+    // failing — `localCityName` simply answers '' until they arrive.
+    await loadCountryMeta().catch(() => {});
     const wanted = [].concat(getPath(spec, from) || []).filter(Boolean);
     const entries = wanted.map((n) => findCountryEntry(all, n)).filter((c) => c && c.iso2);
     countryNames = entries.map((c) => c.name);
@@ -775,14 +797,29 @@ function widgetCities(ctrl, spec, notify) {
     lists.forEach((cities, i) => cities.forEach((c) => {
       // Two countries can share a city name; the first one focused wins, which
       // is the same rule the map itself uses for overlapping marks.
-      if (!universe.has(c.name)) universe.set(c.name, { ...c, country: entries[i].name });
+      if (!universe.has(c.name)) {
+        universe.set(c.name, { ...c, country: entries[i].name, iso2: entries[i].iso2 });
+      }
     }));
 
-    list.setItems([...universe.values()].map((c) => ({
-      value: c.name,
-      label: c.name,
-      note: entries.length > 1 ? c.country : '',
-    })), true);
+    const many = entries.length > 1;
+    list.setItems([...universe.values()].map((c) => {
+      // The curated list names about five cities per country, so most rows
+      // have no local spelling and simply do not get one. Inventing a
+      // transliteration for the other 156,000 would put names on the map
+      // that no source stands behind.
+      const local = localCityName(c.iso2, c.name);
+      return {
+        value: c.name,
+        label: c.name,
+        sub: local,
+        search: local ? `${c.name} ${local}` : c.name,
+        // A flag only earns its place when the list spans countries; on a
+        // single-country map it would be the same picture on every row.
+        icon: many ? c.iso2 : '',
+        note: many ? c.country : '',
+      };
+    }), true);
 
     const on = places().map((p) => String(p.name)).filter((n) => universe.has(n));
     list.setSelected(on);

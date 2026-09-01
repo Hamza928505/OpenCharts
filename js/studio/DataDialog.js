@@ -17,7 +17,10 @@ import {
 import { createDataGrid } from './DataGrid.js';
 import { createCombobox } from './Combobox.js';
 import { createCheckList } from './CheckList.js';
-import { loadCountries, loadCities, countryItems, findCountryEntry } from './geodata.js';
+import {
+  loadCountries, loadCities, countryItems, findCountryEntry, localCityName,
+} from './geodata.js';
+import { flagIcon } from './flags.js';
 import { ask } from './confirm.js';
 import { readDataFile, ACCEPTED } from './fileimport.js';
 import { toast } from './toast.js';
@@ -390,6 +393,7 @@ export function openDataDialog(def, spec, onApply, seedText) {
         items: [],
         placeholder: 'Loading countries…',
         emptyText: 'No country by that name',
+        renderIcon: (iso2) => flagIcon(iso2),
         onSelect: (name, item) => chooseCountry(item),
       });
       field.appendChild(countryBox.el);
@@ -406,6 +410,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
     const list = createCheckList({
       placeholder: isCities ? 'Search cities…' : 'Search countries…',
       emptyText: isCities ? 'Choose a country first.' : 'Loading…',
+      // Only the country list sets an `icon`; the city rows leave it empty,
+      // since one country's flag repeated down every row says nothing.
+      renderIcon: (iso2) => flagIcon(iso2),
       onChange: () => { addBtn.disabled = !list.count(); refreshAddLabel(); },
     });
     wrap.appendChild(list.el);
@@ -492,7 +499,11 @@ export function openDataDialog(def, spec, onApply, seedText) {
           chooseCountry({ value: hit.name, iso2: hit.iso2 });
         }
       } else {
-        list.setItems(items.map((c) => ({ value: c.value, label: c.label })));
+        // The note is dropped — a city count is the combobox's business, not
+        // this list's — but the flag and the local name are kept.
+        list.setItems(items.map((c) => ({
+          value: c.value, label: c.label, icon: c.icon, sub: c.sub, search: c.search,
+        })));
         // Countries already in the table start ticked, so the list reads as
         // the state of the chart rather than a blank form.
         const have = new Set(grid.getData().rows.map((r) => String(r[0]).trim()));
@@ -511,7 +522,15 @@ export function openDataDialog(def, spec, onApply, seedText) {
       listLabel.textContent = `Cities in ${item.value}`;
       loadCities(chosenIso).then((all) => {
         cities = all;
-        list.setItems(all.map((c) => ({ value: c.name, label: c.name })));
+        list.setItems(all.map((c) => {
+          const local = localCityName(chosenIso, c.name);
+          return {
+            value: c.name,
+            label: c.name,
+            sub: local,
+            search: local ? `${c.name} ${local}` : c.name,
+          };
+        }));
         // Cities already in the table start ticked, for the same reason.
         const have = new Set(grid.getData().rows.map((r) => String(r[0]).trim()));
         list.setSelected(all.filter((c) => have.has(c.name)).map((c) => c.name));

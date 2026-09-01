@@ -1452,6 +1452,60 @@ input[type="range"]::-moz-range-thumb {
 .file-status.ok { color: var(--ok); }
 
 
+/* ── Flags ───────────────────────────────────────────────────────────────── */
+/* The vendored icon set in `data/flags.json` — 80px PNGs, base64, fetched once
+   by `flags.js`. Drawn as a background rather than an <img src> for two
+   reasons: a country with no flag falls back to its own two letters in the
+   same box instead of a broken-image glyph, and a data URI on a background
+   cannot be dragged out of the page as a file. */
+.flag {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--surface-2) center / cover no-repeat;
+  /* An inset rule rather than a border, so the box stays exactly 18×13 and
+     rows do not shift by a pixel when a flag loads. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent);
+  overflow: hidden;
+  /* Only ever seen by `.flag-blank`, but declared here so the letters sit in
+     the same box the picture would have filled. */
+  font-family: var(--mono);
+  font-size: 7.5px;
+  line-height: 13px;
+  text-align: center;
+  letter-spacing: -.02em;
+  color: var(--ink-faint);
+}
+.flag-blank { background-image: none; }
+
+/* The local-language name, beside the one the atlas uses. It is a sibling of
+   the label rather than a child, so the label's own text stays the item's
+   name — and it yields space first, because the name is what a reader is
+   scanning for. `isolate` keeps an Arabic or Hebrew spelling from reordering
+   the Latin text around it: without it a row reading "Egypt مصر" renders its
+   parts in the wrong order. */
+.cbx-item-sub,
+.clist-sub {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 11px;
+  unicode-bidi: isolate;
+  /* Takes the slack, so the local name sits against the name it belongs to
+     and anything after it — a city count — still lands on the right edge.
+     Without this the label grows instead and "Afghanistan" and "افغانستان"
+     end up at opposite ends of a wide row, reading as two columns. */
+  margin-right: auto;
+}
+/* Only a row that has one: elsewhere the label must keep growing, or a note
+   with no local name beside it loses its right edge. */
+.cbx-item:has(.cbx-item-sub) .cbx-item-label,
+.clist-row:has(.clist-sub) .clist-label { flex: 0 1 auto; }
+
 /* ── Country chips (sidebar) ─────────────────────────────────────────────── */
 .country-chips {
   display: flex;
@@ -1472,7 +1526,7 @@ input[type="range"]::-moz-range-thumb {
   font-size: 11.5px;
   max-width: 100%;
 }
-.country-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.country-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .country-chip-x {
   background: none;
   border: 0;
