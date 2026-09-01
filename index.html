@@ -201,6 +201,10 @@
 <script type="module">
   import { GalleryApp } from './js/studio/GalleryApp.js';
   import { renderCredits } from './js/studio/GalleryApp.js';
+  import { initMotion } from './js/studio/motion.js';
+
+  // Delegated, so it costs the same whether the grid holds one tile or 114.
+  initMotion();
   // Exposed the way the studio exposes its own, so the suite can ask the page
   // what a tile is actually drawing rather than guess from its pixels.
   window.openChartsGallery = new GalleryApp();

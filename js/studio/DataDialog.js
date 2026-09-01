@@ -21,6 +21,7 @@ import {
   loadCountries, loadCities, countryItems, findCountryEntry, localCityName,
 } from './geodata.js';
 import { flagIcon } from './flags.js';
+import { applyOrigin } from './motion.js';
 import { ask } from './confirm.js';
 import { readDataFile, ACCEPTED } from './fileimport.js';
 import { toast } from './toast.js';
@@ -88,6 +89,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
   dlg.append(head, tabs, panels, foot);
   scrim.appendChild(dlg);
   document.body.appendChild(scrim);
+  // After it is in the document, because the origin is a share of the
+  // dialog's own box and an unmounted element has no box to measure.
+  applyOrigin(dlg);
 
   /* ── initial table ──────────────────────────────────────────────────── */
 

@@ -3041,6 +3041,159 @@ check(toolbarSearch.grows === '1' && toolbarSearch.width > 250,
   'the gallery toolbar search still fills its row',
   `grow ${toolbarSearch.grows}, ${toolbarSearch.width}px`);
 
+/* Suite 21 — motion that answers the pointer. */
+
+/* The sheen follows the cursor across a card. Delegated from the document, so
+ * this also proves one listener serves all 114 tiles. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+
+const firstCard = await page.$('.card');
+await firstCard.scrollIntoViewIfNeeded();
+await page.waitForTimeout(250);
+const cardBox = await firstCard.boundingBox();
+const readSheen = () => page.evaluate(() => {
+  const c = document.querySelector('.card');
+  return { mx: c.style.getPropertyValue('--mx'), my: c.style.getPropertyValue('--my') };
+});
+
+await page.mouse.move(cardBox.x + cardBox.width * 0.2, cardBox.y + cardBox.height * 0.25, { steps: 6 });
+await page.waitForTimeout(220);
+const sheenLeft = await readSheen();
+await page.mouse.move(cardBox.x + cardBox.width * 0.8, cardBox.y + cardBox.height * 0.75, { steps: 6 });
+await page.waitForTimeout(220);
+const sheenRight = await readSheen();
+
+const sheenPainted = await page.evaluate(() => {
+  const cs = getComputedStyle(document.querySelector('.card'), '::after');
+  return /radial-gradient/.test(cs.backgroundImage);
+});
+check(!!sheenLeft.mx && !!sheenRight.mx, 'a card learns where the pointer is',
+  `${sheenLeft.mx || 'none'} → ${sheenRight.mx || 'none'}`);
+check(sheenLeft.mx !== sheenRight.mx && sheenLeft.my !== sheenRight.my,
+  'and the light moves with it', `${sheenLeft.mx},${sheenLeft.my} → ${sheenRight.mx},${sheenRight.my}`);
+check(sheenPainted, 'the sheen is a gradient, not a layout change');
+
+/* A ripple opens from the pixel pressed, so two presses on one button differ. */
+await page.goto(`${base}/studio.html?chart=doughnut-gauge`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+
+const ripple = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = document.querySelector('#btn-reset');
+  const press = async (dx, dy) => {
+    const r = btn.getBoundingClientRect();
+    btn.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, clientX: r.left + dx, clientY: r.top + dy,
+    }));
+    await sleep(50);
+    return { on: btn.classList.contains('rippling'), rx: btn.style.getPropertyValue('--rx') };
+  };
+  const near = await press(6, 6);
+  await sleep(600);
+  const clearedItself = !btn.classList.contains('rippling');
+  const far = await press(70, 12);
+  await sleep(600);
+  return {
+    near, far, clearedItself,
+    // Clipped, or the circle would escape the button it came from.
+    clips: getComputedStyle(btn).overflow,
+  };
+});
+check(ripple.near.on, 'pressing a button opens a ripple');
+check(ripple.near.rx !== ripple.far.rx, 'from the point pressed, not the middle',
+  `${ripple.near.rx} vs ${ripple.far.rx}`);
+check(ripple.clearedItself, 'and it clears itself once it has played');
+check(ripple.clips === 'hidden', 'the ripple stays inside its button', ripple.clips);
+
+/* A dialog grows out of whatever opened it. */
+const origin = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const open = async (dx, dy) => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent));
+    const r = btn.getBoundingClientRect();
+    btn.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, clientX: r.left + dx, clientY: r.top + dy,
+    }));
+    btn.click();
+    await sleep(800);
+    const dlg = document.querySelector('.dlg');
+    const out = {
+      x: parseFloat(dlg.style.getPropertyValue('--from-x')),
+      y: parseFloat(dlg.style.getPropertyValue('--from-y')),
+      origin: getComputedStyle(dlg).transformOrigin,
+    };
+    document.querySelector('.dlg-close').click();
+    await sleep(450);
+    return out;
+  };
+  return { left: await open(4, 4), right: await open(150, 20) };
+});
+check(Number.isFinite(origin.left.x) && Number.isFinite(origin.left.y),
+  'a dialog knows where it was opened from', JSON.stringify(origin.left));
+check(origin.left.x !== origin.right.x, 'and two different buttons open it differently',
+  `${origin.left.x}% vs ${origin.right.x}%`);
+check(origin.left.x >= 0 && origin.left.x <= 100 && origin.left.y >= 0 && origin.left.y <= 100,
+  'the origin is clamped inside the dialog', JSON.stringify(origin.left));
+
+/* A figure that changed says so. One that did not, must stay quiet — marking
+ * the whole row on every rebuild would make the signal mean nothing. */
+const metrics = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const total = document.querySelectorAll('.metric-value').length;
+  if (!total) return { skip: true };
+  app.spec.score = (app.spec.score || 0) + 7;
+  app.rebuild();
+  await sleep(140);
+  const afterEdit = document.querySelectorAll('.metric-value.changed').length;
+  app.rebuild();
+  await sleep(140);
+  const afterNoop = document.querySelectorAll('.metric-value.changed').length;
+  return { total, afterEdit, afterNoop };
+});
+check(!metrics.skip && metrics.afterEdit > 0, 'a changed figure is marked as changed',
+  JSON.stringify(metrics));
+check(!metrics.skip && metrics.afterNoop === 0, 'and an unchanged one is left alone',
+  JSON.stringify(metrics));
+
+/* Reduced motion means none of it. The stylesheet's global block cannot reach
+ * a custom property written from JS, so `motion.js` has to check for itself. */
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.goto(`${base}/studio.html?chart=doughnut-gauge`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const quiet = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const m = await import('/js/studio/motion.js');
+  const btn = document.querySelector('#btn-reset');
+  const r = btn.getBoundingClientRect();
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 8, clientY: r.top + 6 }));
+  await sleep(80);
+  const rippled = btn.classList.contains('rippling');
+
+  const app = window.openCharts;
+  app.spec.score = (app.spec.score || 0) + 5;
+  app.rebuild();
+  await sleep(140);
+  const marked = document.querySelectorAll('.metric-value.changed').length;
+
+  // Position is not animation: a dialog still has to open somewhere sensible.
+  const edit = [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent));
+  edit.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+  edit.click();
+  await sleep(800);
+  const placed = Number.isFinite(parseFloat(document.querySelector('.dlg').style.getPropertyValue('--from-x')));
+  document.querySelector('.dlg-close').click();
+
+  return { reports: m.motionReduced(), rippled, marked, placed };
+});
+check(quiet.reports, 'motion.js sees the reduced-motion preference');
+check(!quiet.rippled, 'no ripple when motion is reduced');
+check(!quiet.marked, 'and no figure is animated');
+check(quiet.placed, 'but a dialog is still placed where it was opened from');
+await page.emulateMedia({ reducedMotion: 'no-preference' });
+console.log(`  ${green('✓')} motion — sheen tracks, ripple from the press point, quiet when asked`);
+
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one

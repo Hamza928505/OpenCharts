@@ -511,6 +511,55 @@ Ctrl+Z is bound on the grid root rather than the document — Ctrl+Z elsewhere o
 the page is not this component's to take — and inside a data grid it means the
 table rather than the one cell, which is what every spreadsheet does.
 
+### Motion
+
+One rule, applied everywhere: **motion starts where the user acted.** A press
+sinks under the finger, a ripple opens from the exact pixel clicked, a sheen
+tracks the cursor across a card, and the data dialog grows out of the button
+that opened it. Nothing loops, drifts or plays on arrival — animation that runs
+on its own is decoration, and there is none of it here.
+
+The scale is four tokens in `:root`: `--dur-fast` (90ms) is acknowledgement,
+`--dur` (180ms) is a state change you watch, `--dur-slow` (300ms) is something
+arriving, and `--ease-spring` overshoots and is only ever used for *release*,
+where a little bounce reads as the surface pushing back.
+
+**Press was the gap worth closing first.** Before this the entire stylesheet
+carried one `:active` rule, and a control that does not move under the pointer
+reads as a picture of a control. Buttons scale down; rows translate sideways
+instead, because a list item that shrinks looks broken while one that gives in
+the direction of the pointer reads as being taken. Two elements already move on
+hover — `.palette-dot` and `.card-shell` — so their press rules compose with
+that rather than replacing it, or the swatch jumps mid-hover.
+
+**The sheen is light, not a tilt.** A 3D card tilt was the obvious choice and
+the wrong one twice over: the studio presents charts as prints, and a print
+does not swivel — the light over it moves; and a rotated element contributes to
+the page's scrollable overflow, which the responsive suite would have caught as
+a sideways scroll. A gradient on a pseudo-element costs no layout at all.
+
+`js/studio/motion.js` holds only the parts that need to know where the pointer
+is, and follows three rules:
+
+- **Delegated, never per element.** The gallery is 114 cards; binding a
+  `pointermove` to each would cost more than the rest of the page together.
+- **One custom-property write per frame.** Pointer moves outrun the display, so
+  coordinates are stashed and applied in a `requestAnimationFrame` — writing on
+  every event lays out the page several times a frame for a gradient nobody
+  asked to be that precise.
+- **Reduced motion means none of it.** The stylesheet's global
+  `prefers-reduced-motion` block neutralises transitions and animations, but a
+  custom property written from JS is neither, so `motion.js` checks the query
+  itself — and keeps listening, so turning the preference on does not need a
+  reload. **Position is not animation**, though: `applyOrigin` still runs, so a
+  dialog opens somewhere sensible rather than somewhere arbitrary.
+
+**A figure that changed says so; one that did not stays quiet.** `_renderMetrics`
+records what each value read before the rebuild and marks only the ones that
+moved. Flashing the whole row on every keystroke would make the signal mean
+nothing — the point is to say *which* number changed. A rebuild with no change
+marks nothing at all, which the suite checks explicitly.
+
 ### Text colour
 
 Every canvas chart draws its labels through `ink(alpha)`, which resolves
@@ -988,6 +1037,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `theme.js` | Light/dark, persisted; charts re-render on change |
 | `toast.js` | Transient notices |
 | `tooltip.js` | Hover readouts for the canvas, SVG and DOM charts |
+| `motion.js` | Pointer-driven motion — the sheen, the ripple, the dialog's origin |
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |

@@ -61,6 +61,15 @@
   --shadow:    0 4px 18px rgba(23,22,20,.07), 0 1px 3px rgba(23,22,20,.04);
   --shadow-lg: 0 22px 56px rgba(23,22,20,.13), 0 4px 12px rgba(23,22,20,.05);
   --ease: cubic-bezier(.22,.61,.36,1);
+  /* One motion scale for the whole site. `fast` is acknowledgement — a press,
+     a tick; `base` is a state change you watch; `slow` is something arriving.
+     `spring` overshoots and is only for release, where a little bounce reads
+     as the surface pushing back. */
+  --dur-fast: 90ms;
+  --dur:      180ms;
+  --dur-slow: 300ms;
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
 
   --sidebar-w: 236px;
   --controls-w: 300px;
@@ -2079,6 +2088,199 @@ body[data-focus="1"] .metrics { padding-left: clamp(1rem, 5vw, 4rem); padding-ri
 @media (prefers-reduced-motion: no-preference) {
   .rail { transition: width .2s var(--ease), flex-basis .2s var(--ease); }
   .stage-body { transition: margin .2s var(--ease), padding .2s var(--ease); }
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+ *
+ * One idea, applied everywhere: **motion starts where the user acted.**
+ *
+ * A press sinks under the finger, a ripple opens from the exact point that was
+ * clicked, a sheen tracks the cursor across a card, and a dialog grows out of
+ * the button that opened it. Nothing here loops, drifts or plays on arrival —
+ * animation that runs on its own is decoration, and this file has none of it.
+ *
+ * Everything is a transition or a one-shot animation, so the global
+ * `prefers-reduced-motion: reduce` block at the foot of this stylesheet
+ * neutralises the lot. The pointer-driven parts are guarded again in
+ * `motion.js`, because a custom property set from JS is not a transition and
+ * that block cannot reach it.
+ */
+
+/* ── Press ────────────────────────────────────────────────────────────────
+ *
+ * The single most-felt piece, and the one that was missing: before this the
+ * whole stylesheet carried one `:active` rule. A control that does not move
+ * under the pointer reads as a picture of a control.
+ *
+ * Scale rather than translate, so a press feels like depth rather than a slip,
+ * and `--dur-fast` down against a springy release — the surface gives way at
+ * once and pushes back a little.
+ */
+.btn,
+.tab,
+.filter,
+.seg-btn,
+.prompt-mode,
+.swatch,
+.dlg-tab,
+.dlg-close,
+.theme-toggle,
+.card-prompt,
+.rail-collapse,
+.palette-sim,
+.dgrid-del,
+.series-del,
+.country-chip-x,
+.pick-chip-x {
+  transition: transform var(--dur) var(--ease-spring),
+              background-color var(--dur) var(--ease),
+              border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease);
+}
+.btn:active:not(:disabled),
+.tab:active,
+.filter:active,
+.seg-btn:active,
+.prompt-mode:active,
+.swatch:active,
+.dlg-tab:active,
+.dlg-close:active,
+.theme-toggle:active,
+.card-prompt:active,
+.rail-collapse:active,
+.palette-sim:active,
+.dgrid-del:active,
+.series-del:active,
+.country-chip-x:active,
+.pick-chip-x:active {
+  transform: scale(.955);
+  transition-duration: var(--dur-fast);
+}
+
+/* Rows travel sideways instead: a list item that shrinks looks broken, but one
+   that gives a little in the direction of the pointer reads as being taken. */
+.rail-link,
+.cbx-item,
+.clist-row,
+.toggle-row,
+.series-row,
+.help-head,
+.rail-group-head {
+  transition: transform var(--dur) var(--ease-spring),
+              background-color var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+}
+.rail-link:active,
+.cbx-item:active,
+.clist-row:active,
+.toggle-row:active,
+.help-head:active,
+.rail-group-head:active { transform: translateX(2px); }
+
+/* These two already move on hover, so their press has to compose with it
+   rather than replace it — a swatch that shrinks to .955 mid-hover jumps. */
+.palette-dot { transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur) var(--ease); }
+.palette-dot:active { transform: scale(1.02); transition-duration: var(--dur-fast); }
+.card-shell:active { transform: translateY(-1px) scale(.995); transition-duration: var(--dur-fast); }
+
+/* A disabled control must not pretend to respond. */
+.btn:disabled { transform: none !important; }
+
+/* ── Ripple ───────────────────────────────────────────────────────────────
+ *
+ * Opens from the point that was pressed, not the middle of the button, so two
+ * clicks on opposite ends of the same control look different. `motion.js` sets
+ * `--rx` / `--ry` from the pointer and adds the class.
+ */
+.btn,
+.tab,
+.filter,
+.seg-btn,
+.prompt-mode,
+.dlg-tab,
+.card-prompt {
+  position: relative;
+  overflow: hidden;
+}
+.rippling::before {
+  content: '';
+  position: absolute;
+  left: var(--rx, 50%);
+  top: var(--ry, 50%);
+  width: 0; height: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .16;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ripple 420ms var(--ease-out) forwards;
+}
+@keyframes ripple {
+  to { width: 240%; height: 240%; opacity: 0; }
+}
+
+/* ── Sheen ────────────────────────────────────────────────────────────────
+ *
+ * The gallery's signature: light travels across a card as the cursor does,
+ * the way it would across paper under a lamp. Chosen over a 3D tilt on
+ * purpose — the studio presents charts as prints, and a print does not
+ * swivel; the light over it moves.
+ *
+ * It is a background on a pseudo-element, so it costs no layout and cannot
+ * add to the page's scrollable width — which a rotated card would.
+ */
+.card { position: relative; }
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease);
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--accent) 13%, transparent),
+    transparent 68%
+  );
+}
+.card-shell:hover .card::after { opacity: 1; }
+
+/* ── Arrival ──────────────────────────────────────────────────────────────
+ *
+ * The dialog grows out of whatever opened it. `motion.js` writes the origin as
+ * a percentage of the dialog's own box, so the corner nearest the button is
+ * the corner that stays still.
+ */
+.dlg {
+  transform-origin: var(--from-x, 50%) var(--from-y, 50%);
+}
+
+/* ── Value changes ────────────────────────────────────────────────────────
+ *
+ * A KPI that swaps silently is a number you have to re-read to trust. This
+ * lifts it a few pixels as it changes, which is enough to say "this one
+ * moved" without asking anyone to wait for it.
+ */
+.metric-value { transition: color var(--dur) var(--ease); }
+.metric-value.changed { animation: metric-bump var(--dur-slow) var(--ease-out); }
+@keyframes metric-bump {
+  0%   { transform: translateY(-4px); opacity: .35; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────
+ *
+ * Keyboard focus gets the same acknowledgement a press does, and arrives
+ * rather than blinking on.
+ */
+:where(.btn, .tab, .filter, .seg-btn, .prompt-mode, .rail-link, .swatch):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  animation: focus-in var(--dur) var(--ease-out);
+}
+@keyframes focus-in {
+  from { outline-color: transparent; outline-offset: 6px; }
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

@@ -19,6 +19,7 @@ import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 import { takeHandOff } from './DataMatch.js';
 import { applyData } from './dataio.js';
+import { initMotion, markChanged } from './motion.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -55,6 +56,7 @@ export class StudioApp {
     this._cacheDom();
     this._buildRail();
     this._bindChrome();
+    initMotion();
 
     // Re-render on width change; charts that draw to raw canvas need it, and
     // Chart.js handles its own resize but a rebuild keeps everything in step.
@@ -556,10 +558,23 @@ export class StudioApp {
       this.metricsEl.innerHTML = '';
       return;
     }
+    // What each figure read before this rebuild, so only the ones that moved
+    // are marked. Flashing the whole row on every keystroke would make the
+    // signal meaningless — the point is to say *which* number changed.
+    const previous = [...this.metricsEl.querySelectorAll('.metric-value')].map((n) => n.textContent);
+
     this.metricsEl.style.display = 'grid';
     this.metricsEl.innerHTML = metrics.map((m) =>
       `<div class="metric"><div class="metric-label">${escapeHtml(m.label)}</div>`
       + `<div class="metric-value">${escapeHtml(m.value)}</div></div>`).join('');
+
+    // Only when the row kept its shape; a different set of metrics is a new
+    // chart, not a changed value.
+    if (previous.length === metrics.length) {
+      this.metricsEl.querySelectorAll('.metric-value').forEach((node, i) => {
+        if (previous[i] !== undefined && previous[i] !== node.textContent) markChanged(node);
+      });
+    }
   }
 
   _onResize() {
