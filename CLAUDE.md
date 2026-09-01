@@ -367,7 +367,90 @@ anything outside its own body. Regions are searched newest first: later marks
 are drawn on top, so where two overlap the visible one wins.
 
 The suite fails if any self-drawn chart records no regions and carries no
-`data-tip`, which is what stops a new chart shipping silent.
+`data-tip`, which is what stops a new chart shipping silent. That check could
+not see the bug above — a mark carrying `data-tip` says nothing about whether a
+tooltip exists to show it — so three more sit beside it: the readout survives
+three consecutive renders, a hover aimed at a mark the chart itself reported
+still puts a value on screen afterwards, and there is exactly one readout per
+host however often it is rebuilt.
+
+### The colour-vision check
+
+`cvd.js` answers one question about a palette: will two series a reader can
+tell apart still be two series for someone who is colour-blind? Roughly one man
+in twelve is not, and the two colours a chart leans on to separate its series
+are exactly the two that tend to merge.
+
+Three rules, all of which the suite holds:
+
+- **The check is keyed to the pair, not the colour.** A pair is reported only
+  when it is *distinguishable normally and indistinguishable simulated*. Two
+  colours a reader deliberately set close together are their business, and
+  reporting those would bury the real finding in noise.
+- **Simulation is inspection, never an edit.** `See it as a green-blind reader`
+  repaints the swatches and leaves `spec` alone. A preview that recoloured the
+  chart would put colours on it that nobody chose — the same rule as "no chart
+  generates its own data".
+- **Advisory, never a gate**, like `checkTableShape`. Somebody matching a brand
+  does not need the tool refusing them; they need to be told which two series
+  just became one.
+
+The matrices are Machado et al. (2009) at severity 1.0 and operate on *linear*
+RGB, which is why `toLinear` runs first — applying them to gamma-encoded bytes
+is the usual way this comes out wrong, and it fails quietly, shifting every
+colour a little rather than obviously. Distance is CIE76 ΔE in CIELAB with a
+threshold of 11: this decides whether to show a sentence, not whether to
+approve a print run, and ΔE2000 would not move a verdict at that threshold.
+
+Note that only the 58 charts carrying a `colors` control get the warning. The
+other 56 colour themselves through `series`, which holds a colour per series
+inside the data widget — wiring the check there is a separate job.
+
+### The Spec view
+
+The sixth code view is the chart as *data*: `{ chart, spec }` as indented JSON.
+Nothing new is computed for it — the share link already proves every spec
+round-trips through serialisation — it is simply exposed where a person can
+read, diff and paste it.
+
+It is **self-describing on purpose**. A spec carrying its own chart id means
+pasting one into the wrong studio opens the chart it belongs to instead of
+merging fields into a chart that will ignore half of them. `_applySpec` merges
+over `newSpec(def)` rather than replacing it, the same rule a share link
+follows, so a spec written before the chart gained an option still opens rather
+than rendering with holes in it.
+
+Two things the editor has to get right, both checked:
+
+- **A rebuild must not repaint the textarea.** `_paint` returns early while
+  editing. Every control change triggers a rebuild, and one of those landing
+  mid-paste would discard what was pasted.
+- **Malformed JSON keeps the text.** The editor stays open holding what was
+  pasted, with the parser's own message in a toast, so it can be fixed rather
+  than retyped.
+
+### Undo in the data editor
+
+`DataGrid.js` keeps a stack of `{ headers, rows }` snapshots rather than
+inverse operations: the whole state is two arrays of strings, so a copy costs
+nothing beside the DOM render that follows it, and an undo cannot drift from
+the edit it reverses.
+
+**Typing coalesces to one step per cell.** A snapshot is taken when a cell
+gains focus and banked on that cell's first keystroke — a snapshot per `input`
+event would make undo walk back one character at a time, which is not what
+anyone means by undo in a grid.
+
+Two smaller rules: an undo clears `pendingEdit`, because a snapshot taken at
+focus describes a table that no longer exists and banking it later would undo
+to a state nobody edited; and `setData` is undoable by default, since that is
+how the place pickers and the paste tab write into the grid and a bulk add is
+exactly what a reader wants back. `setData(next, { reset: true })` is for
+loading a fresh table, where there is no earlier state worth returning to.
+
+Ctrl+Z is bound on the grid root rather than the document — Ctrl+Z elsewhere on
+the page is not this component's to take — and inside a data grid it means the
+table rather than the one cell, which is what every spreadsheet does.
 
 ### Text colour
 
@@ -431,7 +514,7 @@ chart is neutral.
 
 ### The AI prompt
 
-The **AI Prompt** tab is the fifth code view, and the only one that is not
+The **AI Prompt** tab is the fifth of six code views, and the only one that is not
 code: it is the whole chart written as a brief to hand to an assistant along
 with somebody's own spreadsheet. `prompt.js` assembles it from what the studio
 already maintains, and **nothing in it is hand-written per chart**:
@@ -836,12 +919,13 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `geodata.js` | Loads `data/countries.json`, `data/country-meta.json` and `data/cities/<ISO2>.json` |
 | `flags.js` | The flag icon set — `data/flags.json`, fetched once, painted into pickers |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
-| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt tabs, copy, download |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec tabs, copy, download, paste-a-spec |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |
 | `palette.js` | The one colour source for every chart |
+| `cvd.js` | Colour-vision simulation, and which two series just became one |
 | `theme.js` | Light/dark, persisted; charts re-render on change |
 | `toast.js` | Transient notices |
 | `tooltip.js` | Hover readouts for the canvas, SVG and DOM charts |

@@ -39,6 +39,7 @@ export class StudioApp {
     this.spec = null;
     this.inst = null;
     this.codePanel = new CodePanel($('#codepanel'));
+    this.codePanel.onApplySpec = (parsed) => this._applySpec(parsed);
     this.sourcesEl = $('#sources');
     this.helpEl = $('#help');
 
@@ -416,6 +417,10 @@ export class StudioApp {
     this._renderMetrics();
 
     const code = generateCode(this.def, this.spec);
+    // The chart as data. Self-describing, so a spec pasted into a different
+    // chart's studio can open the chart it actually belongs to rather than
+    // being merged into one that will ignore half of it.
+    code.spec = JSON.stringify({ chart: this.def.id, spec: this.spec }, null, 2);
     // Built here rather than inside generateCode: the prompt quotes the
     // Standalone export, so it has to come after it, and it is a brief about
     // the chart rather than one of its four code views.
@@ -426,6 +431,37 @@ export class StudioApp {
     this.codePanel.setCode(code, this.def.id);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
     if (this.helpEl) renderHelp(this.helpEl, this.def, this.spec, () => this.editData());
+  }
+
+  /**
+   * Take a pasted spec.
+   *
+   * Merged over the chart's defaults rather than replacing them — the same
+   * rule a share link follows, so a spec written before the chart gained an
+   * option still opens instead of rendering with holes in it.
+   *
+   * @returns {{ ok: boolean, message: string }}
+   */
+  _applySpec(parsed) {
+    // The panel writes `{ chart, spec }`; a bare spec object from somewhere
+    // else is accepted too rather than refused on a technicality.
+    const inner = parsed.spec && typeof parsed.spec === 'object' && !Array.isArray(parsed.spec)
+      ? parsed.spec
+      : parsed;
+    const wantId = typeof parsed.chart === 'string' ? parsed.chart : '';
+
+    if (wantId && wantId !== this.def.id) {
+      const def = getChart(wantId);
+      if (!def) return { ok: false, message: `No chart called "${wantId}" — check the id.` };
+      this.load(wantId, { shared: inner });
+      return { ok: true, message: `Opened ${def.title} from the pasted spec` };
+    }
+
+    this.spec = { ...newSpec(this.def), ...inner };
+    if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
+    buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+    this.rebuild();
+    return { ok: true, message: 'Spec applied' };
   }
 
   _renderMetrics() {

@@ -41,6 +41,57 @@ export function createDataGrid(opts) {
   const requiredCount = () => Math.min(labelCount(), countOf(rules.filled, headers));
   const addSpec = rules.add;
 
+  /* ── history ───────────────────────────────────────────────────────────
+   *
+   * A grid that can add and delete rows and columns with no way back makes an
+   * editor unsafe to explore in, which is the one thing this one is for.
+   *
+   * Snapshots rather than inverse operations: the whole state is two arrays of
+   * strings, so a copy costs nothing next to the DOM render that follows it,
+   * and there is no way for an undo to drift from the edit it reverses.
+   */
+  const HISTORY_LIMIT = 60;
+  let past = [];
+  let future = [];
+  /* Taken when a cell gains focus, banked on that cell's first keystroke.
+   * Typing coalesces into one undo step per cell this way — a snapshot per
+   * `input` event would make undo walk back a character at a time. */
+  let pendingEdit = null;
+
+  const snapshot = () => ({ headers: [...headers], rows: rows.map((r) => [...r]) });
+
+  function remember(state) {
+    past.push(state || snapshot());
+    if (past.length > HISTORY_LIMIT) past.shift();
+    // A new edit is a new branch: whatever was undone is no longer reachable.
+    future = [];
+    pendingEdit = null;
+    paintHistory();
+  }
+
+  function restore(state) {
+    headers = [...state.headers];
+    rows = state.rows.map((r) => [...r]);
+    // The snapshot taken when a cell was focused describes a table that no
+    // longer exists; banking it later would undo to a state never edited.
+    pendingEdit = null;
+    render();
+    notify();
+    paintHistory();
+  }
+
+  function undo() {
+    if (!past.length) return;
+    future.push(snapshot());
+    restore(past.pop());
+  }
+
+  function redo() {
+    if (!future.length) return;
+    past.push(snapshot());
+    restore(future.pop());
+  }
+
   const root = el('div', 'dgrid-wrap');
   const scroll = el('div', 'dgrid-scroll');
   const table = el('table', 'dgrid');
@@ -51,8 +102,22 @@ export function createDataGrid(opts) {
   addRowBtn.type = 'button';
   const addColBtn = el('button', 'btn btn-sm', (addSpec && addSpec.label) || '+ Column');
   addColBtn.type = 'button';
+  const undoBtn = el('button', 'btn btn-sm dgrid-undo', 'Undo');
+  undoBtn.type = 'button';
+  undoBtn.title = 'Undo (Ctrl+Z)';
+  const redoBtn = el('button', 'btn btn-sm dgrid-undo', 'Redo');
+  redoBtn.type = 'button';
+  redoBtn.title = 'Redo (Ctrl+Shift+Z)';
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
   const summary = el('span', 'dgrid-summary');
-  foot.append(addRowBtn, addColBtn, summary);
+  foot.append(addRowBtn, addColBtn, undoBtn, redoBtn, summary);
+
+  function paintHistory() {
+    undoBtn.disabled = !past.length;
+    redoBtn.disabled = !future.length;
+  }
   // On a shape that reads a fixed set of columns, another one would be
   // dropped in silence. Offering the button anyway is the kind of promise the
   // rest of this studio is built not to make.
@@ -98,6 +163,7 @@ export function createDataGrid(opts) {
 
   /** Fill the grid from a pasted block, starting at the given cell. */
   function pasteBlock(text, atRow, atCol) {
+    remember();
     const lines = String(text).replace(/\r\n?/g, '\n').split('\n').filter((l) => l.length);
     const grid = lines.map((l) => (l.includes('\t') ? l.split('\t') : l.split(',')).map((s) => s.trim()));
     grid.forEach((line, r) => {
@@ -148,6 +214,7 @@ export function createDataGrid(opts) {
         del.type = 'button';
         del.title = 'Remove this column';
         del.addEventListener('click', () => {
+          remember();
           headers.splice(c, 1);
           rows.forEach((rr) => rr.splice(c, 1));
           render(); notify();
@@ -184,7 +251,15 @@ export function createDataGrid(opts) {
           inp.title = bad ? 'This is not a number — it will be read as 0' : '';
         };
 
-        inp.addEventListener('input', () => { rows[r][c] = inp.value; mark(); notify(); });
+        inp.addEventListener('focus', () => { pendingEdit = snapshot(); });
+        inp.addEventListener('blur', () => { pendingEdit = null; });
+        inp.addEventListener('input', () => {
+          // The first keystroke in this cell banks the state it started from.
+          if (pendingEdit) { const was = pendingEdit; pendingEdit = null; remember(was); }
+          rows[r][c] = inp.value;
+          mark();
+          notify();
+        });
         inp.addEventListener('paste', (e) => {
           const text = (e.clipboardData || window.clipboardData).getData('text');
           if (!text || (!text.includes('\n') && !text.includes('\t'))) return;   // single value: let it through
@@ -212,7 +287,7 @@ export function createDataGrid(opts) {
         const del = el('button', 'dgrid-del', '✕');
         del.type = 'button';
         del.title = 'Remove this row';
-        del.addEventListener('click', () => { rows.splice(r, 1); render(); notify(); });
+        del.addEventListener('click', () => { remember(); rows.splice(r, 1); render(); notify(); });
         last.appendChild(del);
       }
       tr.appendChild(last);
@@ -223,6 +298,7 @@ export function createDataGrid(opts) {
   }
 
   function addRow() {
+    remember();
     rows.push(new Array(headers.length).fill(''));
     render();
     const inp = table.querySelector(`.dgrid-cell[data-row="${rows.length - 1}"][data-col="0"]`);
@@ -230,9 +306,20 @@ export function createDataGrid(opts) {
     notify();
   }
 
+  // Scoped to the grid, not the document: Ctrl+Z anywhere else on the page is
+  // not this component's to take. Inside a data grid it is expected to mean
+  // the table rather than the one cell, which is what every spreadsheet does.
+  root.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redo(); }
+  });
+
   addRowBtn.addEventListener('click', addRow);
   addColBtn.addEventListener('click', () => {
     if (!addSpec) return;
+    remember();
     // A stage goes in front of the value column: a path is A → B → C and then
     // the amount, never the amount and then another stage.
     const at = addSpec.stage ? Math.max(labelCount(), headers.length - 1) : headers.length;
@@ -244,15 +331,26 @@ export function createDataGrid(opts) {
   });
 
   render();
+  paintHistory();
 
   return {
     el: root,
     getData,
-    setData(next) {
+    setData(next, opts = {}) {
+      // Undoable by default: this is how the place pickers and the paste tab
+      // write into the grid, and a bulk add is exactly what a reader wants
+      // back. `reset: true` is for loading a fresh table, where there is no
+      // earlier state worth returning to.
+      if (opts.reset) { past = []; future = []; } else { remember(); }
       headers = [...(next.headers || headers)];
       rows = (next.rows || []).map((r) => [...r]);
-      render(); updateSummary();
+      pendingEdit = null;
+      render(); updateSummary(); paintHistory();
     },
+    undo,
+    redo,
+    /** For the suite: how many steps are on each stack. */
+    history() { return { past: past.length, future: future.length }; },
     addRow,
     /** @returns {{ ok: boolean, message: string }} */
     validate() {

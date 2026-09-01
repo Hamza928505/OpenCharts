@@ -890,6 +890,53 @@ input[type="range"]::-moz-range-thumb {
 .palette-dot:hover { transform: scale(1.12); }
 .palette-dot.active { border-color: var(--ink); }
 
+/* Undo and redo sit apart from the two buttons that add to the table — they
+   act on the whole grid rather than extending it. */
+/* The Spec tab's editor. Sized and coloured as the code view it replaces, so
+   swapping between reading and editing does not move the page. */
+.code-edit {
+  flex: 1;
+  min-height: 320px;
+  width: 100%;
+  border: 0;
+  resize: none;
+  padding: .9rem 1rem;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+.code-edit:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.dgrid-undo { margin-left: .1rem; }
+.dgrid-undo:disabled { opacity: .38; cursor: default; }
+
+/* The colour-vision warning under a palette. Advisory, so it is a note in the
+   warning colour rather than an error state — the palette is still usable and
+   the reader may have chosen it deliberately. */
+.palette-warn {
+  margin: .45rem 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.palette-sim {
+  margin-top: .3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.palette-sim:hover { color: var(--accent); }
+.palette-sim:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
 /* ── Stage (preview) ─────────────────────────────────────────────────────── */
 .stage-wrap { display: flex; flex-direction: column; min-width: 0; }
 .stage {

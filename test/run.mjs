@@ -580,7 +580,7 @@ const studio = await page.evaluate(() => ({
 }));
 check(/Vertical Bar/.test(studio.title || ''), 'studio loads the chart named in the URL');
 check(studio.dataEditor, 'studio shows the data editor first');
-check(studio.tabs === 5, 'studio offers five code tabs', String(studio.tabs));
+check(studio.tabs === 6, 'studio offers six code views', String(studio.tabs));
 check(studio.gutterLines > 0, 'code panel renders line numbers');
 check(studio.sources > 0, 'sources panel lists dependencies');
 check(studio.railGroups > 0, 'rail renders collapsible categories');
@@ -2617,6 +2617,235 @@ check(flagUi.citySubs > 0, 'the city list shows local spellings',
   `${flagUi.citySubs} shown, e.g. ${flagUi.citySubSample}`);
 console.log(`  ${green('✓')} flags — ${flagData.flags} flags, ${flagData.meta} countries, `
   + `${flagUi.citySubs} local city names in the list`);
+
+/* Suite 19 — the colour-vision check, the spec view, and undo. */
+
+/* The maths first, away from the DOM. A palette check that is wrong about
+ * colour is worse than none: it would train the reader to ignore it. */
+const cvdMath = await page.evaluate(async () => {
+  const m = await import('/js/studio/cvd.js');
+  const { PALETTE } = await import('/js/studio/palette.js');
+
+  // The textbook case. Distinguishable to a trichromat, one colour to a
+  // deuteranope — if this does not fire, nothing else here is meaningful.
+  const redGreen = m.confusablePairs(['#d40000', '#00a000']);
+
+  // Two colours already alike are a palette choice, not a colour-vision
+  // problem, and reporting them would bury the real finding.
+  const alreadyAlike = m.confusablePairs(['#2F76C9', '#3079CB']);
+
+  // Simulation must leave anything it cannot parse alone rather than
+  // turning a gradient or a CSS variable into black.
+  const passthrough = ['linear-gradient(red, blue)', 'var(--accent)', '', null]
+    .every((v) => m.simulate(v) === v);
+
+  return {
+    redGreen: redGreen.length,
+    redGreenKind: (redGreen[0] || {}).kind,
+    alreadyAlike: alreadyAlike.length,
+    passthrough,
+    // A hex in, a hex out.
+    simHex: /^#[0-9a-f]{6}$/i.test(m.simulate('#CE5229', 'deuteranopia')),
+    // Identical colours are zero apart; the check must not divide by chance.
+    selfDistance: m.distance('#6C63D8', '#6C63D8'),
+    paletteFirstThree: m.confusablePairs(PALETTE.slice(0, 3)).length,
+    sentence: m.describePairs(redGreen, (i) => ['Revenue', 'Cost'][i]),
+  };
+});
+check(cvdMath.redGreen === 1, 'red and green are reported as one colour',
+  `${cvdMath.redGreen} pairs`);
+check(cvdMath.redGreenKind === 'deuteranopia', 'and named as the deficiency that merges them',
+  String(cvdMath.redGreenKind));
+check(!cvdMath.alreadyAlike, 'two already-similar colours are not reported',
+  `${cvdMath.alreadyAlike} pairs`);
+check(cvdMath.passthrough, 'a gradient or variable passes through the simulation untouched');
+check(cvdMath.simHex, 'a simulated colour is still a hex colour');
+check(cvdMath.selfDistance === 0, 'a colour is zero distance from itself', String(cvdMath.selfDistance));
+check(!cvdMath.paletteFirstThree, 'the palette a three-series chart opens with is safe',
+  `${cvdMath.paletteFirstThree} pairs merge`);
+check(/Revenue and Cost/.test(cvdMath.sentence), 'the warning uses the series names', cvdMath.sentence);
+
+/* And it reaches the control panel. `area-band` carries a `colors` widget;
+ * the 56 charts on `series` colour themselves through a different one. */
+await page.goto(`${base}/studio.html?chart=area-band`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const cvdUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const app = window.openCharts;
+  const ctrl = (app.def.controls || []).find((c) => c.type === 'colors');
+  const parts = ctrl.key.split('.');
+  let o = app.spec;
+  for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  const leaf = parts[parts.length - 1];
+
+  const cleanHidden = (document.querySelector('.palette-warn') || {}).hidden;
+
+  o[leaf] = ['#d40000', '#00a000', '#2F76C9'];
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+
+  const warn = document.querySelector('.palette-warn');
+  const sim = document.querySelector('.palette-sim');
+  const before = [...document.querySelectorAll('.palette-dot')].map((d) => d.style.background);
+  if (sim) sim.click();
+  await sleep(250);
+  const after = [...document.querySelectorAll('.palette-dot')].map((d) => d.style.background);
+
+  return {
+    cleanHidden,
+    warnShown: warn ? !warn.hidden : false,
+    warnText: warn ? warn.textContent : '',
+    dotsChanged: JSON.stringify(before) !== JSON.stringify(after),
+    // Previewing is inspection, not an edit — the chart's real colours stand.
+    specUntouched: o[leaf][0] === '#d40000',
+  };
+});
+check(cvdUi.cleanHidden === true, 'a safe palette says nothing');
+check(cvdUi.warnShown, 'a palette that merges warns', cvdUi.warnText);
+check(cvdUi.dotsChanged, 'and can be previewed as the colour-blind reader sees it');
+check(cvdUi.specUntouched, 'previewing never rewrites the chart colours');
+
+/* The chart as data: a spec you can read, copy and paste back. */
+await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const specView = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = (re) => [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => re.test(b.textContent));
+
+  [...document.querySelectorAll('.tab')].find((t) => t.textContent === 'Spec').click();
+  await sleep(300);
+  const shown = document.querySelector('.code-body').textContent;
+  let parsed = null;
+  try { parsed = JSON.parse(shown); } catch { /* reported below */ }
+
+  btn(/Paste a spec/).click();
+  await sleep(200);
+  const ta = document.querySelector('.code-edit');
+  const obj = JSON.parse(ta.value);
+  obj.spec.labels = ['ZZ', 'YY', 'XX', 'WW', 'VV', 'UU'];
+  ta.value = JSON.stringify(obj, null, 2);
+  btn(/Apply spec/).click();
+  await sleep(700);
+
+  const applied = window.openCharts.spec.labels[0];
+  const closed = document.querySelector('.code-edit').hidden;
+
+  // Malformed JSON must not be swallowed — the editor stays open holding
+  // whatever was pasted, so it can be fixed rather than retyped.
+  btn(/Paste a spec/).click();
+  await sleep(150);
+  document.querySelector('.code-edit').value = '{ not json';
+  btn(/Apply spec/).click();
+  await sleep(350);
+  const refusedStaysOpen = !document.querySelector('.code-edit').hidden;
+  const refusedKeepsText = document.querySelector('.code-edit').value === '{ not json';
+
+  return {
+    isJson: !!parsed,
+    namesItsChart: parsed && parsed.chart === 'line-multi',
+    carriesSpec: !!(parsed && parsed.spec && typeof parsed.spec === 'object'),
+    applied,
+    closed,
+    refusedStaysOpen,
+    refusedKeepsText,
+  };
+});
+check(specView.isJson, 'the spec view is valid JSON');
+check(specView.namesItsChart, 'and names the chart it belongs to');
+check(specView.carriesSpec, 'and carries the spec itself');
+check(specView.applied === 'ZZ', 'a pasted spec reaches the chart', String(specView.applied));
+check(specView.closed, 'and the editor closes once it applies');
+check(specView.refusedStaysOpen, 'malformed JSON is refused');
+check(specView.refusedKeepsText, 'and what was pasted is kept so it can be fixed');
+
+/* A spec is portable: pasting another chart's opens that chart, rather than
+ * merging fields into one that will ignore half of them. */
+await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2000);
+const crossChart = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = (re) => [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => re.test(b.textContent));
+  [...document.querySelectorAll('.tab')].find((t) => t.textContent === 'Spec').click();
+  await sleep(250);
+  btn(/Paste a spec/).click();
+  await sleep(150);
+  document.querySelector('.code-edit').value = JSON.stringify({ chart: 'bar-vertical', spec: {} });
+  btn(/Apply spec/).click();
+  await sleep(1300);
+  return { now: window.openCharts.def.id };
+});
+check(crossChart.now === 'bar-vertical', "a spec for another chart opens that chart",
+  String(crossChart.now));
+
+/* Undo. A grid that deletes rows with no way back is not safe to explore in. */
+const history = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const foot = (label) => [...document.querySelectorAll('.dgrid-foot .btn')]
+    .find((b) => b.textContent === label);
+
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(900);
+
+  const startDisabled = foot('Undo').disabled && foot('Redo').disabled;
+
+  const cell = document.querySelector('.dgrid-cell');
+  const original = cell.value;
+  cell.dispatchEvent(new Event('focus', { bubbles: true }));
+  for (const v of ['Q', 'QQ', 'QQQ']) {
+    cell.value = v;
+    cell.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(30);
+  }
+  const typed = document.querySelector('.dgrid-cell').value;
+
+  foot('Undo').click();
+  await sleep(280);
+  const afterUndo = document.querySelector('.dgrid-cell').value;
+  // Three keystrokes are one edit. If undo walked back a character at a time
+  // there would still be steps left on the stack here.
+  const oneStep = foot('Undo').disabled;
+
+  foot('Redo').click();
+  await sleep(280);
+  const afterRedo = document.querySelector('.dgrid-cell').value;
+
+  const rowsBefore = document.querySelectorAll('.dgrid tbody tr').length;
+  foot('+ Row').click();
+  await sleep(220);
+  const rowsAdded = document.querySelectorAll('.dgrid tbody tr').length;
+  foot('Undo').click();
+  await sleep(280);
+  const rowsUndone = document.querySelectorAll('.dgrid tbody tr').length;
+
+  // Ctrl+Z reaches the grid, and only the grid.
+  document.querySelector('.dgrid-cell').focus();
+  foot('+ Row').click();
+  await sleep(200);
+  const beforeKey = document.querySelectorAll('.dgrid tbody tr').length;
+  document.querySelector('.dgrid').dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'z', ctrlKey: true, bubbles: true,
+  }));
+  await sleep(280);
+  const afterKey = document.querySelectorAll('.dgrid tbody tr').length;
+
+  return {
+    startDisabled, original, typed, afterUndo, oneStep, afterRedo,
+    rowsBefore, rowsAdded, rowsUndone, beforeKey, afterKey,
+  };
+});
+check(history.startDisabled, 'undo and redo start with nothing to do');
+check(history.afterUndo === history.original, 'undo restores the cell',
+  `${history.typed} → ${history.afterUndo}, wanted ${history.original}`);
+check(history.oneStep, 'typing is one undo step, not one per keystroke');
+check(history.afterRedo === history.typed, 'redo puts it back', String(history.afterRedo));
+check(history.rowsAdded === history.rowsBefore + 1 && history.rowsUndone === history.rowsBefore,
+  'adding a row can be undone', `${history.rowsBefore} → ${history.rowsAdded} → ${history.rowsUndone}`);
+check(history.afterKey === history.beforeKey - 1, 'Ctrl+Z undoes inside the grid',
+  `${history.beforeKey} → ${history.afterKey}`);
+console.log(`  ${green('✓')} small builds — colour-vision check, spec round-trip, undo/redo`);
 
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

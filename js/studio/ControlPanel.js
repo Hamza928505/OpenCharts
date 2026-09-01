@@ -21,6 +21,7 @@ import {
   loadCountryMeta, localCityName,
 } from './geodata.js';
 import { flagIcon } from './flags.js';
+import { confusablePairs, describePairs, simulate, CVD_KINDS } from './cvd.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
 
@@ -375,24 +376,59 @@ function widgetColors(ctrl, spec, notify) {
   const wrap = field(ctrl.label || 'Colours');
   const strip = el('div', 'palette');
 
+  // Which deficiency the strip is currently showing, or '' for normal vision.
+  let showing = '';
+
+  const warn = el('p', 'palette-warn');
+  const sim = el('button', 'palette-sim');
+  sim.type = 'button';
+
+  /** What to call series i in the warning — its own name if the chart has one. */
+  const nameAt = (i) => {
+    const names = ctrl.names && ctrl.names(spec);
+    return (names && names[i]) || '';
+  };
+
   function paint() {
     strip.innerHTML = '';
     const list = getPath(spec, key) || [];
     list.forEach((colour, i) => {
       const dot = el('span', 'palette-dot');
-      dot.style.background = colour;
-      dot.title = (ctrl.names && ctrl.names(spec)[i]) || colour;
+      // The dot shows the simulated colour while previewing, but the picker
+      // still edits the real one — you are inspecting the palette, not
+      // recolouring the chart to something nobody chose.
+      dot.style.background = showing ? simulate(colour, showing) : colour;
+      dot.title = nameAt(i) || colour;
       attachColourPicker(dot, colour, (next) => {
         list[i] = next;
-        dot.style.background = next;
         notify();
+        paint();
       });
       strip.appendChild(dot);
     });
+    paintWarning(list);
   }
 
+  function paintWarning(list) {
+    // Only the colours this chart actually uses. Checking the whole 8-colour
+    // palette would report pairs no reader will ever see side by side.
+    const pairs = confusablePairs(list);
+    warn.textContent = describePairs(pairs, nameAt);
+    warn.hidden = !pairs.length;
+    sim.hidden = !pairs.length && !showing;
+    sim.textContent = showing
+      ? 'Back to normal vision'
+      : `See it as a ${(CVD_KINDS.find((k) => k.key === (pairs[0] || {}).kind) || CVD_KINDS[0]).label} reader`;
+    sim.dataset.kind = showing || (pairs[0] || {}).kind || CVD_KINDS[0].key;
+  }
+
+  sim.addEventListener('click', () => {
+    showing = showing ? '' : (sim.dataset.kind || CVD_KINDS[0].key);
+    paint();
+  });
+
+  wrap.append(strip, warn, sim);
   paint();
-  wrap.appendChild(strip);
   wrap._repaint = paint;
   return wrap;
 }
