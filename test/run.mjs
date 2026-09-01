@@ -3468,6 +3468,162 @@ await page.unroute('**/oc-test-binary');
 await page.unroute('**/oc-test-cookie');
 console.log(`  ${green('✓')} links — CSV read, pages and schemes refused, no cookies sent`);
 
+/* Suite 24 — reshaping a table before it becomes a chart. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+/* The arithmetic first. A transform that is merely plausible is worse than
+ * none: it puts numbers on a chart that nobody can trace back to the file. */
+const shape = await page.evaluate(async () => {
+  const t = await import('/js/studio/transform.js');
+
+  const headers = ['id', 'region', 'product', 'revenue', 'units'];
+  const regions = ['North', 'South', 'East', 'West'];
+  const rows = [];
+  for (let i = 0; i < 200; i++) {
+    rows.push([
+      String(1000 + i),
+      regions[i % 4],
+      i % 3 ? 'Gadget' : 'Widget',
+      String(100 + ((i * 37) % 900)),
+      String(1 + (i % 9)),
+    ]);
+  }
+  const src = { headers, rows };
+  const run = (steps) => t.runSteps(src, steps).table;
+  const sumCol = (tbl, c) => tbl.rows.reduce((a, r) => a + Number(r[c]), 0);
+
+  const grouped = run([{ op: 'group', col: 1, agg: 'sum' }]);
+  const withId = run([{ op: 'group', col: 1, agg: 'sum', vals: [0, 3] }]);
+  const counted = run([{ op: 'group', col: 1, agg: 'count' }]);
+  const binned = run([{ op: 'bin', col: 3, bins: 5 }]);
+  const filtered = run([{ op: 'filter', col: 2, test: 'is', a: 'Widget' }]);
+  const between = run([{ op: 'filter', col: 3, test: 'between', a: '200', b: '400' }]);
+
+  // Order is the whole point of a pipeline: limit-then-sort keeps the first
+  // three rows of the file, sort-then-limit keeps the three biggest.
+  const sortThenLimit = run([{ op: 'sort', col: 3, dir: 'desc' }, { op: 'limit', n: 3 }]);
+  const limitThenSort = run([{ op: 'limit', n: 3 }, { op: 'sort', col: 3, dir: 'desc' }]);
+
+  const broken = t.runSteps(src, [{ op: 'nonsense' }, { op: 'limit', n: 2 }]);
+
+  return {
+    sourceTotal: sumCol(src, 3),
+    grouped: { headers: grouped.headers, rows: grouped.rows.length, total: sumCol(grouped, 1) },
+    idExcluded: !grouped.headers.includes('id'),
+    idIncludedWhenAsked: withId.headers.includes('id'),
+    counted: { rows: counted.rows.length, total: sumCol(counted, 1) },
+    binned: { headers: binned.headers, rows: binned.rows.length, total: sumCol(binned, 1) },
+    filteredRows: filtered.rows.length,
+    betweenOk: between.rows.every((r) => Number(r[3]) >= 200 && Number(r[3]) <= 400),
+    betweenRows: between.rows.length,
+    sortThenLimit: sortThenLimit.rows.map((r) => r[3]),
+    limitThenSort: limitThenSort.rows.map((r) => r[3]),
+    brokenSurvived: broken.table.rows.length,
+    brokenReported: broken.errors.length,
+    described: t.describeStep({ op: 'group', col: 1, agg: 'mean', vals: [3] }, headers),
+  };
+});
+
+check(shape.grouped.rows === 4, 'grouping folds the rows to one per key',
+  `${shape.grouped.rows} groups`);
+check(Math.abs(shape.grouped.total - shape.sourceTotal) < 0.001,
+  'and the total survives the fold',
+  `${shape.grouped.total} vs ${shape.sourceTotal}`);
+check(shape.idExcluded, 'an id column is not totalled by default',
+  shape.grouped.headers.join(','));
+check(shape.idIncludedWhenAsked, 'but it is folded when explicitly chosen');
+check(shape.counted.rows === 4 && shape.counted.total === 200,
+  'counting rows accounts for every one', JSON.stringify(shape.counted));
+check(shape.binned.total === 200, 'every value lands in exactly one bucket',
+  `${shape.binned.total} of 200`);
+check(shape.binned.rows === 5, 'and there are as many buckets as asked for',
+  String(shape.binned.rows));
+check(shape.filteredRows === 67, 'a filter keeps only what matches',
+  `${shape.filteredRows} rows`);
+check(shape.betweenOk && shape.betweenRows > 0, 'a range filter is inclusive of both ends',
+  `${shape.betweenRows} rows`);
+check(shape.sortThenLimit.join(',') !== shape.limitThenSort.join(','),
+  'steps run in the order they are written',
+  `sort→limit ${shape.sortThenLimit} vs limit→sort ${shape.limitThenSort}`);
+check(shape.brokenSurvived === 2 && shape.brokenReported === 1,
+  'a broken step is reported and the rest still run', JSON.stringify(shape));
+check(/average of revenue/i.test(shape.described),
+  'a step says in words what it does', shape.described);
+
+/* And it reaches the grid. Reshaping is an edit, so it has to be undoable and
+ * it has to land as literal values — not as a layer the chart re-derives. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+const shapeUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tab = (re) => [...document.querySelectorAll('.dlg-tab')].find((t) => re.test(t.textContent));
+
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+
+  // A transaction-shaped table, the kind the whole feature is for.
+  tab(/Paste text/).click();
+  await sleep(250);
+  const ta = document.querySelector('.dlg textarea');
+  const regions = ['North', 'South', 'East', 'West'];
+  let csv = 'id,region,product,revenue,units\n';
+  for (let i = 0; i < 120; i++) {
+    csv += `${1000 + i},${regions[i % 4]},${i % 3 ? 'Gadget' : 'Widget'},${100 + ((i * 37) % 900)},${1 + (i % 9)}\n`;
+  }
+  ta.value = csv;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(400);
+  tab(/^\s*Table\s*$/).click();
+  await sleep(300);
+
+  const shapeTab = tab(/Shape/);
+  if (!shapeTab) return { opened: false };
+  shapeTab.click();
+  await sleep(400);
+
+  const add = document.querySelector('.shape-add .shape-select');
+  add.value = 'group';
+  add.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(350);
+
+  const summary = (document.querySelector('.shape-summary') || {}).textContent || '';
+  const previewRows = [...document.querySelectorAll('.shape-preview tbody tr')]
+    .map((tr) => [...tr.children].map((c) => c.textContent).join(','));
+  // The default fold must leave the id column out here too, not just in the
+  // engine — the checkbox is what a reader actually sees.
+  const boxes = [...document.querySelectorAll('.shape-col')]
+    .map((l) => `${l.textContent.trim()}:${l.querySelector('input').checked ? 'on' : 'off'}`);
+
+  [...document.querySelectorAll('.shape .btn')].find((b) => /Use this shape/.test(b.textContent)).click();
+  await sleep(700);
+
+  const gridRows = [...document.querySelectorAll('.dlg .dgrid tbody tr')]
+    .map((tr) => [...tr.querySelectorAll('.dgrid-cell')].map((c) => c.value).join(','));
+  const undoOn = ![...document.querySelectorAll('.dgrid-foot .btn')]
+    .find((b) => b.textContent === 'Undo').disabled;
+
+  // Undo puts the file back, which is the point of doing this in the editor.
+  [...document.querySelectorAll('.dgrid-foot .btn')].find((b) => b.textContent === 'Undo').click();
+  await sleep(400);
+  const afterUndo = document.querySelectorAll('.dlg .dgrid tbody tr').length;
+
+  return { opened: true, summary, previewRows, boxes, gridRows, undoOn, afterUndo };
+});
+check(shapeUi.opened, 'the editor offers a Shape tab');
+check(/120 rows.*→.*4 rows/.test(shapeUi.summary.replace(/\s+/g, ' ')),
+  'the panel says what the reshape does to the table', shapeUi.summary);
+check(shapeUi.boxes.some((b) => /^id:off/.test(b)), 'the id column starts unticked',
+  shapeUi.boxes.join(' '));
+check(shapeUi.gridRows.length === 4 && shapeUi.gridRows[0].startsWith('North'),
+  'applying writes the result into the grid', (shapeUi.gridRows[0] || '').slice(0, 30));
+check(shapeUi.previewRows[0] === shapeUi.gridRows[0],
+  'and the grid holds exactly what the preview showed',
+  `${shapeUi.previewRows[0]} vs ${shapeUi.gridRows[0]}`);
+check(shapeUi.undoOn && shapeUi.afterUndo === 120,
+  'a reshape can be undone back to the whole file', `${shapeUi.afterUndo} rows after undo`);
+console.log(`  ${green('✓')} shape — group, filter, bin, sort and limit, applied as an edit`);
+
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one

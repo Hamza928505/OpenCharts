@@ -230,6 +230,59 @@ pasted observations were parsed, accepted, confirmed — and silently discarded.
 The suite now catches this class of bug for every chart at once: see
 "the data must reach the chart" in `test/run.mjs`.
 
+### Reshaping a table
+
+`rankCharts` solved half of the wide-table problem: it takes a 45-column export
+and projects out the columns a chart can read. But a projection only *chooses*
+columns — it cannot combine rows. The file most people have is five hundred
+transactions and the chart they want is revenue by region, seven bars, and no
+amount of column-picking gets from one to the other. The answer used to be
+"aggregate it in a spreadsheet first", which is the step this tool exists to
+remove.
+
+`transform.js` adds five operations — **filter, group, bin, sort, limit** —
+and the Shape tab in the data editor puts them in a pipeline. Each step reads
+as a sentence and sees the table the previous one made.
+
+**Transforms are an edit, not a layer, and that is the whole design.** They run
+once, in the editor, and what comes out is written into the grid as literal
+values — the same thing a paste produces. Vega-Lite keeps transforms in the
+spec and applies them at draw time; doing that here would break the rule the
+library is built on — *a renderer reads its data from the spec and nothing
+else* — and would make every exported chart carry a transform engine to
+reproduce numbers it could simply have been given. It is also the honest way
+round: the reader sees what the aggregation produced before accepting it, so
+the numbers on the chart are numbers they looked at.
+
+Four things it gets right, each checked:
+
+- **An id column is not totalled.** Summing `id` produces 124,750 and means
+  nothing. The default fold skips columns *named* like identifiers rather than
+  ones that look like them, because every value-based rule breaks in one
+  direction or the other — ids are often all-distinct integers, and so was the
+  revenue column in the first table this was tested against, which a
+  distinctness rule promptly discarded. It is a default, never a verdict: the
+  panel shows the tick boxes and any column can be put back.
+- **Order is the answer.** `sort → limit` keeps the three biggest rows;
+  `limit → sort` keeps three arbitrary rows and orders them. The suite asserts
+  the two differ, because a pipeline whose order did not matter would not be
+  one.
+- **Each step is offered the columns that exist when it runs.** Grouping
+  renames and drops columns, so the pickers are rebuilt from
+  `runSteps().stages` rather than from the headings the file arrived with.
+- **A broken step is reported, not fatal.** Half-built steps exist while
+  somebody is still typing one, so the run skips them and says so instead of
+  collapsing.
+
+Applying goes through `grid.setData`, so it lands on the undo stack — reshaping
+five hundred rows into seven is exactly the edit somebody wants back.
+
+**A bucket is a chart's worth of arithmetic, so it is checked like one.** The
+suite asserts the group total equals the source total, that every value lands
+in exactly one bin, and that counting rows accounts for all of them. A
+transform that is merely plausible is worse than none: it puts numbers on a
+chart nobody can trace back to the file.
+
 ### Which chart fits a table
 
 `DataMatch.js` asks `checkTableShape` for every chart at once and hands the
