@@ -2847,6 +2847,200 @@ check(history.afterKey === history.beforeKey - 1, 'Ctrl+Z undoes inside the grid
   `${history.beforeKey} → ${history.afterKey}`);
 console.log(`  ${green('✓')} small builds — colour-vision check, spec round-trip, undo/redo`);
 
+/* Suite 20 — the collapsible rail and focus mode. */
+
+/* A fresh page: the suite before this one leaves the data dialog open, and a
+ * rail mode stored by an earlier run would decide the first measurement. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.evaluate(() => {
+  try { localStorage.removeItem('opencharts.rail-mode'); } catch { /* private window */ }
+});
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+
+/* The spine is nothing but glyphs, so two categories sharing one would make
+ * the second unreachable by sight. Harmless in the expanded rail, where the
+ * name is spelled out beside it — which is why this went unnoticed for so long. */
+const spineGlyphs = await page.evaluate(async () => {
+  const { CATEGORY_ORDER } = await import('/js/studio/registry.js');
+  const heads = [...document.querySelectorAll('.rail-group-head .rail-group-ico')];
+  const marks = heads.map((h) => h.innerHTML.trim());
+  return {
+    categories: CATEGORY_ORDER.length,
+    drawn: marks.filter(Boolean).length,
+    distinct: new Set(marks.filter(Boolean)).size,
+  };
+});
+check(spineGlyphs.drawn === spineGlyphs.categories, 'every category carries a glyph',
+  `${spineGlyphs.drawn} of ${spineGlyphs.categories}`);
+check(spineGlyphs.distinct === spineGlyphs.drawn, 'and no two categories share one',
+  `${spineGlyphs.distinct} distinct of ${spineGlyphs.drawn}`);
+
+/* The filter box is a toolbar component borrowed by a sidebar, and it brought
+ * `flex: 1 1 210px` with it. In the gallery's horizontal bar that basis is a
+ * width and growing fills the row; in the rail's column it is a *height*, so
+ * the pill swelled from 35px to 496px the moment a filter left free space
+ * under it. The `min-width: 210px` floor was the same mistake pointing
+ * sideways — wider than the 204px the rail has, so the rail scrolled. */
+const filterBox = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const input = document.querySelector('#rail-search');
+  const rail = document.querySelector('.rail');
+  const box = () => rail.querySelector('.search').getBoundingClientRect();
+
+  const type = async (q) => {
+    input.value = q;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(300);
+    return {
+      h: Math.round(box().height),
+      links: document.querySelectorAll('.rail-link').length,
+      overflow: rail.scrollWidth - rail.clientWidth,
+    };
+  };
+
+  const full = await type('');
+  // One result, no results, and a middling number: the empty end of the range
+  // is where the free space appears.
+  const few = await type('globe');
+  const none = await type('zzzz');
+  const some = await type('bar');
+  await type('');
+  return { full, few, none, some };
+});
+const boxHeights = [filterBox.full, filterBox.few, filterBox.none, filterBox.some];
+check(boxHeights.every((m) => m.h === filterBox.full.h),
+  'the filter box is the same height however many charts match',
+  boxHeights.map((m) => `${m.links}:${m.h}px`).join(' '));
+check(filterBox.full.h < 60, 'and that height is one line', `${filterBox.full.h}px`);
+check(boxHeights.every((m) => m.overflow <= 0),
+  'the rail never scrolls sideways', boxHeights.map((m) => m.overflow).join(','));
+
+const rail = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const width = () => Math.round(document.querySelector('.rail').getBoundingClientRect().width);
+  const stage = () => Math.round(document.querySelector('.stage').getBoundingClientRect().width);
+
+  const openWidth = width();
+  const openStage = stage();
+
+  // Which groups are open is a separate preference from whether the rail is
+  // collapsed, and collapsing must not overwrite it.
+  let groupsBefore = null;
+  try { groupsBefore = localStorage.getItem('opencharts.rail'); } catch { /* private window */ }
+
+  document.querySelector('#rail-collapse').click();
+  await sleep(420);
+  const miniWidth = width();
+  const miniStage = stage();
+  const marked = document.body.dataset.rail;
+  let saved = null;
+  let groupsAfter = null;
+  try {
+    saved = localStorage.getItem('opencharts.rail-mode');
+    groupsAfter = localStorage.getItem('opencharts.rail');
+  } catch { /* private window */ }
+
+  // The list is not on screen, so a glyph has to bring it back — otherwise a
+  // collapsed rail is a one-way door.
+  document.querySelectorAll('.rail-group-head')[2].click();
+  await sleep(420);
+  const reopened = document.body.dataset.rail !== 'mini';
+  const groupOpen = document.querySelectorAll('.rail-group')[2].dataset.open;
+
+  return {
+    openWidth, miniWidth, openStage, miniStage, marked, saved,
+    groupsKept: groupsBefore === groupsAfter,
+    reopened, groupOpen,
+  };
+});
+check(rail.miniWidth < 70 && rail.miniWidth > 40, 'the rail collapses to a spine',
+  `${rail.openWidth}px → ${rail.miniWidth}px`);
+check(rail.miniStage > rail.openStage + 100, 'and the chart gets the width back',
+  `stage ${rail.openStage}px → ${rail.miniStage}px`);
+check(rail.marked === 'mini', 'the mode is marked on the document', String(rail.marked));
+check(rail.saved === 'mini', 'and remembered for next time', String(rail.saved));
+check(rail.groupsKept, 'collapsing does not overwrite which groups are open');
+check(rail.reopened, 'a glyph opens the rail again rather than toggling an unseen body');
+check(rail.groupOpen === 'true', 'and opens its own category', String(rail.groupOpen));
+
+/* Focus: everything but the plate. */
+const focus = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = (sel) => {
+    const el = document.querySelector(sel);
+    return !!(el && el.offsetParent !== null);
+  };
+  const before = Math.round(document.querySelector('.stage').getBoundingClientRect().width);
+
+  document.querySelector('#btn-focus').click();
+  await sleep(420);
+  const on = {
+    rail: shown('.rail'),
+    controls: shown('.controls'),
+    code: shown('.codepanel'),
+    head: shown('.page-head'),
+    stage: shown('.stage'),
+    width: Math.round(document.querySelector('.stage').getBoundingClientRect().width),
+    pressed: document.querySelector('#btn-focus').getAttribute('aria-pressed'),
+  };
+
+  // Escape is the way out of a mode you may have entered by accident, and the
+  // stage bar stays put so the button is still there to click.
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(420);
+  const off = { rail: shown('.rail'), controls: shown('.controls'), code: shown('.codepanel') };
+
+  return { before, on, off };
+});
+check(!focus.on.rail && !focus.on.controls && !focus.on.code && !focus.on.head,
+  'focus hides every panel but the chart',
+  JSON.stringify(focus.on));
+check(focus.on.stage, 'and keeps the stage itself');
+check(focus.on.width > focus.before, 'the chart takes the whole window',
+  `${focus.before}px → ${focus.on.width}px`);
+check(focus.on.pressed === 'true', 'the focus button reports its state');
+check(focus.off.rail && focus.off.controls && focus.off.code,
+  'and Escape brings everything back', JSON.stringify(focus.off));
+
+/* The spine is a desktop idea. Below 900px the rail is already a slide-over
+ * drawer, and a 56px strip competing with it would be a third behaviour. */
+await page.setViewportSize({ width: 820, height: 900 });
+await page.waitForTimeout(400);
+const narrow = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.body.dataset.rail = 'mini';
+  await sleep(200);
+  const railEl = document.querySelector('.rail');
+  const w = Math.round(railEl.getBoundingClientRect().width);
+  document.body.dataset.rail = '';
+  return { width: w, overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth) };
+});
+check(narrow.width > 70, 'the spine does not apply where the rail is a drawer',
+  `${narrow.width}px at 820px wide`);
+check(narrow.overflow <= 1, 'and nothing overflows sideways', `${narrow.overflow}px`);
+await page.setViewportSize({ width: 1280, height: 900 });
+console.log(`  ${green('✓')} atelier — spine ${rail.openWidth}→${rail.miniWidth}px, focus full-bleed`);
+
+// Leave the profile as it was found, so nothing after this inherits a spine.
+await page.evaluate(() => {
+  try { localStorage.removeItem('opencharts.rail-mode'); } catch { /* private window */ }
+  document.body.dataset.rail = '';
+});
+
+/* Scoping the rail's copy must not have taken the growing pill away from the
+ * toolbar it was written for. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const toolbarSearch = await page.evaluate(() => {
+  const s = document.querySelector('.search');
+  const cs = getComputedStyle(s);
+  return { grows: cs.flexGrow, width: Math.round(s.getBoundingClientRect().width) };
+});
+check(toolbarSearch.grows === '1' && toolbarSearch.width > 250,
+  'the gallery toolbar search still fills its row',
+  `grow ${toolbarSearch.grows}, ${toolbarSearch.width}px`);
+
 /* Suite 26 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one

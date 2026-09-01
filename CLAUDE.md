@@ -337,6 +337,65 @@ The gallery's matcher cannot know, so it *asks*: a **First row is a header**
 tick box, prefilled from the guess, with the parsed column names shown beside
 it so a wrong guess is visible rather than silent.
 
+### The studio layout
+
+The studio had two fixed columns before the chart — a 236px rail and a 300px
+control panel — so 536px of chrome was spent before the subject of the page got
+any. The rail only collapsed below 1024px, which is the width at which it
+mattered least.
+
+**The plate.** `.stage` is a mat and `.stage-body` is the print: the mat carries
+the deep paper tone, the plate carries the surface and the shadow. Only one of
+them casts — a mat floating above the page under a print floating above the mat
+is two shadows arguing. On a dark ground a drop shadow is invisible, so the
+plate is lifted by its own edge instead.
+
+**The spine.** `body[data-rail="mini"]` takes the rail to 56px of glyphs, one
+per category, and hands ~180px back to the chart. Three rules:
+
+- **It is never gone.** Switching chart is the second most common thing anyone
+  does here, so a hidden list would trade one click for two on every switch. A
+  glyph click opens the rail *and* its own category, because a collapsed head
+  toggling an unseen body would look like nothing happened.
+- **Every category needs its own glyph.** Five of the fifteen used to fall
+  through to the bar mark. Harmless in the expanded rail, where the name is
+  spelled out beside it, and fatal in a spine that is nothing but the glyph.
+- **Desktop only.** Below 900px the rail is already a slide-over drawer, and a
+  56px strip competing with it would be a third behaviour.
+
+**Focus** (`body[data-focus="1"]`, Ctrl/Cmd+Shift+F, Escape to leave) hides
+every panel but the plate. Distinct from `[data-embed]`, which strips the studio
+permanently for an iframe — this is a mode you come back from, so the stage bar
+stays and keeps the way out visible. The plate is **centred and sized to the
+chart** rather than stretched: a 330px chart marooned in 750px of empty paper
+was the first attempt, and a bigger frame is not more focus.
+
+Three things that bit, all now checked:
+
+- **`RAIL_MODE_KEY` is not `RAIL_KEY`.** The latter holds a JSON map of which
+  categories are open; writing `'mini'` over it threw away every group the
+  reader had arranged.
+- **A sticky footer needs its container's padding moved.** The rail's 2rem
+  bottom padding left the collapse control floating clear of the edge with
+  chart names scrolling through the gap beneath it.
+- **`e.target` is not always an Element.** A key event dispatched at the
+  document has the document as its target and `document.matches` does not
+  exist, so the shortcut handler threw and took the `[` / `]` bindings with it.
+- **A toolbar component does not survive being turned on its side.** `.search`
+  carries `flex: 1 1 210px` and `min-width: 210px`, which are a width and a
+  floor in the gallery's horizontal bar. Dropped into the rail's new *column*,
+  the basis became a height and the pill swelled from 35px to 496px the moment
+  a filter left free space beneath it; the 210px floor, meanwhile, is wider
+  than the 204px the rail actually has, so the rail had been scrolling
+  sideways by 7px since long before the column existed. `.rail .search` now
+  states what a sidebar needs — `flex: 0 0 auto; min-width: 0` — and the
+  toolbar keeps the rule it was written for. The suite measures the box at
+  four result counts, because only the empty end of the range shows it.
+
+Changing the rail width does not fire a window resize, so `_afterLayoutChange`
+tells the hand-drawn renderers to re-measure — after the transition, or they
+measure a host that is still moving.
+
 ### Embed mode
 
 `studio.html?chart=…&s=…&embed=1` is the same page with the studio hidden by

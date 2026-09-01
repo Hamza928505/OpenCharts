@@ -1880,6 +1880,207 @@ input[type="range"]::-moz-range-thumb {
 .rail-toggle { display: none; }
 .rail-scrim { display: none; }
 
+/* ── The atelier: the plate, the spine and focus ──────────────────────────
+ *
+ * Three changes, all of them about giving the chart the room and the standing
+ * it deserves in a tool whose whole subject is the chart.
+ *
+ * Placed above the responsive section deliberately: everything here is desktop
+ * framing, and the media queries below have to keep the last word.
+ */
+
+/* ── The plate ────────────────────────────────────────────────────────────
+ *
+ * The stage stops being a card containing a chart and becomes a mat holding a
+ * print. The mat is the deep paper tone, the plate is the surface, and only
+ * the plate casts a shadow — a mat that floats above the page and a print that
+ * floats above the mat is two shadows arguing.
+ */
+.stage {
+  margin: 1.5rem 1.6rem 0;
+  padding: 0 0 .35rem;
+  background: var(--paper-deep);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: none;
+  overflow: visible;
+}
+.stage-bar {
+  background: transparent;
+  border-bottom: 0;
+  padding: .8rem 1.15rem .65rem;
+}
+.stage-title {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.stage-body {
+  margin: 0 1.15rem;
+  padding: 1.35rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-sm), 0 10px 26px -12px rgba(23, 22, 20, .22);
+  min-height: 300px;
+}
+:root:not([data-theme="light"]) .stage-body,
+:root[data-theme="dark"] .stage-body {
+  /* A dark ground swallows a drop shadow, so the plate is lifted by its own
+     edge instead of by a shadow nobody can see. */
+  box-shadow: none;
+  border-color: var(--rule-firm);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .stage-body { box-shadow: none; border-color: var(--rule-firm); }
+}
+/* The legend reads as the caption under the print, so it sits on the mat with
+   room above it — but only when there is one. */
+.legend:not(:empty) { padding: .95rem 1.3rem 1rem; }
+.metrics { padding-left: 1.3rem; padding-right: 1.3rem; }
+
+/* ── The spine ────────────────────────────────────────────────────────────
+ *
+ * Collapsed, the rail is one glyph per category. It is never *gone*: switching
+ * chart is the second most common thing anyone does here, and a hidden list
+ * would trade one click for two on every switch.
+ *
+ * Only above 900px. Below that the rail is already a slide-over drawer and a
+ * 56px spine would be a third behaviour competing with it.
+ */
+/* The rail's own bottom padding has to move onto the list, or a sticky footer
+   pinned to `bottom: 0` floats 2rem clear of the edge and chart names scroll
+   through the gap underneath it. */
+.rail { position: sticky; display: flex; flex-direction: column; padding-bottom: 0; }
+#rail-list { flex: 1; padding-bottom: .8rem; }
+
+/* `.search` is a toolbar component: `flex: 1 1 210px` and `min-width: 210px`
+   are sized for the gallery's *horizontal* bar, where 210px is a width and
+   growing fills the row. Both are wrong in a column, and wrong in two ways:
+   the basis becomes a height, so the pill swelled to 496px the moment a
+   filter left free vertical space below it; and the 210px floor is wider
+   than the 204px the rail actually has, so the rail scrolled sideways.
+   Neither is the toolbar's fault — the rail has to say what it needs. */
+.rail .search {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.rail .search input { min-width: 0; }
+
+.rail-group-ico {
+  display: none;
+  width: 16px; height: 16px;
+  flex: 0 0 16px;
+  color: var(--ink-faint);
+}
+.rail-group-ico svg { width: 100%; height: 100%; display: block; }
+
+.rail-collapse {
+  display: flex; align-items: center; gap: .5rem;
+  /* Sticky, not merely last: the rail scrolls 114 charts, and a control at the
+     bottom of that is a control nobody finds. `margin-top: auto` keeps it at
+     the foot when the list is short enough not to scroll. */
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: auto;
+  padding: .45rem .55rem;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  width: 100%;
+}
+.rail-collapse:hover { color: var(--accent); }
+.rail-collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rail-collapse-mark { font-size: 13px; line-height: 1; }
+
+@media (min-width: 901px) {
+  body[data-rail="mini"] { --sidebar-w: 56px; }
+
+  body[data-rail="mini"] .rail { padding-left: .5rem; padding-right: .5rem; align-items: stretch; }
+  body[data-rail="mini"] .brand { justify-content: center; gap: 0; }
+  body[data-rail="mini"] .brand > span:last-child,
+  body[data-rail="mini"] .rail .search,
+  body[data-rail="mini"] .rail-group-body,
+  body[data-rail="mini"] .rail-group-head .caret,
+  body[data-rail="mini"] .rail-group-head .n,
+  body[data-rail="mini"] .rail-group-head > span:not(.caret):not(.n):not(.rail-group-ico),
+  body[data-rail="mini"] .rail-collapse-text { display: none; }
+
+  body[data-rail="mini"] .rail-group-ico { display: block; }
+  body[data-rail="mini"] .rail-group-head {
+    justify-content: center;
+    padding: .55rem 0;
+    border-radius: var(--r-xs);
+  }
+  /* The active category still has to be findable at a glance, and the little
+     dot the expanded rail uses is too small to carry that on its own here. */
+  body[data-rail="mini"] .rail-group-head .here { display: none; }
+  body[data-rail="mini"] .rail-group:has(.rail-link.active) .rail-group-ico { color: var(--accent); }
+  body[data-rail="mini"] .rail-group:has(.rail-link.active) .rail-group-head { background: var(--accent-wash); }
+  body[data-rail="mini"] .rail-group-head:hover .rail-group-ico { color: var(--ink); }
+
+  body[data-rail="mini"] .rail-collapse { justify-content: center; padding: .5rem 0; }
+  body[data-rail="mini"] .rail-collapse-mark { transform: rotate(180deg); }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────
+ *
+ * Everything but the plate. Distinct from the embed attribute, which strips
+ * the studio permanently for an iframe — this is a mode you come back from,
+ * so the stage bar stays and keeps the way out visible.
+ */
+body[data-focus="1"] .rail,
+body[data-focus="1"] .rail-scrim,
+body[data-focus="1"] .controls,
+body[data-focus="1"] .codepanel,
+body[data-focus="1"] .sources,
+body[data-focus="1"] .help,
+body[data-focus="1"] .page-head { display: none; }
+
+body[data-focus="1"] .studio { grid-template-columns: minmax(0, 1fr); }
+body[data-focus="1"] .stage {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 100vh;
+  /* The plate is centred in the viewport and sized to the chart. Stretching it
+     instead left a 330px chart marooned in 750px of empty paper — a bigger
+     frame is not more focus. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3.4rem 0 1rem;
+  position: relative;
+}
+body[data-focus="1"] .stage-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+}
+body[data-focus="1"] .stage-body {
+  flex: 0 0 auto;
+  margin: 0 clamp(1rem, 5vw, 4rem);
+}
+body[data-focus="1"] #btn-focus { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
+body[data-focus="1"] .stage-bar { padding: .9rem clamp(1rem, 5vw, 4rem) .7rem; }
+body[data-focus="1"] .legend:not(:empty),
+body[data-focus="1"] .metrics { padding-left: clamp(1rem, 5vw, 4rem); padding-right: clamp(1rem, 5vw, 4rem); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rail { transition: width .2s var(--ease), flex-basis .2s var(--ease); }
+  .stage-body { transition: margin .2s var(--ease), padding .2s var(--ease); }
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
 /* Laptop: the controls column stops earning its width. */
