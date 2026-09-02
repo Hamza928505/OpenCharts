@@ -14,7 +14,7 @@ import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
 import {
-  panelSpecs, panelColumns, panelHeight, facetMarkup, isFaceted, FACET_CSS,
+  panelSpecs, panelColumns, panelHeight, facetMarkup, FACET_CSS,
   sharedScaleBounds, applyScaleBounds,
 } from './facet.js';
 

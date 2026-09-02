@@ -291,15 +291,25 @@ export function scaleSharing(def) {
   };
 }
 
-/** Whether this Chart.js chart exposes a numeric axis a bound can be put on. */
+/**
+ * Whether this Chart.js chart exposes a numeric axis a bound can be put on.
+ *
+ * Memoised against the definition, which is a module-level singleton: the
+ * answer is a property of the chart's shape, not of anyone's data, and finding
+ * it costs a whole config build. The control panel asks on every rebuild.
+ */
+const CAN_SHARE = new WeakMap();
+
 function chartjsCanShare(def) {
-  let config = null;
+  if (CAN_SHARE.has(def)) return CAN_SHARE.get(def);
+  let answer = false;
   try {
-    config = def.chartjs.build(structuredClone(def.spec), { width: 400, height: 240 });
-  } catch { return false; }
-  const scales = config && config.options && config.options.scales;
-  if (!scales) return false;
-  return Object.keys(scales).some((id) => clampableScale(id, scales[id]));
+    const config = def.chartjs.build(structuredClone(def.spec), { width: 400, height: 240 });
+    const scales = config && config.options && config.options.scales;
+    answer = !!scales && Object.keys(scales).some((id) => clampableScale(id, scales[id]));
+  } catch { answer = false; }
+  CAN_SHARE.set(def, answer);
+  return answer;
 }
 
 /* -- shared scales the other way round ------------------------------------ */

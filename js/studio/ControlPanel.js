@@ -451,20 +451,41 @@ function widgetColors(ctrl, spec, notify) {
   const wrap = field(ctrl.label || 'Colours');
   const strip = el('div', 'palette');
 
+  // A `colors` control usually points at an array of hex strings. The word
+  // cloud points at its words, which carry a colour each — and reading those
+  // as colours painted 28 blank swatches, a control that could not do the one
+  // thing it is named for. Read and write one level down when the entry is an
+  // object, so the strip works either way and a pick can never replace a word
+  // with the colour it was given.
+  const colourAt = (list, i) => {
+    const entry = list[i];
+    return (entry && typeof entry === 'object') ? (entry.color || '') : (entry || '');
+  };
+  const setColourAt = (list, i, next) => {
+    const entry = list[i];
+    if (entry && typeof entry === 'object') entry.color = next;
+    else list[i] = next;
+  };
+
   /** What to call series i in the warning — its own name if the chart has one. */
   const nameAt = (i) => {
     const names = ctrl.names && ctrl.names(spec);
     return (names && names[i]) || '';
   };
 
-  const cvd = colourWarning(() => getPath(spec, key) || [], nameAt, () => paint());
+  const cvd = colourWarning(
+    () => (getPath(spec, key) || []).map((_, i) => colourAt(getPath(spec, key) || [], i)),
+    nameAt,
+    () => paint(),
+  );
   // Which deficiency the strip is currently showing, or '' for normal vision.
   const showingNow = () => cvd.showing();
 
   function paint() {
     strip.innerHTML = '';
     const list = getPath(spec, key) || [];
-    list.forEach((colour, i) => {
+    list.forEach((_, i) => {
+      const colour = colourAt(list, i);
       const dot = el('span', 'palette-dot');
       // The dot shows the simulated colour while previewing, but the picker
       // still edits the real one — you are inspecting the palette, not
@@ -472,7 +493,7 @@ function widgetColors(ctrl, spec, notify) {
       dot.style.background = showingNow() ? simulate(colour, showingNow()) : colour;
       dot.title = nameAt(i) || colour;
       attachColourPicker(dot, colour, (next) => {
-        list[i] = next;
+        setColourAt(list, i, next);
         notify();
         paint();
       });

@@ -176,6 +176,13 @@ export function confusablePairs(colors, opts = {}) {
  *
  * @returns {{colors: string[], names: string[], from: 'colors'|'series'|null}}
  */
+/** The colour an entry holds, whether it *is* one or merely carries one. */
+const colourIn = (entry) => {
+  if (typeof entry === 'string') return entry || '';
+  if (entry && typeof entry === 'object' && typeof entry.color === 'string') return entry.color;
+  return '';
+};
+
 export function paletteOf(def, spec) {
   const at = (obj, path) => String(path).split('.')
     .reduce((node, key) => (node == null ? node : node[key]), obj);
@@ -185,10 +192,20 @@ export function paletteOf(def, spec) {
     if (c.type !== 'colors') continue;
     const list = at(spec, c.key || 'colors');
     if (!Array.isArray(list) || !list.length) continue;
-    const colors = list.filter((x) => typeof x === 'string' && x);
-    if (colors.length) {
-      const named = (typeof c.names === 'function' && c.names(spec)) || [];
-      return { colors, names: colors.map((_, i) => named[i] || ''), from: 'colors' };
+    // A `colors` control usually points at an array of hex. The word cloud
+    // points at its words, which carry a colour each — so read the entry when
+    // it is a string and its `color` when it is not, rather than dropping a
+    // whole chart for keeping its colours one level down.
+    const named = (typeof c.names === 'function' && c.names(spec)) || [];
+    const kept = list
+      .map((entry, i) => ({ colour: colourIn(entry), name: named[i] || '' }))
+      .filter((e) => e.colour);
+    if (kept.length) {
+      return {
+        colors: kept.map((e) => e.colour),
+        names: kept.map((e) => e.name),
+        from: 'colors',
+      };
     }
   }
 

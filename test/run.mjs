@@ -2827,14 +2827,45 @@ const cvdReach = await page.evaluate(async () => {
 check(cvdReach.from.series === 48,
   'the check now reads the charts that keep a colour per series',
   `${cvdReach.from.series} via series, ${cvdReach.from.colors} via colors`);
-check(cvdReach.comparable === 93,
-  'and 93 charts have two colours to compare — up from the 58 with a colors control',
+check(cvdReach.comparable === 94,
+  'and 94 charts have two colours to compare — up from the 58 with a colors control',
   `${cvdReach.comparable} comparable, ${cvdReach.oneColour} with fewer than two`);
 check(cvdReach.comparable + cvdReach.oneColour === cvdReach.total,
   'every chart is either checked or has nothing to compare',
   `${cvdReach.comparable} + ${cvdReach.oneColour} of ${cvdReach.total}`);
 check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette each time',
   cvdReach.unreachable.slice(0, 4).join(', '));
+
+/* A `colors` control does not always point at hex.
+ *
+ * The word cloud points its at `words`, whose entries carry a colour each —
+ * read as colours those painted 28 blank swatches, a control that could not do
+ * the one thing it is named for, on the only chart the check could not see. */
+await page.goto(`${base}/studio.html?chart=word-cloud`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const wordCloud = await page.evaluate(async () => {
+  const { paletteOf } = await import('/js/studio/cvd.js');
+  const app = window.openCharts;
+  const palette = paletteOf(app.def, app.spec);
+  const dots = [...document.querySelectorAll('.palette-dot')];
+  const before = JSON.parse(JSON.stringify(app.spec.words[0]));
+  return {
+    resolved: palette.from,
+    colours: palette.colors.length,
+    named: palette.names.filter(Boolean).length,
+    words: app.spec.words.length,
+    blank: dots.filter((d) => !d.style.background).length,
+    entryIsObject: before && typeof before === 'object' && 'weight' in before,
+  };
+});
+check(wordCloud.resolved === 'colors' && wordCloud.colours === wordCloud.words,
+  'a colors control pointing at objects still yields one colour per entry',
+  `${wordCloud.colours} of ${wordCloud.words} via ${wordCloud.resolved}`);
+check(wordCloud.blank === 0, 'so none of its swatches render blank',
+  `${wordCloud.blank} blank of ${wordCloud.words}`);
+check(wordCloud.named === wordCloud.words, 'and each one is named for its word',
+  `${wordCloud.named} named`);
+check(wordCloud.entryIsObject, 'the entries are still words, not bare colours');
 
 /* And it reaches the panel for a chart that keeps its colours per series. */
 await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
