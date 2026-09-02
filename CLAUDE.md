@@ -245,13 +245,23 @@ room check. `colorpicker.js` puts one element on `document.body`, positioned
 nothing is a sibling to paint over it, and it flips above the swatch when the
 window bottom is closer than it is tall.
 
-Being pinned to a rect means it has to close when that rect moves, so a scroll
-or a resize dismisses it. That is also the bug that took longest to see:
-`first.focus()` scrolls an ancestor to bring the focused dot into view, which
-fired the scroll listener, which closed the popover **on the frame it opened**
-— but only when the sidebar happened to be scrollable, which is why it worked
-by hand and failed in the suite. `focus({ preventScroll: true })` is not a
-nicety here.
+Being pinned to a rect means it has to **follow** that rect, and the first
+version closed on any scroll instead — which looks equivalent and is not.
+**Clicking a swatch low in a scrolling column makes the browser scroll it into
+view, and that scroll arrives after the popover has opened**, so on any window
+short enough for the sidebar to scroll the popover shut within a frame of
+opening. It repositions now, and gives up only when its swatch has left the
+document or been scrolled out of sight. `focus({ preventScroll: true })` is
+part of the same lesson: focusing a dot inside it scrolls an ancestor too.
+
+`place()` flips above the swatch when the window bottom is nearer than the
+popover is tall, and clamps into the window after that — flipping covers the
+ordinary case, the clamp covers the ones where neither side has room, so it is
+never half off an edge.
+
+Both short-window cases are in the suite at 720px and 620px, because this is
+exactly the bug that reproduces on a laptop and not on the machine it was
+written on.
 
 **Colours are editable from the data table**, because that is where a reader
 looks for them. They are not part of the table — the grid holds words and

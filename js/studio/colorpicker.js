@@ -20,8 +20,12 @@
  * - **It flips up when there is no room below**, which is the case that made
  *   the old one unreachable rather than merely ugly.
  *
- * Being fixed to a rect means it has to close when that rect moves, so a
- * scroll or a resize dismisses it rather than leaving it stranded.
+ * Being fixed to a rect means it has to **follow** that rect. The first version
+ * dismissed on any scroll, which looked equivalent and was not: clicking a
+ * swatch low in the sidebar makes the browser scroll it into view, and that
+ * scroll arrives *after* the popover opens — so on any window short enough for
+ * the column to scroll, the popover closed within a frame of opening. It
+ * repositions instead, and gives up only when its swatch has actually gone.
  */
 
 import { SWATCHES } from './palette.js';
@@ -55,7 +59,11 @@ function place(pop, anchor) {
   const h = pop.offsetHeight;
   const gap = 6;
   const room = window.innerHeight - a.bottom;
-  const top = (room < h + gap && a.top > h + gap) ? a.top - h - gap : a.bottom + gap;
+  const wanted = (room < h + gap && a.top > h + gap) ? a.top - h - gap : a.bottom + gap;
+  // Clamped into the window as a last resort. Flipping handles the ordinary
+  // case; this handles the ones where neither side has room, so the popover is
+  // always wholly reachable rather than half of it hanging off an edge.
+  const top = Math.max(8, Math.min(wanted, window.innerHeight - h - 8));
   const left = Math.max(8, Math.min(a.left, window.innerWidth - w - 8));
   pop.style.top = `${Math.round(top)}px`;
   pop.style.left = `${Math.round(left)}px`;
@@ -131,9 +139,27 @@ export function attachColourPicker(swatch, read, onPick, onClear) {
 
     const onDoc = (ev) => { if (!pop.contains(ev.target) && ev.target !== swatch) closeColourPicker(); };
     const onKey = (ev) => { if (ev.key === 'Escape') closeColourPicker(); };
-    // Fixed to a rect that scrolling moves, so a scroll dismisses rather than
-    // strands it. Captured, because the sidebar scrolls, not the window.
-    const onMove = () => closeColourPicker();
+
+    /**
+     * Keep it against the swatch as things move.
+     *
+     * Closing on scroll was the obvious rule and the wrong one: clicking a
+     * swatch near the bottom of a scrolling column makes the browser scroll it
+     * into view, and that scroll lands *after* the popover has opened — so it
+     * shut within a frame of opening on any window short enough for the
+     * sidebar to scroll. It follows instead, and gives up only when the swatch
+     * has left the document or been scrolled out of sight, where a popover
+     * would be pointing at nothing. Captured, because the sidebar scrolls, not
+     * the window.
+     */
+    const onMove = () => {
+      if (!swatch.isConnected) { closeColourPicker(); return; }
+      const a = swatch.getBoundingClientRect();
+      const gone = a.bottom < 0 || a.top > window.innerHeight
+        || a.right < 0 || a.left > window.innerWidth;
+      if (gone) { closeColourPicker(); return; }
+      place(pop, swatch);
+    };
 
     document.addEventListener('mousedown', onDoc, true);
     document.addEventListener('keydown', onKey, true);

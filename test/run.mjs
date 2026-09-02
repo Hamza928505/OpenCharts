@@ -2877,11 +2877,18 @@ const picker = await page.evaluate(async () => {
     openedOne: document.querySelectorAll('.colour-pop').length,
   };
 
-  // Scrolling moves the rect it is pinned to, so it dismisses rather than
-  // stranding itself beside a swatch that has gone.
+  // A scroll must not dismiss it. Clicking a swatch low in a scrolling column
+  // makes the browser scroll it into view, and that scroll lands *after* the
+  // popover opens — closing on it shut the popover within a frame of opening.
   document.querySelector('.controls').dispatchEvent(new Event('scroll', { bubbles: true }));
   await sleep(150);
-  shot.closedOnScroll = document.querySelectorAll('.colour-pop').length === 0;
+  shot.survivesScroll = document.querySelectorAll('.colour-pop').length === 1;
+
+  // It gives up only when the swatch it points at has actually gone.
+  document.querySelectorAll('.series-row').forEach((r) => r.remove());
+  document.querySelector('.controls').dispatchEvent(new Event('scroll', { bubbles: true }));
+  await sleep(150);
+  shot.closedWhenAnchorGone = document.querySelectorAll('.colour-pop').length === 0;
   return shot;
 });
 check(picker.portalled && picker.position === 'fixed',
@@ -2891,9 +2898,13 @@ check(picker.inViewport, 'and it opens where it fits on screen');
 check(!picker.overlaps || /colour-pop/.test(picker.onTop || ''),
   'where it overlaps the next control, it is the one on top',
   `overlaps=${picker.overlaps} top=${picker.onTop}`);
-check(picker.openedOne === 1 && picker.closedOnScroll,
-  'and it closes when the swatch it is pinned to scrolls away',
-  `${picker.openedOne} open, closed: ${picker.closedOnScroll}`);
+check(picker.openedOne === 1 && picker.survivesScroll,
+  'a scroll moves it rather than closing it',
+  `${picker.openedOne} open, survived: ${picker.survivesScroll}`);
+check(picker.closedWhenAnchorGone,
+  'and it closes once its swatch is gone');
+
+
 
 /* A series is a column, so its colour belongs against its heading. */
 const gridColour = await page.evaluate(async () => {
@@ -2950,6 +2961,54 @@ const rowColour = await page.evaluate(async () => {
 check(rowColour.gutters === rowColour.items && rowColour.heads === 0,
   'an item chart puts one in each row gutter instead',
   `${rowColour.gutters} gutters for ${rowColour.items} items, ${rowColour.heads} headings`);
+
+/* The bug this all came from: on a window short enough for the sidebar to
+ * scroll, clicking a swatch near the bottom scrolls it into view, and that
+ * scroll arrives after the popover has opened. */
+for (const height of [720, 620]) {
+  await page.setViewportSize({ width: 1280, height });
+  await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+  const low = await page.evaluate(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Push the list down so the last swatch sits low in a scrolling column.
+    for (let i = 0; i < 4; i++) {
+      const add = [...document.querySelectorAll('.btn')].find((b) => /Add series/.test(b.textContent));
+      if (!add) break;
+      add.click();
+      await sleep(120);
+    }
+    const controls = document.querySelector('.controls');
+    const rows = [...document.querySelectorAll('.series-row')];
+    // Bring the last row to the *bottom of the visible column*, which is where
+    // a reader clicking it would have it — not past the top, which is what
+    // scrolling to the very end does, and which nobody can click.
+    rows[rows.length - 1].scrollIntoView({ block: 'end' });
+    await sleep(200);
+    rows[rows.length - 1].querySelector('.swatch').click();
+    // The scroll the browser makes to reveal the swatch lands about here.
+    await sleep(250);
+    const pop = document.querySelector('.colour-pop');
+    if (!pop) return { open: false, scrollable: controls.scrollHeight > controls.clientHeight };
+    const r = pop.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const sw = rows[rows.length - 1].querySelector('.swatch').getBoundingClientRect();
+    return {
+      open: true,
+      scrollable: controls.scrollHeight > controls.clientHeight,
+      onScreen: r.top >= 0 && r.bottom <= window.innerHeight,
+      onTop: !!(hit && pop.contains(hit)),
+      pop: { t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) },
+      swatch: { t: Math.round(sw.top), b: Math.round(sw.bottom) },
+      vh: window.innerHeight,
+    };
+  });
+  check(low.scrollable, `the sidebar really does scroll at ${height}px`, JSON.stringify(low));
+  check(low.open && low.onScreen && low.onTop,
+    `a swatch low in a ${height}px window still opens a usable popover`,
+    JSON.stringify(low));
+}
+await page.setViewportSize({ width: 1280, height: 900 });
 
 /* A `colors` control does not always point at hex.
  *
