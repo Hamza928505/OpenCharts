@@ -75,12 +75,12 @@ Publishing happens on a tag, from the same workflow that cuts the Release, and
 only after the test suite passes:
 
 ```bash
-npm version 2.1.0        # writes package.json and tags it
+npm version 2.2.0        # writes package.json and tags it
 git push --follow-tags
 ```
 
 The workflow refuses to publish if the tag and `package.json` disagree, so a
-`v2.1.0` tag on a `2.0.0` package fails loudly rather than shipping the wrong
+`v2.2.0` tag on a `2.1.0` package fails loudly rather than shipping the wrong
 version under the right name.
 
 ## Running it
@@ -106,7 +106,7 @@ Server, and so on. There is no build step and nothing to install.
 
 ## Code output
 
-Each chart emits five views:
+Each chart emits seven views:
 
 - **HTML** — the markup fragment (`<canvas>` / `<div>` plus the legend slot)
 - **CSS** — only the rules that chart actually uses
@@ -115,6 +115,14 @@ Each chart emits five views:
   the CDN script tags already in place. Download it and it runs.
 - **AI Prompt** — the same chart written as a brief you can hand to an
   assistant along with your own spreadsheet.
+- **Spec** — the chart as data: `{ chart, spec }` as JSON you can diff, check
+  into a repo, or paste back. It carries its own chart id, so pasting one into
+  the wrong studio opens the chart it belongs to.
+- **Colours** — not code at all: the whole palette at once, a swatch and a name
+  per series, with a warning if two of them merge for a colour-blind reader.
+
+Undo and redo sit in that same bar and cover the whole chart — every colour,
+slider, toggle, note and split, not just the data table.
 
 ## Handing it to an AI
 
@@ -228,6 +236,79 @@ distributions, the finance charts and the maps, which used to draw a simulation
 from a "Sample seed" slider and had no way to accept anyone's actual numbers.
 The datasets are deliberately small enough to edit: a histogram of 140 ages
 rather than 2,400 simulated ones.
+
+## Reshaping a table before you chart it
+
+The file most people have is five hundred transactions; the chart they want is
+revenue by region, seven bars. The **Shape** tab in the data editor closes that
+gap with five operations — filter, group, bin, sort, limit — in a pipeline
+where each step reads the table the one before it made.
+
+They are an **edit, not a layer**. They run once, and what comes out is written
+into the grid as literal values, exactly as a paste would be. Nothing is
+re-derived at draw time, so an exported chart carries numbers rather than a
+transform engine — and you see what the aggregation produced before you accept
+it, which is the honest way round.
+
+Order is the answer: `sort → limit` keeps the three biggest rows, `limit →
+sort` keeps three arbitrary ones and puts them in order. And an `id` column is
+never totalled by default, because summing it produces a number that means
+nothing.
+
+## Small multiples
+
+Any chart can be split into a grid of panels — one per series, or one per
+distinct value of a column. `Region, Month, Sales` becomes one chart per
+region, side by side.
+
+It is a general operation rather than three chart types that happen to be
+small: the split produces one complete spec per panel and hands each to the
+same renderer the chart already had, so all 114 charts can do it and none of
+them had to be told how.
+
+Where a chart can put every panel on **one axis**, it does, and says so. Where
+it cannot — most charts work their scale out from their own data, privately —
+it says that too, in words, under the control. A grid of panels that looks
+comparable and is not would be worse than one that admits it.
+
+## Notes on the chart
+
+A label on the peak, a rule at the target, a shaded band over the quarter that
+went wrong — the thing that turns a chart into an explanation. Drag one onto
+the plate and it travels with the exported code.
+
+They are positioned as a fraction of the chart's box rather than in data
+coordinates, which is what makes them work identically on all five renderers.
+The trade is honest and worth knowing: move the data and the note stays where
+it was, which is why you place it by dragging rather than typing two numbers.
+
+## Colours that work for everyone
+
+Roughly one man in twelve has some form of red-green colour deficiency, and the
+two colours a chart leans on to separate its series are exactly the two that
+tend to merge. Every palette is checked, and you are told **which two series
+just became one** — with a preview of the chart as that reader sees it.
+
+The check is advisory, never a gate: matching a brand is your business. But the
+default palette had to pass it too. It did not — seven of its pairs merged, and
+the first bit at four series — so it was corrected. Every pair now clears the
+threshold under all three deficiencies, and no chart in the library warns on the
+data it ships with.
+
+Colours are editable wherever you are looking at them: beside each series in
+the sidebar, as a **Colour row** in the data table, or as the whole palette at
+once in the Colours tab.
+
+## Readable without seeing it
+
+Every exported chart carries a text description and its data as a real `<table>`
+— because a `<canvas>` is a rectangle of pixels with nothing inside it for a
+screen reader, and these charts get pasted into other people's sites.
+
+Both are derived from what the library already holds: the chart's own blurb,
+the line that explains how it is read, and the writer that produces its data
+table. A chart that gains a good data writer gains a good description for free.
+It costs about 2.3KB.
 
 ## Cities without leaving the chart
 
@@ -371,9 +452,15 @@ draws to a canvas or measures real layout — jsdom would report a green run
 while rendering nothing. For each chart it checks that it renders, that the
 canvas is not blank, that the data editor accepts its own example, that the
 chart survives that data, and that the generated code parses and declares its
-dependencies. It also loads seven exported standalone files and confirms they
+dependencies. It also loads exported standalone files and confirms they
 actually run, and checks that every chart's AI prompt carries that chart's own
 format, code and current data.
+
+Beyond that it drives the things a person does: pasting a wide export and
+seeing which charts can read it, reshaping a table, splitting one into panels,
+annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
+spreadsheet, and refusing six hostile ones. **655 checks**, and it fails if
+anything writes to the console.
 
 ```bash
 npm test -- --only geo     # just the charts whose id contains "geo"

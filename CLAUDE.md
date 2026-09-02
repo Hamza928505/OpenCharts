@@ -737,7 +737,8 @@ palette, and a second copy of that statement is a second thing to keep true.
 
 ### The Spec view
 
-The sixth code view is the chart as *data*: `{ chart, spec }` as indented JSON.
+The sixth of seven code views is the chart as *data*: `{ chart, spec }` as
+indented JSON.
 Nothing new is computed for it — the share link already proves every spec
 round-trips through serialisation — it is simply exposed where a person can
 read, diff and paste it.
@@ -1258,7 +1259,8 @@ chart is neutral.
 
 ### The AI prompt
 
-The **AI Prompt** tab is the fifth of six code views, and the only one that is not
+The **AI Prompt** tab is the fifth of seven code views, and one of the two that
+are not
 code: it is the whole chart written as a brief to hand to an assistant along
 with somebody's own spreadsheet. `prompt.js` assembles it from what the studio
 already maintains, and **nothing in it is hand-written per chart**:
@@ -1697,6 +1699,9 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `a11y.js` | The chart as text — its description and its data as a table |
 | `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
+| `chart-help.js` | The `read` and `watch` line per chart, with a category fallback |
+| `HelpPanel.js` | Those two lines, rendered beside the chart |
+| `share.js` | The spec compressed into a link, and read back out of one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |
 | `SourcesPanel.js` | The studio's per-chart dependency disclosure |
@@ -1730,7 +1735,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
+The suite is **655 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -1741,7 +1746,8 @@ phone), flags and country metadata, the colour-vision check, the spec view
 and undo, the collapsible rail and focus mode, interaction motion, accessible chart
 output, reading a table from a link, reshaping a table, annotating a chart,
 queued previews and forgiving hover, splitting one table into small
-multiples, and console cleanliness.
+multiples, editing a colour wherever it is shown, undo and redo across the
+whole spec, a resizable controls column, and console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
