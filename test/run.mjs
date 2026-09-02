@@ -2827,14 +2827,219 @@ const cvdReach = await page.evaluate(async () => {
 check(cvdReach.from.series === 48,
   'the check now reads the charts that keep a colour per series',
   `${cvdReach.from.series} via series, ${cvdReach.from.colors} via colors`);
-check(cvdReach.comparable === 93,
-  'and 93 charts have two colours to compare — up from the 58 with a colors control',
+check(cvdReach.comparable === 94,
+  'and 94 charts have two colours to compare — up from the 58 with a colors control',
   `${cvdReach.comparable} comparable, ${cvdReach.oneColour} with fewer than two`);
 check(cvdReach.comparable + cvdReach.oneColour === cvdReach.total,
   'every chart is either checked or has nothing to compare',
   `${cvdReach.comparable} + ${cvdReach.oneColour} of ${cvdReach.total}`);
 check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette each time',
   cvdReach.unreachable.slice(0, 4).join(', '));
+
+
+/* The colour popover, and colours in the data table.
+ *
+ * The popover used to be an absolutely-positioned child of the swatch, inside
+ * `.controls` — a scroll container. So it was clipped near the bottom of the
+ * column, it overlapped whatever control came next, and it only ever opened
+ * downward. It is a portal on `document.body` now, which is why these checks
+ * are about where it lives rather than about a z-index. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const picker = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const rows = [...document.querySelectorAll('.series-row')];
+  rows[rows.length - 1].querySelector('.swatch').click();
+  await sleep(300);
+
+  const pop = document.querySelector('.colour-pop');
+  const r = pop ? pop.getBoundingClientRect() : null;
+  const add = [...document.querySelectorAll('.btn')].find((b) => /Add series/.test(b.textContent));
+  const ab = add ? add.getBoundingClientRect() : null;
+
+  let onTop = null;
+  const overlaps = !!(r && ab && r.bottom > ab.top && r.top < ab.bottom);
+  if (overlaps) {
+    const y = (Math.max(r.top, ab.top) + Math.min(r.bottom, ab.bottom)) / 2;
+    const hit = document.elementFromPoint(r.left + r.width / 2, y);
+    onTop = hit ? (hit.className || hit.tagName) : null;
+  }
+
+  // Read where it lives *before* dismissing it: the scroll below detaches the
+  // node, and asking a detached element for its parent answers about the test,
+  // not about the popover.
+  const shot = {
+    portalled: !!(pop && pop.parentElement === document.body),
+    position: pop ? getComputedStyle(pop).position : null,
+    inViewport: !!(r && r.top >= 0 && r.bottom <= window.innerHeight),
+    overlaps,
+    onTop,
+    openedOne: document.querySelectorAll('.colour-pop').length,
+  };
+
+  // A scroll must not dismiss it. Clicking a swatch low in a scrolling column
+  // makes the browser scroll it into view, and that scroll lands *after* the
+  // popover opens — closing on it shut the popover within a frame of opening.
+  document.querySelector('.controls').dispatchEvent(new Event('scroll', { bubbles: true }));
+  await sleep(150);
+  shot.survivesScroll = document.querySelectorAll('.colour-pop').length === 1;
+
+  // It gives up only when the swatch it points at has actually gone.
+  document.querySelectorAll('.series-row').forEach((r) => r.remove());
+  document.querySelector('.controls').dispatchEvent(new Event('scroll', { bubbles: true }));
+  await sleep(150);
+  shot.closedWhenAnchorGone = document.querySelectorAll('.colour-pop').length === 0;
+  return shot;
+});
+check(picker.portalled && picker.position === 'fixed',
+  'the colour popover is a portal, so nothing can clip it',
+  JSON.stringify(picker));
+check(picker.inViewport, 'and it opens where it fits on screen');
+check(!picker.overlaps || /colour-pop/.test(picker.onTop || ''),
+  'where it overlaps the next control, it is the one on top',
+  `overlaps=${picker.overlaps} top=${picker.onTop}`);
+check(picker.openedOne === 1 && picker.survivesScroll,
+  'a scroll moves it rather than closing it',
+  `${picker.openedOne} open, survived: ${picker.survivesScroll}`);
+check(picker.closedWhenAnchorGone,
+  'and it closes once its swatch is gone');
+
+
+
+/* A series is a column, so its colour belongs against its heading. */
+const gridColour = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const before = app.spec.series.map((x) => x.color);
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+  const heads = [...document.querySelectorAll('.dgrid thead .dgrid-swatch')];
+  const gutters = document.querySelectorAll('.dgrid tbody .dgrid-swatch').length;
+  if (!heads.length) return { heads: 0, gutters };
+  heads[0].click();
+  await sleep(300);
+  const dots = [...document.querySelectorAll('.colour-pop .palette-dot')];
+  if (dots[2]) { dots[2].click(); await sleep(250); }
+  const heldBefore = app.spec.series.map((x) => x.color);
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Use this data/.test(b.textContent)).click();
+  await sleep(1300);
+  return {
+    heads: heads.length,
+    gutters,
+    before,
+    swatchPainted: heads[0].style.background,
+    heldUntilApply: JSON.stringify(before) === JSON.stringify(heldBefore),
+    after: app.spec.series.map((x) => x.color),
+  };
+});
+check(gridColour.heads === 2 && gridColour.gutters === 0,
+  'a series chart puts a swatch on each column heading',
+  `${gridColour.heads} headings, ${gridColour.gutters} gutters`);
+check(!!gridColour.swatchPainted, 'the swatch shows the colour it will apply',
+  gridColour.swatchPainted);
+check(gridColour.heldUntilApply,
+  'and the chart is not recoloured until the table is applied');
+check(gridColour.after[0] !== gridColour.before[0]
+  && gridColour.after[1] === gridColour.before[1],
+  'applying writes that one colour to the spec, and only that one',
+  `${gridColour.before} -> ${gridColour.after}`);
+
+/* An item is a row, so its colour belongs against the row number. */
+await page.goto(`${base}/studio.html?chart=bar-lollipop`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const rowColour = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+  return {
+    items: app.spec.items.length,
+    heads: document.querySelectorAll('.dgrid thead .dgrid-swatch').length,
+    gutters: document.querySelectorAll('.dgrid tbody .dgrid-swatch').length,
+  };
+});
+check(rowColour.gutters === rowColour.items && rowColour.heads === 0,
+  'an item chart puts one in each row gutter instead',
+  `${rowColour.gutters} gutters for ${rowColour.items} items, ${rowColour.heads} headings`);
+
+/* The bug this all came from: on a window short enough for the sidebar to
+ * scroll, clicking a swatch near the bottom scrolls it into view, and that
+ * scroll arrives after the popover has opened. */
+for (const height of [720, 620]) {
+  await page.setViewportSize({ width: 1280, height });
+  await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+  const low = await page.evaluate(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Push the list down so the last swatch sits low in a scrolling column.
+    for (let i = 0; i < 4; i++) {
+      const add = [...document.querySelectorAll('.btn')].find((b) => /Add series/.test(b.textContent));
+      if (!add) break;
+      add.click();
+      await sleep(120);
+    }
+    const controls = document.querySelector('.controls');
+    const rows = [...document.querySelectorAll('.series-row')];
+    // Bring the last row to the *bottom of the visible column*, which is where
+    // a reader clicking it would have it — not past the top, which is what
+    // scrolling to the very end does, and which nobody can click.
+    rows[rows.length - 1].scrollIntoView({ block: 'end' });
+    await sleep(200);
+    rows[rows.length - 1].querySelector('.swatch').click();
+    // The scroll the browser makes to reveal the swatch lands about here.
+    await sleep(250);
+    const pop = document.querySelector('.colour-pop');
+    if (!pop) return { open: false, scrollable: controls.scrollHeight > controls.clientHeight };
+    const r = pop.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const sw = rows[rows.length - 1].querySelector('.swatch').getBoundingClientRect();
+    return {
+      open: true,
+      scrollable: controls.scrollHeight > controls.clientHeight,
+      onScreen: r.top >= 0 && r.bottom <= window.innerHeight,
+      onTop: !!(hit && pop.contains(hit)),
+      pop: { t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) },
+      swatch: { t: Math.round(sw.top), b: Math.round(sw.bottom) },
+      vh: window.innerHeight,
+    };
+  });
+  check(low.scrollable, `the sidebar really does scroll at ${height}px`, JSON.stringify(low));
+  check(low.open && low.onScreen && low.onTop,
+    `a swatch low in a ${height}px window still opens a usable popover`,
+    JSON.stringify(low));
+}
+await page.setViewportSize({ width: 1280, height: 900 });
+
+/* A `colors` control does not always point at hex.
+ *
+ * The word cloud points its at `words`, whose entries carry a colour each —
+ * read as colours those painted 28 blank swatches, a control that could not do
+ * the one thing it is named for, on the only chart the check could not see. */
+await page.goto(`${base}/studio.html?chart=word-cloud`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const wordCloud = await page.evaluate(async () => {
+  const { paletteOf } = await import('/js/studio/cvd.js');
+  const app = window.openCharts;
+  const palette = paletteOf(app.def, app.spec);
+  const dots = [...document.querySelectorAll('.palette-dot')];
+  const before = JSON.parse(JSON.stringify(app.spec.words[0]));
+  return {
+    resolved: palette.from,
+    colours: palette.colors.length,
+    named: palette.names.filter(Boolean).length,
+    words: app.spec.words.length,
+    blank: dots.filter((d) => !d.style.background).length,
+    entryIsObject: before && typeof before === 'object' && 'weight' in before,
+  };
+});
+check(wordCloud.resolved === 'colors' && wordCloud.colours === wordCloud.words,
+  'a colors control pointing at objects still yields one colour per entry',
+  `${wordCloud.colours} of ${wordCloud.words} via ${wordCloud.resolved}`);
+check(wordCloud.blank === 0, 'so none of its swatches render blank',
+  `${wordCloud.blank} blank of ${wordCloud.words}`);
+check(wordCloud.named === wordCloud.words, 'and each one is named for its word',
+  `${wordCloud.named} named`);
+check(wordCloud.entryIsObject, 'the entries are still words, not bare colours');
 
 /* And it reaches the panel for a chart that keeps its colours per series. */
 await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });

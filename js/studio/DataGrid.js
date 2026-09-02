@@ -11,6 +11,7 @@
  */
 
 import { looksNumeric, columnRules, countOf } from './dataio.js';
+import { attachColourPicker } from './colorpicker.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -26,6 +27,11 @@ const el = (tag, cls, text) => {
  * @param {string} [opts.shape] the data shape, which decides how many leading
  *   columns hold words and what "+ Column" adds. See `columnRules` in dataio.
  * @param {Function} [opts.onChange] called with { headers, rows } after any edit
+ * @param {object} [opts.colours] lets the table edit the chart's colours:
+ *   `{ mode: 'column'|'row', at(i), set(i, hex) }`. A series is a column and an
+ *   item is a row, so the swatch goes wherever that chart's colours actually
+ *   live. Omitted where the palette does not line up with either, because a
+ *   swatch on the wrong thing is worse than none.
  * @returns {{ el, getData, setData, addRow, validate }}
  */
 export function createDataGrid(opts) {
@@ -48,6 +54,26 @@ export function createDataGrid(opts) {
    * over. Every other column is counted as if the facet were not there, so a
    * shape's own rules go on applying to the table it will actually be given.
    */
+  /* Colours, when the caller has told us where they belong. */
+  const colours = opts.colours || null;
+  /** A swatch button for palette slot `i`, or null. */
+  function swatchFor(i) {
+    if (!colours || i < 0) return null;
+    const hex = colours.at(i);
+    if (!hex) return null;
+    const b = el('button', 'dgrid-swatch');
+    b.type = 'button';
+    b.style.background = hex;
+    b.title = 'Change this colour';
+    b.setAttribute('aria-label', `Colour ${i + 1}`);
+    attachColourPicker(b, () => colours.at(i), (next) => {
+      colours.set(i, next);
+      b.style.background = next;
+      notify();
+    });
+    return b;
+  }
+
   const skipAt = () => {
     const i = opts.skipColumn ? opts.skipColumn(headers) : -1;
     return (Number.isInteger(i) && i >= 0 && i < headers.length) ? i : -1;
@@ -216,7 +242,17 @@ export function createDataGrid(opts) {
       inp.spellcheck = false;
       inp.setAttribute('aria-label', `Name of column ${c + 1}`);
       inp.addEventListener('input', () => { headers[c] = inp.value; notify(); });
-      th.appendChild(inp);
+      // A series is a column, so its colour belongs against its name.
+      const headSwatch = (colours && colours.mode === 'column')
+        ? swatchFor(dataCol(c) - labelCount())
+        : null;
+      if (headSwatch) {
+        const wrap = el('div', 'dgrid-head-wrap');
+        wrap.append(headSwatch, inp);
+        th.appendChild(wrap);
+      } else {
+        th.appendChild(inp);
+      }
       // A text column may go while there are more of them than the shape
       // needs — that is what lets a fourth Sankey stage be taken back out. A
       // value column may go while more than the minimum remain, except on a
@@ -247,7 +283,13 @@ export function createDataGrid(opts) {
     const tbody = el('tbody');
     rows.forEach((row, r) => {
       const tr = el('tr');
-      tr.appendChild(el('td', 'dgrid-gutter', String(r + 1)));
+      const gutter = el('td', 'dgrid-gutter', String(r + 1));
+      // An item is a row, so its colour belongs against its number.
+      if (colours && colours.mode === 'row') {
+        const rowSwatch = swatchFor(r);
+        if (rowSwatch) gutter.appendChild(rowSwatch);
+      }
+      tr.appendChild(gutter);
 
       headers.forEach((_, c) => {
         const td = el('td');

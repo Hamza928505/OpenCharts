@@ -176,39 +176,66 @@ export function confusablePairs(colors, opts = {}) {
  *
  * @returns {{colors: string[], names: string[], from: 'colors'|'series'|null}}
  */
+/** The colour an entry holds, whether it *is* one or merely carries one. */
+const colourIn = (entry) => {
+  if (typeof entry === 'string') return entry || '';
+  if (entry && typeof entry === 'object' && typeof entry.color === 'string') return entry.color;
+  return '';
+};
+
 export function paletteOf(def, spec) {
   const at = (obj, path) => String(path).split('.')
     .reduce((node, key) => (node == null ? node : node[key]), obj);
   const controls = (def && def.controls) || [];
 
+  // `kept` carries the index each colour came from, so the setter can write
+  // back to the entry it was read from rather than to the filtered position.
+  const pack = (list, kept, from) => ({
+    colors: kept.map((k) => k.colour),
+    names: kept.map((k) => k.name),
+    from,
+    set(i, hex) {
+      const slot = kept[i];
+      if (!slot || !hex) return false;
+      const entry = list[slot.at];
+      if (entry && typeof entry === 'object') entry.color = hex;
+      else list[slot.at] = hex;
+      return true;
+    },
+  });
+
   for (const c of controls) {
     if (c.type !== 'colors') continue;
     const list = at(spec, c.key || 'colors');
     if (!Array.isArray(list) || !list.length) continue;
-    const colors = list.filter((x) => typeof x === 'string' && x);
-    if (colors.length) {
-      const named = (typeof c.names === 'function' && c.names(spec)) || [];
-      return { colors, names: colors.map((_, i) => named[i] || ''), from: 'colors' };
-    }
+    // A `colors` control usually points at an array of hex. The word cloud
+    // points at its words, which carry a colour each — so read the entry when
+    // it is a string and its `color` when it is not, rather than dropping a
+    // whole chart for keeping its colours one level down.
+    const named = (typeof c.names === 'function' && c.names(spec)) || [];
+    const kept = list
+      .map((entry, i) => ({ colour: colourIn(entry), name: named[i] || '', at: i }))
+      .filter((e) => e.colour);
+    if (kept.length) return pack(list, kept, 'colors');
   }
 
   for (const c of controls) {
     if (c.type !== 'series') continue;
     const list = at(spec, c.key || 'series');
     if (!Array.isArray(list)) continue;
-    const kept = list.filter((e) => e && typeof e.color === 'string' && e.color);
-    if (kept.length >= 2) {
-      return {
-        colors: kept.map((e) => e.color),
-        names: kept.map((e) => e.label || e.name || ''),
-        from: 'series',
-      };
-    }
+    const kept = list
+      .map((entry, i) => ({
+        colour: colourIn(entry),
+        name: (entry && (entry.label || entry.name)) || '',
+        at: i,
+      }))
+      .filter((e) => e.colour);
+    if (kept.length >= 2) return pack(list, kept, 'series');
   }
 
   // A single-series chart has one colour and therefore no pair that can merge.
   // That is not a gap in the check; it is the check having nothing to say.
-  return { colors: [], names: [], from: null };
+  return { colors: [], names: [], from: null, set: () => false };
 }
 
 /** One sentence a reader can act on, or '' when the palette is clear. */
