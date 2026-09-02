@@ -4400,6 +4400,30 @@ const facetExports = await page.evaluate(async () => {
     if (/Code generation failed/.test(code.standalone)) continue;
     picked.set(engine, { id: def.id, engine, panels: panels.length, html: code.standalone });
   }
+
+  // The one DOM chart reads `items`, which has no notion of a series — so the
+  // loop above never reaches the fifth code path in `buildJS`. Split it by a
+  // column instead, which every shape supports, rather than leaving a whole
+  // renderer's export untested.
+  if (!picked.has('dom')) {
+    const def = reg.getChart('waffle');
+    const spec = reg.newSpec(def);
+    const rows = [];
+    ['Q1', 'Q2', 'Q3'].forEach((q, qi) => {
+      ['Chrome', 'Safari', 'Firefox'].forEach((b, bi) => {
+        rows.push([q, b, String(60 - bi * 20 + qi * 2)]);
+      });
+    });
+    if (f.facetByColumn(def, spec, { headers: ['Quarter', 'Browser', 'Share'], rows }, 0).ok) {
+      const panels = f.panelSpecs(def, spec);
+      const code = eng.generateCode(def, spec);
+      if (panels && !/Code generation failed/.test(code.standalone)) {
+        picked.set('dom', {
+          id: def.id, engine: 'dom', panels: panels.length, html: code.standalone,
+        });
+      }
+    }
+  }
   return [...picked.values()];
 });
 
@@ -4423,7 +4447,10 @@ for (const item of facetExports) {
       }
       const svg = p.querySelector('svg');
       if (svg) return svg.querySelectorAll('path,circle,rect,line').length > 3;
-      return p.children.length > 0 && p.textContent.trim().length > 0;
+      // A DOM chart draws with elements, not ink or paths — a waffle's cells
+      // carry no text at all, so counting descendants is the only honest
+      // question to ask of this branch.
+      return p.querySelectorAll('*').length > 3;
     });
     return {
       plates: plates.length,
@@ -4440,8 +4467,8 @@ for (const item of facetExports) {
   check(state.names.length === item.panels,
     `and names every panel: ${item.id}`, state.names.join(','));
 }
-check(facetExports.length >= 3, 'faceted exports were checked on more than one renderer',
-  facetExports.map((e) => e.engine).join(','));
+check(facetExports.length === 5, 'every renderer has a faceted export that runs',
+  facetExports.map((e) => e.engine + ':' + e.id).join(' '));
 
 console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetUi.panels} in the studio, ${facetExportsOk}/${facetExports.length} exports run`);
 
