@@ -2751,7 +2751,8 @@ check(!cvdMath.paletteFirstThree, 'the palette a three-series chart opens with i
 check(/Revenue and Cost/.test(cvdMath.sentence), 'the warning uses the series names', cvdMath.sentence);
 
 /* And it reaches the control panel. `area-band` carries a `colors` widget;
- * the 56 charts on `series` colour themselves through a different one. */
+ * the 48 charts on `series` colour themselves through a different one, and
+ * are checked just below. */
 await page.goto(`${base}/studio.html?chart=area-band`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2200);
 const cvdUi = await page.evaluate(async () => {
@@ -2790,6 +2791,99 @@ check(cvdUi.cleanHidden === true, 'a safe palette says nothing');
 check(cvdUi.warnShown, 'a palette that merges warns', cvdUi.warnText);
 check(cvdUi.dotsChanged, 'and can be previewed as the colour-blind reader sees it');
 check(cvdUi.specUntouched, 'previewing never rewrites the chart colours');
+
+/* Every chart the check can say something about, and only those.
+ *
+ * It first shipped reading the `colors` control, which 58 charts carry — so
+ * more than half the library was exempt from a check the product presents as
+ * universal, and the silence read as a pass. `paletteOf` answers the question
+ * wherever the colours live. */
+const cvdReach = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const { paletteOf, confusablePairs } = await import('/js/studio/cvd.js');
+  const from = { colors: 0, series: 0, none: 0 };
+  const unreachable = [];
+  const singles = [];
+  let comparable = 0;
+  let oneColour = 0;
+  for (const def of reg.CHARTS) {
+    const p = paletteOf(def, reg.newSpec(def));
+    from[p.from || 'none']++;
+    // Fewer than two colours is not a gap in the check; it is the check having
+    // nothing to say. A single-series chart has no pair that can merge.
+    if (p.colors.length < 2) { oneColour++; singles.push(def.id); continue; }
+    comparable++;
+    // Names must be filtered in step with colours, or the sentence blames the
+    // wrong two series.
+    if (p.names.length !== p.colors.length) unreachable.push(def.id + ':names');
+    // Whatever it hands back has to be something the checker accepts.
+    try { confusablePairs(p.colors); } catch { unreachable.push(def.id + ':threw'); }
+  }
+  return {
+    total: reg.CHARTS.length, from, unreachable, singles,
+    comparable, oneColour,
+  };
+});
+check(cvdReach.from.series === 48,
+  'the check now reads the charts that keep a colour per series',
+  `${cvdReach.from.series} via series, ${cvdReach.from.colors} via colors`);
+check(cvdReach.comparable === 93,
+  'and 93 charts have two colours to compare — up from the 58 with a colors control',
+  `${cvdReach.comparable} comparable, ${cvdReach.oneColour} with fewer than two`);
+check(cvdReach.comparable + cvdReach.oneColour === cvdReach.total,
+  'every chart is either checked or has nothing to compare',
+  `${cvdReach.comparable} + ${cvdReach.oneColour} of ${cvdReach.total}`);
+check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette each time',
+  cvdReach.unreachable.slice(0, 4).join(', '));
+
+/* And it reaches the panel for a chart that keeps its colours per series. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const cvdSeries = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const { paletteOf } = await import('/js/studio/cvd.js');
+  const app = window.openCharts;
+  const where = paletteOf(app.def, app.spec).from;
+
+  // Purple and teal are two swatches that stay apart under every deficiency,
+  // so this is the quiet case. Set explicitly rather than trusting whatever
+  // the chart ships with — the wider reach turned some shipped pairs into
+  // true positives, which is the finding, not the fixture.
+  app.spec.series[0].color = '#6C63D8';
+  app.spec.series[1].color = '#16916A';
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+  const cleanHidden = (document.querySelector('.palette-warn') || {}).hidden;
+
+  app.spec.series[0].color = '#d40000';
+  app.spec.series[1].color = '#00a000';
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+
+  const warn = document.querySelector('.palette-warn');
+  const sim = document.querySelector('.palette-sim');
+  const before = [...document.querySelectorAll('.swatch')].map((d) => d.style.background);
+  if (sim) sim.click();
+  await sleep(250);
+  const after = [...document.querySelectorAll('.swatch')].map((d) => d.style.background);
+
+  return {
+    where,
+    cleanHidden,
+    warnShown: warn ? !warn.hidden : false,
+    warnText: warn ? warn.textContent : '',
+    swatchesChanged: JSON.stringify(before) !== JSON.stringify(after),
+    specUntouched: app.spec.series[0].color === '#d40000',
+  };
+});
+check(cvdSeries.where === 'series', 'a per-series chart is read through its series control',
+  String(cvdSeries.where));
+check(cvdSeries.cleanHidden === true, 'a safe per-series palette says nothing either');
+check(cvdSeries.warnShown && /2024|2023/.test(cvdSeries.warnText),
+  'a merging pair warns, naming the series', cvdSeries.warnText);
+check(cvdSeries.swatchesChanged, 'and previews as the colour-blind reader sees it');
+check(cvdSeries.specUntouched, 'previewing never rewrites the chart colours here either');
 
 /* The chart as data: a spec you can read, copy and paste back. */
 await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });

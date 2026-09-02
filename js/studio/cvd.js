@@ -156,6 +156,61 @@ export function confusablePairs(colors, opts = {}) {
   return [...found.values()].sort((x, y) => x.delta - y.delta);
 }
 
+/**
+ * The colours a chart is actually drawing with, wherever it keeps them.
+ *
+ * The check first shipped reading the `colors` control, which 58 charts carry.
+ * The other 56 hold a colour per series *inside* the data widget — so more
+ * than half the library was quietly exempt from a check the product presents
+ * as universal. Both places are one question with one answer, and this is it.
+ *
+ * Two rules it follows:
+ *
+ * - **Nothing is guessed.** A series with no colour of its own is left out
+ *   rather than filled in from `paletteAt(i)`: reporting a pair a reader never
+ *   chose would be the same noise the "distinguishable normally" rule exists
+ *   to keep out.
+ * - **Names travel with colours.** They are filtered in step, so the sentence
+ *   `describePairs` writes names the right two series rather than the two that
+ *   happened to land at those indices before filtering.
+ *
+ * @returns {{colors: string[], names: string[], from: 'colors'|'series'|null}}
+ */
+export function paletteOf(def, spec) {
+  const at = (obj, path) => String(path).split('.')
+    .reduce((node, key) => (node == null ? node : node[key]), obj);
+  const controls = (def && def.controls) || [];
+
+  for (const c of controls) {
+    if (c.type !== 'colors') continue;
+    const list = at(spec, c.key || 'colors');
+    if (!Array.isArray(list) || !list.length) continue;
+    const colors = list.filter((x) => typeof x === 'string' && x);
+    if (colors.length) {
+      const named = (typeof c.names === 'function' && c.names(spec)) || [];
+      return { colors, names: colors.map((_, i) => named[i] || ''), from: 'colors' };
+    }
+  }
+
+  for (const c of controls) {
+    if (c.type !== 'series') continue;
+    const list = at(spec, c.key || 'series');
+    if (!Array.isArray(list)) continue;
+    const kept = list.filter((e) => e && typeof e.color === 'string' && e.color);
+    if (kept.length >= 2) {
+      return {
+        colors: kept.map((e) => e.color),
+        names: kept.map((e) => e.label || e.name || ''),
+        from: 'series',
+      };
+    }
+  }
+
+  // A single-series chart has one colour and therefore no pair that can merge.
+  // That is not a gap in the check; it is the check having nothing to say.
+  return { colors: [], names: [], from: null };
+}
+
 /** One sentence a reader can act on, or '' when the palette is clear. */
 export function describePairs(pairs, name) {
   if (!pairs || !pairs.length) return '';
