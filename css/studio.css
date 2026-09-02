@@ -2916,13 +2916,32 @@ body[data-focus="1"] .stage-data { display: none; }
   .dgrid-swatch { border-color: rgba(255,255,255,.22); }
 }
 
-.dgrid thead th .dgrid-head-wrap {
-  display: flex;
-  align-items: center;
-  gap: .3rem;
+/* The colour row.
+ *
+ * In the head, with the header row it describes — it is not data, and the
+ * sticky header carries it along. Centred in each column so the swatch sits
+ * under the name it belongs to. */
+.dgrid-colour-row td,
+.dgrid-colour-row th {
+  border-bottom: 1px solid var(--rule);
+  padding: .25rem .35rem;
+  background: var(--surface-2);
 }
 
-/* The gutter holds a row number; with colours it holds the swatch too. */
+.dgrid-colour-cell { text-align: center; }
+.dgrid-colour-cell.is-blank { background: var(--surface-2); }
+
+.dgrid-colour-lead {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* The gutter holds a row number; on a row-coloured chart it holds the swatch. */
 .dgrid-gutter .dgrid-swatch { margin-left: .3rem; }
 
 /* ── Small multiples ─────────────────────────────────────────────────────────

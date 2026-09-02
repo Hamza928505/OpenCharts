@@ -268,8 +268,16 @@ looks for them. They are not part of the table — the grid holds words and
 numbers, and a colour is neither — so `DataGrid` takes a `colours` accessor and
 renders a swatch beside the thing that owns it:
 
-- **A series is a column**, so its swatch sits against the column heading.
-- **An item is a row**, so its swatch sits in the row's gutter, by the number.
+- **A series is a column**, so the colours are **a row of the table** —
+  `Colour`, in the `thead` under the header row it describes, one cell per
+  column and blank under the label columns. It lives in the head because it is
+  not data: it is never validated, `getData` never sees it, and the sticky
+  header carries it along. The first attempt hung the swatch off the heading
+  text instead, which put it in the same cell as the name input and read as
+  part of the name.
+- **An item is a row**, so its swatch sits in the row's gutter, by the number —
+  the same idea turned ninety degrees, and why a colour *row* is offered only
+  where a series really is a column.
 
 Which of the two is not declared per chart. It follows from whether the palette
 has one entry per value column or one per row, and where it matches neither no

@@ -242,17 +242,7 @@ export function createDataGrid(opts) {
       inp.spellcheck = false;
       inp.setAttribute('aria-label', `Name of column ${c + 1}`);
       inp.addEventListener('input', () => { headers[c] = inp.value; notify(); });
-      // A series is a column, so its colour belongs against its name.
-      const headSwatch = (colours && colours.mode === 'column')
-        ? swatchFor(dataCol(c) - labelCount())
-        : null;
-      if (headSwatch) {
-        const wrap = el('div', 'dgrid-head-wrap');
-        wrap.append(headSwatch, inp);
-        th.appendChild(wrap);
-      } else {
-        th.appendChild(inp);
-      }
+      th.appendChild(inp);
       // A text column may go while there are more of them than the shape
       // needs — that is what lets a fourth Sankey stage be taken back out. A
       // value column may go while more than the minimum remain, except on a
@@ -277,6 +267,36 @@ export function createDataGrid(opts) {
     });
     hr.appendChild(el('th', 'dgrid-gutter', ''));
     thead.appendChild(hr);
+
+    /* A row for the colours.
+     *
+     * A series *is* a column here, so its colour reads as another thing said
+     * about that column — like its name — and belongs under the name, in line
+     * with it. Hanging the swatch off the heading text put it in the same cell
+     * as the input and made it look like part of the name.
+     *
+     * It sits in the `thead`, with the header row it describes: it is not data,
+     * it is never validated, and `getData` never sees it. Charts that colour by
+     * row rather than by column keep their swatch in the row gutter, which is
+     * the same idea turned ninety degrees.
+     */
+    if (colours && colours.mode === 'column') {
+      const cr = el('tr', 'dgrid-colour-row');
+      const lead = el('th', 'dgrid-gutter dgrid-colour-lead', 'Colour');
+      lead.scope = 'row';
+      lead.title = 'The colour each series is drawn in';
+      cr.appendChild(lead);
+      headers.forEach((_, c) => {
+        const td = el('td', 'dgrid-colour-cell');
+        const swatch = swatchFor(dataCol(c) - labelCount());
+        // A label column names things; it has no colour of its own to set.
+        if (swatch) td.appendChild(swatch);
+        else td.classList.add('is-blank');
+        cr.appendChild(td);
+      });
+      cr.appendChild(el('td', 'dgrid-gutter', ''));
+      thead.appendChild(cr);
+    }
     table.appendChild(thead);
 
     /* body */

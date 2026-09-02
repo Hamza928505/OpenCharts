@@ -3124,9 +3124,23 @@ const gridColour = await page.evaluate(async () => {
   const before = app.spec.series.map((x) => x.color);
   [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
   await sleep(1100);
-  const heads = [...document.querySelectorAll('.dgrid thead .dgrid-swatch')];
+  const row = document.querySelector('.dgrid-colour-row');
+  const heads = [...document.querySelectorAll('.dgrid-colour-row .dgrid-swatch')];
   const gutters = document.querySelectorAll('.dgrid tbody .dgrid-swatch').length;
-  if (!heads.length) return { heads: 0, gutters };
+  if (!row || !heads.length) return { heads: 0, gutters, hasRow: !!row };
+  // A row of the table, in the head with the header it describes — not a
+  // swatch tucked into the heading's own cell.
+  const headerCells = document.querySelector('.dgrid thead tr').children.length;
+  const centre = (e) => { const b = e.getBoundingClientRect(); return b.left + b.width / 2; };
+  const colCentres = [...document.querySelectorAll('.dgrid thead tr th')]
+    .slice(1, -1).map(centre);
+  const layout = {
+    lead: row.querySelector('.dgrid-colour-lead').textContent,
+    inHead: row.parentElement.tagName,
+    cellsMatchHeader: row.children.length === headerCells,
+    blanks: row.querySelectorAll('.is-blank').length,
+    aligned: heads.every((b) => colCentres.some((x) => Math.abs(x - centre(b)) <= 2)),
+  };
   heads[0].click();
   await sleep(300);
   const dots = [...document.querySelectorAll('.colour-pop .palette-dot')];
@@ -3138,14 +3152,22 @@ const gridColour = await page.evaluate(async () => {
     heads: heads.length,
     gutters,
     before,
+    hasRow: true,
+    ...layout,
     swatchPainted: heads[0].style.background,
     heldUntilApply: JSON.stringify(before) === JSON.stringify(heldBefore),
     after: app.spec.series.map((x) => x.color),
   };
 });
+check(gridColour.hasRow && gridColour.inHead === 'THEAD' && gridColour.lead === 'Colour',
+  'a series chart gets a Colour row in the table',
+  `row=${gridColour.hasRow} in=${gridColour.inHead} lead=${gridColour.lead}`);
 check(gridColour.heads === 2 && gridColour.gutters === 0,
-  'a series chart puts a swatch on each column heading',
-  `${gridColour.heads} headings, ${gridColour.gutters} gutters`);
+  'with one swatch per series column and none in the gutter',
+  `${gridColour.heads} swatches, ${gridColour.gutters} gutters`);
+check(gridColour.cellsMatchHeader && gridColour.blanks === 1 && gridColour.aligned,
+  'its cells line up with the columns, blank under the label column',
+  `cells=${gridColour.cellsMatchHeader} blanks=${gridColour.blanks} aligned=${gridColour.aligned}`);
 check(!!gridColour.swatchPainted, 'the swatch shows the colour it will apply',
   gridColour.swatchPainted);
 check(gridColour.heldUntilApply,
