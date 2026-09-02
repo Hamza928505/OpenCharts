@@ -4297,8 +4297,14 @@ const facet = await page.evaluate(async () => {
   const seriesPanels = f.panelSpecs(bar, barSpec);
   out.seriesCount = seriesPanels ? seriesPanels.length : 0;
   out.seriesEachOne = !!seriesPanels && seriesPanels.every((p) => p.spec.series.length === 1);
-  /* And a chart with no axis bound says so instead of pretending. */
-  out.honest = f.scaleSharing(bar);
+  /* And a chart that genuinely cannot share an axis says so instead of
+     pretending. Found rather than named: which charts those are moved when the
+     config route landed, and a hard-coded id would quietly stop testing the
+     case it was written for. */
+  const cannot = reg.CHARTS.find((d) => !f.scaleSharing(d).can);
+  out.honest = cannot ? f.scaleSharing(cannot) : null;
+  out.honestId = cannot ? cannot.id : '';
+  out.honestEngine = cannot ? eng.engineOf(cannot) : '';
 
   /* A slider called "Largest city" is not an axis maximum. */
   out.notAxes = ['city-map', 'proportional-symbol-map', 'flow-map', 'word-cloud']
@@ -4349,8 +4355,12 @@ check(new Set(facet.freeMaxima).size === 1 && facet.freeMaxima[0] !== facet.shar
   facet.freeMaxima.join(',') + ' vs ' + facet.sharedMaxima.join(','));
 check(facet.notAxes.every((s) => s.endsWith(':none')),
   'a "Largest city" slider is not mistaken for an axis', facet.notAxes.join(' '));
-check(!facet.honest.can && /own axis|scaled to itself/i.test(facet.honest.why),
-  'a chart that cannot share an axis says so', facet.honest.why);
+check(facet.honest && !facet.honest.can && /own axis|scaled to itself/i.test(facet.honest.why),
+  'a chart that cannot share an axis says so',
+  `${facet.honestId} (${facet.honestEngine}): ${(facet.honest || {}).why}`);
+check(facet.honestEngine !== 'chartjs',
+  'and it is one that draws its own axis, not one that returns a config',
+  facet.honestEngine);
 check(facet.exportPlates === facet.count && facet.exportIds,
   'the export carries one plate per panel', String(facet.exportPlates));
 check(facet.exportNames && facet.exportCss && facet.exportRuns,
@@ -4375,6 +4385,97 @@ check(facet.offered.join(',') === 'Region',
   facet.offered.join(','));
 check(facet.columns.join(',') === '1,2,3,4', 'the grid never goes past four across',
   facet.columns.join(','));
+
+/* Matched scales the other way round.
+ *
+ * A canvas `draw` computes its domain privately inside the function that gets
+ * serialised, so no facet can reach it. Chart.js does not: `build()` returns a
+ * config, and a config is data. Writing the axis afterwards puts panels on one
+ * scale without a single build function being touched. */
+const facetScales = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const f = await import('/js/studio/facet.js');
+  const out = {};
+
+  const yMaxOf = (cfg) => cfg && cfg.options && cfg.options.scales
+    && cfg.options.scales.y && cfg.options.scales.y.max;
+
+  // A Chart.js chart with no axis-bound control of its own — so any sharing
+  // that happens here came from the config route.
+  const def = reg.getChart('bar-vertical');
+  out.noBoundControl = !f.boundKeys(def).max && !f.boundKeys(def).min;
+  out.saysYes = f.scaleSharing(def);
+
+  const spec = reg.newSpec(def);
+  // Panels with deliberately different peaks: without sharing they draw to
+  // their own maxima and the grid lies about the comparison.
+  spec.series = [
+    { label: 'Small', color: '#6C63D8', data: [10, 14, 12, 16] },
+    { label: 'Large', color: '#16916A', data: [800, 940, 870, 1010] },
+  ];
+  f.facetBySeries(def, spec);
+  const panels = f.panelSpecs(def, spec);
+  out.panels = panels.length;
+
+  const bounds = f.sharedScaleBounds(def, panels, spec.facet);
+  out.bounds = bounds;
+  const shared = panels.map((p) => yMaxOf(
+    f.applyScaleBounds(def.chartjs.build(p.spec, { width: 400, height: 240 }), bounds),
+  ));
+  out.sharedMaxima = shared;
+  out.coversPeak = shared.every((m) => typeof m === 'number' && m >= 1010);
+
+  // Independent scales must leave the config alone, or the switch does nothing.
+  spec.facet.scales = 'free';
+  const freeBounds = f.sharedScaleBounds(def, f.panelSpecs(def, spec), spec.facet);
+  out.freeIsNull = freeBounds === null;
+  spec.facet.scales = 'shared';
+
+  // And it reaches the generated code, not just the preview.
+  const code = eng.generateCode(def, spec);
+  out.inExport = (code.js.match(/max:\s*-?\d/g) || []).length;
+
+  // A chart with no cartesian axis is still honest about it.
+  const pie = reg.getChart('pie');
+  out.pieSays = f.scaleSharing(pie);
+
+  // A chart that pins its own axis keeps it — a facet does not overrule a
+  // deliberate choice.
+  const pinned = { options: { scales: { y: { max: 100 } } } };
+  f.applyScaleBounds(pinned, { y: { max: 4000 } });
+  out.pinnedKept = pinned.options.scales.y.max === 100;
+
+  // How much wider the net is now.
+  let bound = 0; let viaConfig = 0;
+  for (const d of reg.CHARTS) {
+    const k = f.boundKeys(d);
+    if (k.max || k.min) { bound++; continue; }
+    if (f.scaleSharing(d).can) viaConfig++;
+  }
+  out.byControl = bound;
+  out.byConfig = viaConfig;
+  return out;
+});
+
+check(facetScales.noBoundControl, 'the test chart has no axis control of its own');
+check(facetScales.saysYes.can, 'so sharing must have come from its config',
+  facetScales.saysYes.why);
+check(facetScales.panels === 2, 'two panels with very different peaks',
+  String(facetScales.panels));
+check(new Set(facetScales.sharedMaxima).size === 1 && facetScales.coversPeak,
+  'both are drawn to one axis that reaches the larger',
+  JSON.stringify(facetScales.sharedMaxima));
+check(facetScales.freeIsNull, 'independent scales write nothing at all');
+check(facetScales.inExport >= 2, 'and the shared axis is in the exported code',
+  `${facetScales.inExport} bounds emitted`);
+check(!facetScales.pieSays.can && /own axis|scaled to itself/i.test(facetScales.pieSays.why),
+  'a chart with no cartesian axis still says panels do not compare',
+  facetScales.pieSays.why);
+check(facetScales.pinnedKept, 'a chart that pins its own axis keeps it');
+check(facetScales.byConfig >= 25,
+  'the config route roughly triples how many charts can share an axis',
+  `${facetScales.byControl} by control + ${facetScales.byConfig} by config`);
 
 /* And it works in the studio, on a real page, without leaking a chart per
  * rebuild. Twelve Chart.js instances left behind on every control edit is the
@@ -4564,7 +4665,7 @@ for (const item of facetExports) {
 check(facetExports.length === 5, 'every renderer has a faceted export that runs',
   facetExports.map((e) => e.engine + ':' + e.id).join(' '));
 
-console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetUi.panels} in the studio, ${facetExportsOk}/${facetExports.length} exports run`);
+console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetExportsOk}/${facetExports.length} exports run, ${facetScales.byControl + facetScales.byConfig} charts share an axis`);
 
 /* Suite 27 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

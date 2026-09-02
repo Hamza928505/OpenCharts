@@ -15,6 +15,7 @@ import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
 import {
   panelSpecs, panelColumns, panelHeight, facetMarkup, isFaceted, FACET_CSS,
+  sharedScaleBounds, applyScaleBounds,
 } from './facet.js';
 
 export const ENGINE_LABEL = {
@@ -106,6 +107,9 @@ function renderFacetGrid(def, host, spec, panels, opts) {
 
   const grid = host.querySelector('.oc-facets');
   const height = panelHeight(heightFor(def, opts), cols);
+  // Worked out once across every panel, then handed to each — a panel rendered
+  // on its own cannot know what the others reach.
+  const bounds = sharedScaleBounds(def, panels, spec.facet);
 
   const build = () => panels.map((panel, i) => {
     const plate = host.querySelector(`#oc-panel-${i}`);
@@ -113,6 +117,7 @@ function renderFacetGrid(def, host, spec, panels, opts) {
     return renderOne(def, plate, panel.spec, {
       ...opts,
       height,
+      bounds,
       label: `${panel.name} — ${chartLabel(def, panel.spec)}`,
     });
   }).filter(Boolean);
@@ -169,7 +174,7 @@ function renderOne(def, host, spec, opts = {}) {
     wrap.appendChild(canvas);
     host.appendChild(wrap);
     try {
-      const config = def.chartjs.build(spec, ctxInfo);
+      const config = applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds);
       const chart = new window.Chart(canvas, config);
       annotate();
       return { engine, chart, canvas };
@@ -654,9 +659,12 @@ function buildJS(def, spec) {
 
   if (engine === 'chartjs') {
     if (panels) {
+      const bounds = sharedScaleBounds(def, panels, spec.facet);
       const built = panels.map((p) => ({
         name: p.name,
-        config: def.chartjs.build(p.spec, { width: panelWidth, height: h }),
+        config: applyScaleBounds(
+          def.chartjs.build(p.spec, { width: panelWidth, height: h }), bounds,
+        ),
       }));
       return tidy([
         ...header,

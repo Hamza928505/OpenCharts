@@ -588,9 +588,25 @@ colour a little rather than obviously. Distance is CIE76 ΔE in CIELAB with a
 threshold of 11: this decides whether to show a sentence, not whether to
 approve a print run, and ΔE2000 would not move a verdict at that threshold.
 
-Note that only the 58 charts carrying a `colors` control get the warning. The
-other 56 colour themselves through `series`, which holds a colour per series
-inside the data widget — wiring the check there is a separate job.
+**The check reads the colours wherever they live.** It first shipped against
+the `colors` control, which 58 charts carry — so more than half the library was
+exempt from a check the product presents as universal, and the silence read as
+a pass. `paletteOf(def, spec)` now answers the question for both homes: the
+`colors` array, and the colour-per-series that the other 48 keep inside the
+data widget. 105 charts resolve a palette and **93 have two colours to
+compare**; the other 21 are single-colour, where there is no pair that can
+merge — that is the check having nothing to say, not a gap in it.
+
+Two rules `paletteOf` follows. **Nothing is guessed**: a series with no colour
+of its own is left out rather than filled in from `paletteAt(i)`, because
+reporting a pair nobody chose is the same noise the "distinguishable normally"
+rule exists to keep out. And **names are filtered in step with colours**, or
+the sentence blames the wrong two series.
+
+The warning itself is one component both palette widgets mount rather than a
+copy in each: the two edit different things — an array of hex, and an array of
+objects that happen to carry one — but they make the same statement about the
+palette, and a second copy of that statement is a second thing to keep true.
 
 ### The Spec view
 
@@ -812,11 +828,25 @@ contract by which a facet could force a scale on 114 renderers, and inventing
 one would be a change to every one of them. So:
 
 - Where a chart exposes a real axis bound, the union extent is written into
-  every panel. `boundKeys` finds it **by control label, not by key**, and that
-  is not fussiness: `opts.max` is an axis maximum on fourteen charts, and
-  `opts.maxRadius`, `opts.maxSize` and `opts.maxWidth` are the largest circle,
-  the largest word and the widest route on four others. A key-shaped rule
-  writes a data extent into a radius and quietly ruins three maps.
+  every panel's **spec**. `boundKeys` finds it **by control label, not by key**,
+  and that is not fussiness: `opts.max` is an axis maximum on fourteen charts,
+  and `opts.maxRadius`, `opts.maxSize` and `opts.maxWidth` are the largest
+  circle, the largest word and the widest route on four others. A key-shaped
+  rule writes a data extent into a radius and quietly ruins three maps.
+- **Chart.js is the exception to "privately", and it took a second look to
+  see it.** The rule that stops a facet forcing a scale is that domains are
+  computed inside the very functions that get serialised — true of the 48
+  canvas charts and the 21 D3 mounts, and *not* true of Chart.js, where
+  `build()` returns a config and a config is data. `sharedScaleBounds` reads
+  the union extent off the built configs and `applyScaleBounds` writes it back,
+  which is the same bargain that lets `build()` use imports freely while a
+  `draw` may not. Together the two routes take matched scales from 16 charts
+  to **45**; the suite prints that number so it cannot quietly rot.
+- **A bound the chart set for itself is never overwritten.** A percentage stack
+  pinned to 100 or a gauge pinned to its dial said something deliberate, and a
+  facet is not entitled to overrule it. The nine Chart.js charts with no
+  cartesian axis at all — pie, doughnut, gauge, polar area, three radars,
+  treemap, sankey — fall back to saying so in words.
 - Everywhere else, `scaleSharing(def)` returns a **sentence**, not a boolean —
   "This chart works its own axis out from the data, so each panel is scaled to
   itself. Compare shapes between panels, not heights." — and it is shown under
