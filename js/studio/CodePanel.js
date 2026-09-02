@@ -12,6 +12,8 @@
 import { highlight } from './highlight.js';
 import { toast } from './toast.js';
 import { PROMPT_MODES, readPromptMode, writePromptMode } from './prompt.js';
+import { paletteEditor } from './palette-ui.js';
+import { attachColourPicker } from './colorpicker.js';
 
 const TABS = [
   { id: 'html',       label: 'HTML',       lang: 'html' },
@@ -26,6 +28,11 @@ const TABS = [
   // Highlighted as JS because JSON is a subset of it and the highlighter
   // colours strings, numbers and punctuation the same way.
   { id: 'spec',       label: 'Spec',       lang: 'js',   editable: true },
+  // Not code at all: the palette as a set. The sidebar edits one colour beside
+  // its series and the data table edits one against its column, and neither
+  // answers "do these twelve work together", which is the question a palette
+  // raises. `view: true` means it renders a component rather than source.
+  { id: 'colours',    label: 'Colours',    lang: 'text', view: true },
 ];
 
 /** What the copy toast calls each view. */
@@ -175,6 +182,18 @@ export class CodePanel {
     if (this.redoBtn) this.redoBtn.disabled = !canRedo;
   }
 
+  /**
+   * The chart the panel is showing, for the views that edit rather than print.
+   *
+   * The code tabs need only strings; the Colours tab needs the definition and
+   * the live spec, because it writes to them.
+   */
+  setChart(def, spec, onChange) {
+    this.def = def;
+    this.spec = spec;
+    this.onSpecEdit = onChange;
+  }
+
   setCode(code, filename) {
     this.code = code;
     this.filename = filename || 'chart';
@@ -242,8 +261,30 @@ export class CodePanel {
     this.editBtn.hidden = !tab.editable;
     this.editBtn.textContent = 'Paste a spec';
 
+    if (tab.view) {
+      // A component, not source: it owns its own DOM and writes to the spec.
+      this.body.innerHTML = '';
+      this.body.classList.remove('prose');
+      if (this.def && this.spec) {
+        this.body.appendChild(paletteEditor(this.def, this.spec, () => {
+          if (this.onSpecEdit) this.onSpecEdit();
+        }));
+      }
+      this.gutter.hidden = true;
+      this.gutter.innerHTML = '';
+      this.modeSwitch.hidden = true;
+      this.copyBtn.style.display = 'none';
+      this.dlBtn.style.display = 'none';
+      this.editBtn.hidden = true;
+      this.note.textContent = 'Every colour this chart draws with. '
+        + 'Changing one here is the same edit as changing it in the sidebar.';
+      return;
+    }
+    this.copyBtn.style.display = '';
+
     this.body.innerHTML = highlight(src, tab.lang);
     this.body.classList.toggle('prose', !!tab.prose);
+    if (tab.id === 'spec') this._decorateColours(src);
 
     // Line numbers down the side of a paragraph are noise, so the prose tab
     // has no gutter at all rather than an empty one taking up its rule.
@@ -272,6 +313,65 @@ export class CodePanel {
   }
 
   /** Swap between reading the spec and editing it. */
+  /**
+   * Put a clickable swatch beside every colour printed in the Spec tab.
+   *
+   * The spec is the chart as data, and a hex string in it is the one value a
+   * reader cannot judge by reading. The swatch is inserted into the highlighted
+   * output rather than the source, so the highlighter stays a pure function of
+   * the text.
+   *
+   * A pick edits the *printed JSON* and re-applies the whole thing, rather than
+   * resolving the hex back to a path in the spec. The highlighter emits text in
+   * source order, so the nth swatch on screen is the nth match in the source —
+   * which is all the mapping this needs, and it cannot disagree with what the
+   * reader is looking at.
+   */
+  _decorateColours(src) {
+    if (!this.onApplySpec) return;
+    const HEX = /#[0-9a-fA-F]{6}\b/g;
+    const spans = [];
+    let m = HEX.exec(src);
+    while (m) { spans.push({ at: m.index, len: m[0].length, hex: m[0] }); m = HEX.exec(src); }
+    if (!spans.length) return;
+
+    // Walk the highlighted output in document order and pair each printed hex
+    // with its match in the source.
+    const walker = document.createTreeWalker(this.body, NodeFilter.SHOW_TEXT);
+    const found = [];
+    let node = walker.nextNode();
+    while (node) {
+      const local = /#[0-9a-fA-F]{6}\b/g;
+      let hit = local.exec(node.nodeValue);
+      while (hit) { found.push({ node, hex: hit[0] }); hit = local.exec(node.nodeValue); }
+      node = walker.nextNode();
+    }
+
+    found.forEach((entry, i) => {
+      const slot = spans[i];
+      // If the two ever disagree, decorate nothing rather than wire a swatch
+      // to the wrong colour.
+      if (!slot || slot.hex !== entry.hex) return;
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'spec-swatch';
+      dot.style.background = entry.hex;
+      dot.title = `Change ${entry.hex}`;
+      dot.setAttribute('aria-label', `Change the colour ${entry.hex}`);
+      attachColourPicker(dot, () => slot.hex, (next) => {
+        const edited = src.slice(0, slot.at) + next + src.slice(slot.at + slot.len);
+        let parsed = null;
+        try { parsed = JSON.parse(edited); } catch { parsed = null; }
+        if (!parsed) { toast('That colour could not be applied', 'bad'); return; }
+        const res = this.onApplySpec(parsed);
+        if (res && res.ok === false) toast(res.message, 'bad');
+      });
+      // Before the string, so the swatch reads as a marker on the value rather
+      // than as part of it.
+      entry.node.parentNode.insertBefore(dot, entry.node);
+    });
+  }
+
   toggleEdit() {
     if (!this.editing) {
       this.editing = true;

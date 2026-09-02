@@ -684,6 +684,34 @@ Two things the editor has to get right, both checked:
   pasted, with the parser's own message in a toast, so it can be fixed rather
   than retyped.
 
+### The Colours tab
+
+The seventh view in the code panel, and the only other one that is not code.
+The sidebar edits a colour beside its series and the data table edits one
+against its column or row — both answer *what colour is this one*. Neither
+answers *do these twelve work together*, which is the question a palette
+raises, so this shows the whole set at once: a swatch, a name and a hex per
+series, with the colour-vision warning underneath.
+
+`view: true` on the tab means it renders a component rather than highlighted
+source, and Copy and Download stand down — there is nothing to copy from a
+view that is not text. Editing here is an ordinary spec edit, so it joins the
+undo history like any other.
+
+**The Spec tab prints a swatch on every colour it holds.** A hex string is the
+one value in a spec a reader cannot judge by reading. The swatch is inserted
+into the highlighted *output*, never the source, so the highlighter stays a
+pure function of its text — and a pick edits the printed JSON and re-applies
+the whole thing rather than resolving the hex back to a path. The highlighter
+emits text in source order, so the nth swatch on screen is the nth match in the
+source, which is all the mapping this needs and it cannot disagree with what
+the reader is looking at. Where the two ever fail to line up, nothing is
+decorated rather than a swatch being wired to the wrong colour.
+
+`palette-ui.js` holds both the warning and the editor. The warning began inside
+`ControlPanel.js` for two widgets; this tab was the third caller, and a third
+copy of one statement about the palette would be a third thing to keep true.
+
 ### Undo in the studio
 
 The data editor has had undo since it shipped, and it covers the table and
@@ -1563,7 +1591,8 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `flags.js` | The flag icon set — `data/flags.json`, fetched once, painted into pickers |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
 | `colorpicker.js` | The swatch popover, portalled so nothing can clip it |
-| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec tabs, copy, download, paste-a-spec |
+| `palette-ui.js` | The colour-vision warning and the whole-palette editor |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |

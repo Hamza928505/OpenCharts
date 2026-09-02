@@ -656,6 +656,9 @@ export class StudioApp {
     // The short one costs nothing next to the code generation above it.
     code.prompt = buildPrompt(this.def, this.spec, code, 'full');
     code.promptShort = buildPrompt(this.def, this.spec, code, 'data');
+    // The code tabs need only strings; the Colours tab edits the live spec, so
+    // it is handed the chart itself.
+    this.codePanel.setChart(this.def, this.spec, () => this._onEdit());
     this.codePanel.setCode(code, this.def.id);
     if (this.dataEl) this.dataEl.innerHTML = tableMarkup(this.def, this.spec);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);

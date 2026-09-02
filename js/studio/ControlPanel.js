@@ -22,7 +22,8 @@ import {
   loadCountryMeta, localCityName,
 } from './geodata.js';
 import { flagIcon } from './flags.js';
-import { confusablePairs, describePairs, simulate, CVD_KINDS, paletteOf } from './cvd.js';
+import { simulate, paletteOf } from './cvd.js';
+import { colourWarning } from './palette-ui.js';
 import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
 import {
   isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
@@ -341,49 +342,6 @@ function widgetColor(ctrl, spec, notify) {
   strip.appendChild(dot);
   wrap.appendChild(strip);
   return wrap;
-}
-
-/**
- * The colour-vision warning and its simulate toggle.
- *
- * One component rather than a copy in each palette widget: the two widgets
- * edit different things — an array of hex, and an array of objects that happen
- * to carry one — but they make the *same* statement about the palette, and a
- * second copy of that statement is a second thing to keep true.
- *
- * `read()` hands back the colours whenever they are asked for rather than a
- * snapshot, because both widgets repaint on every edit and a captured list
- * would go stale on the first colour change.
- *
- * @param {() => string[]} read       the colours as they stand now
- * @param {(i:number) => string} nameAt  what to call colour i
- * @param {() => void} repaint       redraw the swatches in the new mode
- */
-function colourWarning(read, nameAt, repaint) {
-  const warn = el('p', 'palette-warn');
-  const sim = el('button', 'palette-sim');
-  sim.type = 'button';
-  let showing = '';
-
-  function paint() {
-    // Only the colours this chart actually uses. Checking the whole 8-colour
-    // palette would report pairs no reader will ever see side by side.
-    const pairs = confusablePairs(read());
-    warn.textContent = describePairs(pairs, nameAt);
-    warn.hidden = !pairs.length;
-    sim.hidden = !pairs.length && !showing;
-    sim.textContent = showing
-      ? 'Back to normal vision'
-      : `See it as a ${(CVD_KINDS.find((k) => k.key === (pairs[0] || {}).kind) || CVD_KINDS[0]).label} reader`;
-    sim.dataset.kind = showing || (pairs[0] || {}).kind || CVD_KINDS[0].key;
-  }
-
-  sim.addEventListener('click', () => {
-    showing = showing ? '' : (sim.dataset.kind || CVD_KINDS[0].key);
-    repaint();
-  });
-
-  return { warn, sim, paint, showing: () => showing };
 }
 
 function widgetColors(ctrl, spec, notify) {

@@ -580,7 +580,7 @@ const studio = await page.evaluate(() => ({
 }));
 check(/Vertical Bar/.test(studio.title || ''), 'studio loads the chart named in the URL');
 check(studio.dataEditor, 'studio shows the data editor first');
-check(studio.tabs === 6, 'studio offers six code views', String(studio.tabs));
+check(studio.tabs === 7, 'studio offers seven views in the code panel', String(studio.tabs));
 check(studio.gutterLines > 0, 'code panel renders line numbers');
 check(studio.sources > 0, 'sources panel lists dependencies');
 check(studio.railGroups > 0, 'rail renders collapsible categories');
@@ -2946,6 +2946,82 @@ const fresh = await page.evaluate(() => {
 check(fresh.depth === 0 && fresh.disabled,
   'and opening another chart starts a fresh history',
   `${fresh.depth} steps`);
+
+
+/* The palette as a set, and swatches on the printed spec.
+ *
+ * The sidebar edits a colour beside its series and the data table edits one
+ * against its column; neither shows the palette as a whole, which is what you
+ * need when the question is "do these work together". */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const colourTab = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const tab = (re) => [...document.querySelectorAll('.code-bar .tab')].find((b) => re.test(b.textContent));
+  const out = {};
+
+  const ct = tab(/Colours/);
+  out.tabExists = !!ct;
+  if (!ct) return out;
+  ct.click();
+  await sleep(400);
+
+  out.rows = document.querySelectorAll('.palette-editor-row').length;
+  out.names = [...document.querySelectorAll('.palette-editor-name')].map((n) => n.textContent);
+  out.hexes = [...document.querySelectorAll('.palette-editor-hex')].map((n) => n.textContent);
+  // Nothing to copy or download from a view that is not source.
+  const copy = [...document.querySelectorAll('.code-actions .btn')].find((b) => /Copy/.test(b.textContent));
+  out.copyHidden = getComputedStyle(copy).display === 'none';
+
+  const before = app.spec.series[0].color;
+  document.querySelector('.palette-editor-dot').click();
+  await sleep(300);
+  const dots = [...document.querySelectorAll('.colour-pop .palette-dot')];
+  out.picker = dots.length > 0;
+  if (dots[2]) { dots[2].click(); await sleep(500); }
+  out.changed = app.spec.series[0].color !== before;
+  // It is an ordinary edit, so it joins the history like any other.
+  const undoBtn = [...document.querySelectorAll('.code-actions .btn')].find((b) => /Undo/.test(b.textContent));
+  out.undoLit = !undoBtn.disabled;
+  undoBtn.click();
+  await sleep(400);
+  out.undone = app.spec.series[0].color === before;
+
+  /* And the Spec tab prints a swatch on every colour it holds. */
+  tab(/Spec/).click();
+  await sleep(400);
+  out.specSwatches = document.querySelectorAll('.spec-swatch').length;
+  const sw = document.querySelector('.spec-swatch');
+  if (sw) {
+    const specBefore = JSON.stringify(app.spec);
+    sw.click();
+    await sleep(300);
+    const d = [...document.querySelectorAll('.colour-pop .palette-dot')];
+    if (d[4]) { d[4].click(); await sleep(600); }
+    out.specEdited = JSON.stringify(app.spec) !== specBefore;
+    out.stillValid = !!(app.spec.series && app.spec.series.length === 2
+      && app.spec.series[0].label === '2024');
+  }
+  return out;
+});
+check(colourTab.tabExists, 'the code panel has a Colours tab');
+check(colourTab.rows === 2 && colourTab.names.join(',') === '2024,2023',
+  'it lists every colour the chart draws with, by series name',
+  `${colourTab.rows} rows: ${colourTab.names.join(',')}`);
+check(colourTab.hexes.every((h) => /^#[0-9A-Fa-f]{6}$/.test(h)),
+  'each one shows its hex', colourTab.hexes.join(' '));
+check(colourTab.copyHidden, 'and the copy button stands down on a view that is not source');
+check(colourTab.picker && colourTab.changed,
+  'picking a colour there changes the chart', String(colourTab.changed));
+check(colourTab.undoLit && colourTab.undone,
+  'and it is an ordinary edit, so undo takes it back');
+check(colourTab.specSwatches === 2,
+  'the Spec tab prints a swatch on every colour it holds',
+  `${colourTab.specSwatches} swatches`);
+check(colourTab.specEdited && colourTab.stillValid,
+  'and picking one edits the spec without disturbing the rest',
+  `edited=${colourTab.specEdited} intact=${colourTab.stillValid}`);
 
 /* The colour popover, and colours in the data table.
  *
