@@ -457,7 +457,69 @@ CSS on a `[data-embed]` attribute. The attribute is set by the inline script in
 the whole studio and then collapsed to the chart would be worse than no embed
 at all. There is deliberately no second page and no second renderer.
 
+### Building the gallery previews
+
+The gallery mounts its previews lazily through an `IntersectionObserver`, which
+was already true — and was not enough. The observer reports **a whole screen of
+tiles in one callback**, so a load or a scroll built eight charts inside a
+single frame. Measured: **207ms of blocked main thread on load and 58ms on
+every scroll**, the worst single task 71ms. Every one of those is a frame in
+which the page cannot answer the scroll that asked for it.
+
+`_queue` and `_pump` in `GalleryApp.js` put a frame budget between them. The
+observer no longer builds anything; it records what is wanted, and the pump
+builds until 8ms of the frame is spent and then yields. After it: **0ms blocked
+while scrolling**, and load down to about 137ms — the rest of which is library
+parsing and Chart.js's one-time warm-up, both of which happen before or during
+the first chart and neither of which this can touch.
+
+Three details that matter:
+
+- **A time budget, not a fixed count.** Charts are wildly uneven: a sparkline
+  is a few hundred microseconds and a choropleth is tens of milliseconds. "Two
+  per frame" would stall on the heavy ones and dawdle on the light ones.
+- **The budget gates *starting* another chart, not finishing one.** A single
+  slow chart can still overrun the frame; it cannot be interrupted, and
+  pretending otherwise would mean rewriting every renderer.
+- **A Map keyed by id, not a queue of jobs.** A tile asked for twice is built
+  once, and a tile that scrolls away is forgotten by id — a fast scroll used to
+  leave a backlog of charts nobody would ever see being built.
+
+`pendingCount()` is exposed so the suite can watch the queue fill and drain
+rather than inferring it from pixels.
+
 ### Hover readouts
+
+**A readout nobody can land on is a readout nobody has.** Both helpers hit-test
+*exactly* — the pointer had to be inside the mark — and a barcode plot's rules
+are two pixels wide, a scatter dot three across, a dendrogram's branches one
+and a half. Those charts were reported as "not interacting with hovering", and
+they were right: the tooltip existed and could not be reached.
+
+The suite had missed it because it asked the wrong question. It checked that a
+chart *records* regions or carries `data-tip`, which every one of the 70 did.
+Recording a mark says nothing about whether a person can put a cursor on it.
+
+Two pieces of slack, both inside the serialised helpers so exports get them too:
+
+- **Canvas** — when nothing is exactly under the cursor, the nearest mark
+  within 14px wins. Distance is measured per shape: to the rim for a circle,
+  to the box for a rectangle, to the mid-arc point for a wedge. Strictly
+  nearer, so of two equally close marks the later-drawn one still wins — the
+  same rule the exact pass uses.
+- **SVG** — `closest('[data-tip]')` on a hairline almost never matches, so a
+  miss probes two rings of eight points around the cursor, near before far,
+  and takes the first mark that belongs to this chart. Sixteen hit-tests, no
+  bookkeeping, no per-mark listeners.
+
+It stays quiet away from everything: past the slack the readout hides, or it
+would follow the cursor across empty space and mean nothing. The suite checks
+all three positions — on a mark, a few pixels off it, and well away.
+
+**What this does not fix**, and knowingly: a chart with a dozen small marks on
+a large canvas is still something you aim at. Making those genuinely easy needs
+wider invisible hit areas drawn per chart, which is a change to the renderers
+rather than to the helper.
 
 Chart.js brings its own tooltips, so for a long time the 39 charts on that
 renderer were the only ones you could interrogate. `js/studio/tooltip.js` gives
@@ -1307,7 +1369,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-Twenty-six suites cover the registry, every chart (render + non-blank canvas +
+Twenty-seven suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -1317,8 +1379,7 @@ exports, AI prompts, responsive breakpoints (including the editor on a 390px
 phone), flags and country metadata, the colour-vision check, the spec view
 and undo, the collapsible rail and focus mode, interaction motion, accessible chart
 output, reading a table from a link, reshaping a table, annotating a chart,
-and console
-cleanliness.
+queued previews and forgiving hover, and console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so

@@ -4000,7 +4000,124 @@ check(editing.added > 0 && editing.added === editing.removed,
 check(editing.cleared && editing.left === 0, 'removing the last note takes the overlay with it');
 console.log(`  ${green('✓')} annotations — note, rule and band on all five engines`);
 
-/* Suite 26 — nothing wrote to the console along the way. */
+/* Suite 26 — hover you can actually land on, and a gallery that stays awake. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1400);
+
+/* A whole screen of tiles arrives in one observer callback. Building them all
+ * there blocked the main thread for 207ms on load and 58ms on every scroll —
+ * frames in which the page cannot answer the scroll that asked for them. */
+const pump = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const g = window.openChartsGallery;
+  if (typeof g.pendingCount !== 'function') return { queued: false };
+
+  // Jump far enough to bring a fresh screenful into view at once.
+  window.scrollTo(0, 2600);
+  // Read on the very next frame, before the pump has had time to drain.
+  const seen = await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(g.pendingCount())));
+  });
+
+  await sleep(1800);
+  const after = g.pendingCount();
+  const live = g.live ? g.live.size : 0;
+
+  // Scrolling straight past a tile must forget it rather than build it: a
+  // fast scroll used to leave a backlog of charts nobody would ever see.
+  window.scrollTo(0, 12000);
+  await new Promise((r) => requestAnimationFrame(r));
+  window.scrollTo(0, 0);
+  await sleep(1600);
+  const settled = g.pendingCount();
+
+  return { queued: true, seen, after, live, settled };
+});
+check(pump.queued, 'the gallery builds previews through a queue');
+check(pump.after === 0, 'and the queue drains', `${pump.after} still waiting`);
+check(pump.live > 0, 'the charts still get built', `${pump.live} live`);
+check(pump.settled === 0, 'scrolling past a tile forgets it rather than queueing it',
+  `${pump.settled} left over`);
+
+/* The queue must not starve a frame. Measured rather than asserted by faith:
+ * the budget only gates *starting* another chart, so one heavy chart can
+ * still overrun — what must not happen is eight of them in a row. */
+const frames = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const long = [];
+  let obs = null;
+  try {
+    obs = new PerformanceObserver((l) => l.getEntries().forEach((e) => long.push(e.duration)));
+    obs.observe({ entryTypes: ['longtask'] });
+  } catch { return { supported: false }; }
+
+  for (let i = 0; i < 5; i++) {
+    window.scrollBy(0, 1500);
+    await sleep(420);
+  }
+  obs.disconnect();
+  return {
+    supported: true,
+    count: long.length,
+    worst: Math.round(long.length ? Math.max(...long) : 0),
+    blocked: Math.round(long.reduce((a, b) => a + b, 0)),
+  };
+});
+if (frames.supported) {
+  check(frames.blocked < 120, 'scrolling the gallery does not block the main thread',
+    `${frames.count} long tasks, worst ${frames.worst}ms, ${frames.blocked}ms blocked`);
+} else {
+  check(true, 'long-task timing unavailable in this browser — skipped');
+}
+
+/* Hover has to forgive a few pixels. A barcode plot's rules are two pixels
+ * wide and a scatter dot is three across; requiring the pointer to land inside
+ * the mark is why those charts read as having no hover at all. */
+const slack = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;z-index:99999;background:#fff';
+  document.body.appendChild(host);
+
+  const showing = () => [...host.querySelectorAll('[role="tooltip"]')]
+    .some((t) => t.style.opacity !== '0' && t.textContent.trim());
+
+  const inst = eng.renderChart(reg.getChart('barcode-plot'), host, reg.newSpec(reg.getChart('barcode-plot')));
+  const canvas = host.querySelector('canvas');
+  const regions = canvas.__ocRegions || [];
+  const box = canvas.getBoundingClientRect();
+
+  const at = (x, y) => {
+    canvas.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+    return showing();
+  };
+
+  const r = regions.find((g) => g.w != null) || regions[0];
+  const cx = box.left + r.x + r.w / 2;
+  const cy = box.top + r.y + r.h / 2;
+
+  const dead = at(-500, -500);
+  const onIt = at(cx, cy);
+  const nearby = at(cx + r.w / 2 + 6, cy);
+  // Far enough away and it must go quiet again, or the readout would follow
+  // the cursor across empty space and mean nothing.
+  const farOff = at(cx + r.w / 2 + 90, cy);
+
+  eng.destroyInstance(inst);
+  host.remove();
+  return { marks: regions.length, dead, onIt, nearby, farOff };
+});
+check(slack.marks > 0, 'the barcode plot records marks', `${slack.marks}`);
+check(slack.onIt, 'hovering a mark reads out');
+check(slack.nearby, 'and hovering a few pixels off it still does');
+check(!slack.farOff, 'but hovering well away from everything stays quiet');
+check(!slack.dead, 'and a cursor outside the chart shows nothing');
+console.log(`  ${green('✓')} feel — queued previews, ${frames.blocked ?? '?'}ms blocked on scroll, hover with slack`);
+
+/* Suite 27 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one
 // error this suite provokes deliberately is not evidence of a broken page.
