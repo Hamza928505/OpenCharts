@@ -596,7 +596,118 @@ export class StudioApp {
     if (this.inst && this.inst.redraw) resizeInstance(this.inst);
   }
 
+  /**
+   * A faceted chart exports as the grid, not as its first panel.
+   *
+   * `querySelector('canvas')` would find panel one and hand over a picture of
+   * a twelfth of what is on screen, with nothing saying so — the quietest
+   * possible way for an export to lie. Both branches lay the panels out from
+   * the boxes the browser has already computed, so the file is what the
+   * reader is looking at rather than a second guess at the layout.
+   */
+  _exportGrid(grid) {
+    const facets = [...grid.querySelectorAll('.oc-facet')];
+    const box = grid.getBoundingClientRect();
+    const pad = 14;
+    const style = getComputedStyle(document.body);
+    const paper = style.getPropertyValue('--surface').trim() || '#ffffff';
+    const ink = style.getPropertyValue('--ink-soft').trim() || '#56544d';
+    const at = (r) => ({ x: r.left - box.left + pad, y: r.top - box.top + pad });
+    const W = box.width + pad * 2;
+    const H = box.height + pad * 2;
+    const nameOf = (f) => {
+      const n = f.querySelector('.oc-facet-name');
+      return n ? n.textContent : '';
+    };
+
+    const canvases = facets.map((f) => f.querySelector('canvas'));
+    if (canvases.length && canvases.every(Boolean)) {
+      const dpr = window.devicePixelRatio || 1;
+      const out = document.createElement('canvas');
+      out.width = Math.round(W * dpr);
+      out.height = Math.round(H * dpr);
+      const ctx = out.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = paper;
+      ctx.fillRect(0, 0, W, H);
+      facets.forEach((f, i) => {
+        const label = f.querySelector('.oc-facet-name');
+        if (label) {
+          const p = at(label.getBoundingClientRect());
+          ctx.fillStyle = ink;
+          ctx.font = '600 11.5px system-ui, sans-serif';
+          ctx.textBaseline = 'top';
+          ctx.fillText(nameOf(f), p.x, p.y);
+        }
+        const c = canvases[i];
+        const r = c.getBoundingClientRect();
+        const p = at(r);
+        ctx.drawImage(c, p.x, p.y, r.width, r.height);
+      });
+      downloadDataUrl(out.toDataURL('image/png'), `${this.def.id}-panels.png`);
+      toast(`PNG exported — ${facets.length} panels`, 'ok');
+      return true;
+    }
+
+    const svgs = facets.map((f) => f.querySelector('svg'));
+    if (svgs.length && svgs.every(Boolean)) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const out = document.createElementNS(NS, 'svg');
+      out.setAttribute('xmlns', NS);
+      out.setAttribute('width', String(Math.round(W)));
+      out.setAttribute('height', String(Math.round(H)));
+      const bg = document.createElementNS(NS, 'rect');
+      bg.setAttribute('width', '100%');
+      bg.setAttribute('height', '100%');
+      bg.setAttribute('fill', paper);
+      out.appendChild(bg);
+      facets.forEach((f, i) => {
+        const label = f.querySelector('.oc-facet-name');
+        if (label) {
+          const p = at(label.getBoundingClientRect());
+          const t = document.createElementNS(NS, 'text');
+          t.setAttribute('x', String(Math.round(p.x)));
+          t.setAttribute('y', String(Math.round(p.y + 10)));
+          t.setAttribute('fill', ink);
+          t.setAttribute('font-size', '11.5');
+          t.setAttribute('font-weight', '600');
+          t.setAttribute('font-family', 'system-ui, sans-serif');
+          t.textContent = nameOf(f);
+          out.appendChild(t);
+        }
+        // A nested <svg> keeps each panel's own coordinate system, so no path
+        // has to be transformed to sit in the grid.
+        const r = svgs[i].getBoundingClientRect();
+        const p = at(r);
+        const clone = svgs[i].cloneNode(true);
+        clone.setAttribute('x', String(Math.round(p.x)));
+        clone.setAttribute('y', String(Math.round(p.y)));
+        clone.setAttribute('width', String(Math.round(r.width)));
+        clone.setAttribute('height', String(Math.round(r.height)));
+        out.appendChild(clone);
+      });
+      const blob = new Blob([new XMLSerializer().serializeToString(out)], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      downloadDataUrl(url, `${this.def.id}-panels.svg`);
+      URL.revokeObjectURL(url);
+      toast(`SVG exported — ${facets.length} panels`, 'ok');
+      return true;
+    }
+
+    return false;
+  }
+
   _exportPNG() {
+    const grid = this.host.querySelector('.oc-facets');
+    if (grid) {
+      // Never fall through to the single-chart path from here: it would find
+      // panel one and export a twelfth of the picture without saying so.
+      if (!this._exportGrid(grid)) {
+        toast('These panels cannot be exported as an image — copy the Standalone code', 'bad');
+      }
+      return;
+    }
+
     const canvas = this.host.querySelector('canvas');
     if (canvas) {
       // Repaint onto an opaque background so the PNG is not transparent.

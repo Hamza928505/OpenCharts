@@ -13,6 +13,9 @@ import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe } from './cd
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
+import {
+  panelSpecs, panelColumns, panelHeight, facetMarkup, isFaceted, FACET_CSS,
+} from './facet.js';
 
 export const ENGINE_LABEL = {
   chartjs: 'Chart.js',
@@ -76,13 +79,71 @@ function heightFor(def, opts) {
  * @returns {object} instance handle for destroyInstance()
  */
 export function renderChart(def, host, spec, opts = {}) {
+  // A faceted spec is still one chart definition; it is drawn once per panel.
+  // The split happens here rather than inside each renderer because not one of
+  // the five has ever heard of a facet — see facet.js.
+  const panels = panelSpecs(def, spec);
+  if (panels) return renderFacetGrid(def, host, spec, panels, opts);
+  return renderOne(def, host, spec, opts);
+}
+
+/**
+ * The grid of small multiples.
+ *
+ * Each plate is handed to `renderOne` with a panel spec holding literal
+ * values, so every renderer draws exactly what it draws unfaceted. The
+ * annotation overlay goes over the *grid*, not into any panel: a note is a
+ * remark about the picture, and with a facet the picture is all of it.
+ */
+function renderFacetGrid(def, host, spec, panels, opts) {
+  const cols = panelColumns(panels.length, spec.facet && spec.facet.cols);
+  // A group rather than an image: it holds several graphics, each of which
+  // labels itself below. Announcing the container as one picture would hide
+  // every panel inside it.
+  host.setAttribute('role', 'group');
+  host.setAttribute('aria-label', `${def.title} — ${panels.length} panels`);
+  host.innerHTML = facetMarkup(panels.map((p) => p.name), { cols, idPrefix: 'oc-panel' });
+
+  const grid = host.querySelector('.oc-facets');
+  const height = panelHeight(heightFor(def, opts), cols);
+
+  const build = () => panels.map((panel, i) => {
+    const plate = host.querySelector(`#oc-panel-${i}`);
+    if (!plate) return null;
+    return renderOne(def, plate, panel.spec, {
+      ...opts,
+      height,
+      label: `${panel.name} — ${chartLabel(def, panel.spec)}`,
+    });
+  }).filter(Boolean);
+
+  const insts = build();
+  drawAnnotations(grid, spec.annotations);
+
+  return {
+    engine: 'facet',
+    grid,
+    panels: insts,
+    redraw: () => {
+      // The hand-drawn renderers measure their host, and a panel's host only
+      // has its width once the grid has laid out — so a resize re-runs each
+      // panel rather than the grid, which has not changed.
+      insts.forEach((inst) => { if (inst && inst.redraw) inst.redraw(); });
+      drawAnnotations(grid, spec.annotations);
+    },
+  };
+}
+
+function renderOne(def, host, spec, opts = {}) {
   host.innerHTML = '';
   // A canvas is a rectangle of pixels and an SVG of paths is barely better, so
   // the host carries the name. Set here rather than per renderer: it is the
   // one line every engine passes through, and it is the same label the
   // exported markup gets, from the same function.
   host.setAttribute('role', 'img');
-  host.setAttribute('aria-label', chartLabel(def, spec));
+  // A panel names itself with the value it was split on, so the reader hears
+  // "North — Vertical Bar chart" rather than twelve identical labels.
+  host.setAttribute('aria-label', opts.label || chartLabel(def, spec));
   const engine = engineOf(def);
   const width = Math.max(120, host.clientWidth || host.offsetWidth || 600);
   const height = heightFor(def, opts);
@@ -218,6 +279,13 @@ function drawError(ctx, w, h, message) {
 /** Tear down whatever renderChart() produced. */
 export function destroyInstance(inst) {
   if (!inst) return;
+  // A grid owns one instance per panel, and a Chart.js instance that is not
+  // destroyed keeps its canvas and its resize listener alive — twelve of those
+  // per rebuild is the leak this branch exists to prevent.
+  if (inst.engine === 'facet') {
+    (inst.panels || []).forEach(destroyInstance);
+    return;
+  }
   try {
     if (inst.chart && typeof inst.chart.destroy === 'function') inst.chart.destroy();
   } catch { /* already gone */ }
@@ -442,10 +510,23 @@ function buildHTML(def, spec) {
 
   // The mark itself carries the short label, so a reader landing on the
   // graphic hears what it is; the long description hangs off the figure.
-  const label = escapeText(chartLabel(def, spec));
-  const inner = (engine === 'd3' || engine === 'dom')
-    ? `  <div id="chart" role="img" aria-label="${label}"></div>`
-    : `  <div class="chart-wrap">\n    <canvas id="chart" role="img" aria-label="${label}"></canvas>\n  </div>`;
+  const plate = (id, label) => ((engine === 'd3' || engine === 'dom')
+    ? `<div id="${id}" role="img" aria-label="${escapeText(label)}"></div>`
+    : `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`);
+
+  const panels = panelSpecs(def, spec);
+  // The plate and the mark inside it must not share an id. They did, and
+  // `getElementById('chart-0')` handed back the wrapper — so three of the five
+  // renderers called `getContext` on a `<div>` and every faceted export was
+  // blank. The plate is named for what it is; the mark keeps `chart-<i>`,
+  // which is the id the generated JS looks up.
+  const inner = panels
+    ? indent(facetMarkup(panels.map((p) => p.name), {
+      cols: panelColumns(panels.length, spec.facet && spec.facet.cols),
+      idPrefix: 'panel',
+      inner: (i) => plate(`chart-${i}`, `${panels[i].name} — ${chartLabel(def, panels[i].spec)}`),
+    }), 2)
+    : indent(plate('chart', chartLabel(def, spec)), 2);
 
   const table = tableMarkup(def, spec);
 
@@ -463,9 +544,26 @@ function buildHTML(def, spec) {
 function buildCSS(def, spec) {
   const engine = engineOf(def);
   const parts = [BASE_CSS, A11Y_CSS];
+  const panels = panelSpecs(def, spec);
+  // A panel is shorter than the chart it came from, and the grid decides by
+  // how much — so the height the exported CSS reserves has to come from the
+  // same function the preview lays out with, not from `heightFor` alone.
+  const h = panels
+    ? panelHeight(heightFor(def, {}), panelColumns(panels.length, spec.facet && spec.facet.cols))
+    : heightFor(def, {});
+
+  if (panels) {
+    parts.push(FACET_CSS);
+    // `BASE_CSS` gives `.chart-wrap` the full 340px a single chart wants. A
+    // panel is shorter, and Chart.js sizes itself from that box — so without
+    // this every panel would be drawn at full height inside a grid cell.
+    parts.push(`.oc-facet-plate .chart-wrap {\n  height: ${h}px;\n}`);
+  }
 
   if (engine === 'd3' || engine === 'dom') {
-    parts.push(`#chart {\n  width: 100%;\n  min-height: ${heightFor(def, {})}px;\n}`);
+    parts.push(panels
+      ? `.oc-facet-plate > div {\n  width: 100%;\n  min-height: ${h}px;\n}`
+      : `#chart {\n  width: 100%;\n  min-height: ${h}px;\n}`);
   }
   // Only where there is something to lay over the plate, so the export of a
   // chart nobody annotated is byte-for-byte what it was before the feature
@@ -535,7 +633,45 @@ function buildJS(def, spec) {
   const header = dependencyHeader(def, dependenciesFor(def));
   const annots = annotationDecl(spec);
 
+  // A faceted export carries N complete specs and one loop. Nothing in any
+  // renderer changes: the split happened in `panelSpecs`, which runs here, and
+  // what is printed below is the same `draw` / `mount` / `build` reading the
+  // same shape of spec it has always read.
+  const panels = panelSpecs(def, spec);
+  const cols = panels ? panelColumns(panels.length, spec.facet && spec.facet.cols) : 1;
+  const h = panels ? panelHeight(heightFor(def, {}), cols) : heightFor(def, {});
+  const panelWidth = Math.max(160, Math.round(800 / cols));
+  // The notes belong to the grid, not to a panel — so they hang off the
+  // container the panels sit in.
+  const facetTarget = `document.querySelector('.oc-facets')`;
+  const panelData = () => serialize(
+    panels.map((p) => ({ name: p.name, spec: specForCode(p.spec) })), 0,
+  );
+  // Faceted legends are never interactive: the toggle drives one `chart`, and
+  // a grid has as many as it has panels.
+  const legendLines = (interactive) =>
+    (hasLegend ? ['', legendCode(legend, interactive && !panels)] : []);
+
   if (engine === 'chartjs') {
+    if (panels) {
+      const built = panels.map((p) => ({
+        name: p.name,
+        config: def.chartjs.build(p.spec, { width: panelWidth, height: h }),
+      }));
+      return tidy([
+        ...header,
+        '',
+        `// One finished config per panel.`,
+        `const panels = ${serialize(built, 0)};`,
+        '',
+        `const charts = panels.map((panel, i) =>`,
+        `  new Chart(document.getElementById('chart-' + i), panel.config));`,
+        ...annots,
+        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...legendLines(true),
+      ].join('\n'));
+    }
+
     const config = def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) });
     const lines = [
       ...header,
@@ -552,7 +688,53 @@ function buildJS(def, spec) {
 
   if (engine === 'canvas') {
     const block = def.canvas;
-    const h = heightFor(def, {});
+    if (panels) {
+      return tidy([
+        ...header,
+        '',
+        `const panels = ${panelData()};`,
+        ...annots,
+        '',
+        helperSource(block).trim(),
+        '',
+        toFunctionSource(recordTip),
+        '',
+        toFunctionSource(attachCanvasTips),
+        '',
+        namedFunction(block.draw, 'draw'),
+        '',
+        `// Every panel is drawn by the same function from its own spec.`,
+        `function render() {`,
+        `  panels.forEach((panel, i) => {`,
+        `    const canvas = document.getElementById('chart-' + i);`,
+        `    if (!canvas) return;`,
+        `    const w = canvas.parentElement.clientWidth;`,
+        `    const h = ${h};`,
+        `    const dpr = window.devicePixelRatio || 1;`,
+        `    canvas.width = Math.round(w * dpr);`,
+        `    canvas.height = Math.round(h * dpr);`,
+        `    canvas.style.width = w + 'px';`,
+        `    canvas.style.height = h + 'px';`,
+        `    const ctx = canvas.getContext('2d');`,
+        `    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
+        `    ctx.clearRect(0, 0, w, h);`,
+        `    const regions = [];`,
+        `    draw(ctx, panel.spec, w, h, {`,
+        `      width: w, height: h,`,
+        `      tip: recordTip(regions),`,
+        `    });`,
+        `    attachCanvasTips(canvas, regions);`,
+        `  });`,
+        `}`,
+        '',
+        `render();`,
+        `window.addEventListener('resize', render);`,
+        // The grid itself is never emptied — only the canvases inside it are —
+        // so the overlay is painted once and left to reflow.
+        ...annotationCall(spec, facetTarget),
+        ...legendLines(false),
+      ].join('\n'));
+    }
     return tidy([
       ...header,
       '',
@@ -600,7 +782,38 @@ function buildJS(def, spec) {
 
   if (engine === 'd3') {
     const block = def.d3;
-    const h = heightFor(def, {});
+    if (panels) {
+      return tidy([
+        ...header,
+        '',
+        `const panels = ${panelData()};`,
+        ...annots,
+        '',
+        helperSource(block).trim(),
+        '',
+        toFunctionSource(attachTips),
+        '',
+        namedFunction(block.mount, 'mount'),
+        '',
+        `function render() {`,
+        `  panels.forEach((panel, i) => {`,
+        `    const host = document.getElementById('chart-' + i);`,
+        `    if (!host) return;`,
+        `    host.innerHTML = '';`,
+        `    const w = host.clientWidth;`,
+        `    mount(host, panel.spec, w, ${h}, { width: w, height: ${h}, redraw: render });`,
+        `    attachTips(host);`,
+        `  });`,
+        `}`,
+        '',
+        `render();`,
+        `window.addEventListener('resize', render);`,
+        // A mount empties its own panel, never the grid, so the overlay is laid
+        // over the grid once.
+        ...annotationCall(spec, facetTarget),
+        ...legendLines(false),
+      ].join('\n'));
+    }
     return tidy([
       ...header,
       '',
@@ -630,8 +843,31 @@ function buildJS(def, spec) {
   }
 
   if (engine === 'native') {
-    const { data, config } = def.native.build(spec, { width: 800, height: heightFor(def, {}) });
     const cls = def.native.className;
+    if (panels) {
+      const built = panels.map((p) => {
+        const out = def.native.build(p.spec, { width: panelWidth, height: h });
+        return { name: p.name, data: out.data, config: out.config };
+      });
+      return tidy([
+        ...header,
+        '',
+        `import { ${cls} } from './js/charts/${cls}.js';`,
+        '',
+        `const panels = ${serialize(built, 0)};`,
+        '',
+        `const charts = panels.map((panel, i) => {`,
+        `  const chart = new ${cls}('chart-' + i, { data: panel.data, ...panel.config });`,
+        `  chart.enableTooltip();`,
+        `  return chart;`,
+        `});`,
+        ...annots,
+        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...legendLines(false),
+      ].join('\n'));
+    }
+
+    const { data, config } = def.native.build(spec, { width: 800, height: heightFor(def, {}) });
     return tidy([
       ...header,
       '',
@@ -653,6 +889,29 @@ function buildJS(def, spec) {
 
   // dom
   const block = def.dom;
+  if (panels) {
+    return tidy([
+      ...header,
+      '',
+      `const panels = ${panelData()};`,
+      ...annots,
+      '',
+      helperSource(block).trim(),
+      '',
+      toFunctionSource(attachTips),
+      '',
+      namedFunction(block.mount, 'mount'),
+      '',
+      `panels.forEach((panel, i) => {`,
+      `  const host = document.getElementById('chart-' + i);`,
+      `  if (!host) return;`,
+      `  mount(host, panel.spec);`,
+      `  attachTips(host);`,
+      `});`,
+      ...annotationCall(spec, facetTarget),
+      ...legendLines(false),
+    ].join('\n'));
+  }
   return tidy([
     ...header,
     '',

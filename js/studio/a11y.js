@@ -28,6 +28,7 @@
 import { helpFor } from './chart-help.js';
 import { parseTable, looksNumeric } from './dataio.js';
 import { describeAnnotations } from './annotate.js';
+import { facetSource, describeFacet } from './facet.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -45,6 +46,16 @@ const esc = (s) => String(s == null ? '' : s)
  * @returns {{headers: string[], rows: string[][]} | null}
  */
 export function chartTable(def, spec) {
+  // A chart split by a column has that column in the facet, not in the spec —
+  // the panels carry a table each with the splitting column already spent. So
+  // the table a reader is given is the source, which is the only version that
+  // still says which panel a row belongs to. Take it away and the accessible
+  // layer describes a grid with no way to tell its panels apart.
+  const source = facetSource(spec);
+  if (source && source.rows && source.rows.length) {
+    return { headers: source.headers || [], rows: source.rows };
+  }
+
   if (typeof def.toText !== 'function') return null;
   let text = '';
   try {
@@ -110,6 +121,13 @@ export function chartSummary(def, spec) {
 
   const help = helpFor(def);
   if (help && help.read) parts.push(help.read.trim());
+
+  // What the grid is, and — the part that matters — whether the panels can be
+  // compared by height. A reader who cannot see the axes has no other way to
+  // find that out, and a grid of small multiples that is not on one scale is
+  // exactly the thing that would mislead them.
+  const grid = describeFacet(def, spec);
+  if (grid) parts.push(grid);
 
   // Whatever the author wrote on the chart. An annotation is them saying what
   // the picture is *for*, which makes it the last thing that should be

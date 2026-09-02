@@ -4117,6 +4117,334 @@ check(!slack.farOff, 'but hovering well away from everything stays quiet');
 check(!slack.dead, 'and a cursor outside the chart shows nothing');
 console.log(`  ${green('✓')} feel — queued previews, ${frames.blocked ?? '?'}ms blocked on scroll, hover with slack`);
 
+/* Suite 28 — small multiples.
+ *
+ * Faceting is not a kind of chart. It splits one spec into N complete specs
+ * and hands each to the renderer the chart already had, which is why not one
+ * `draw` or `mount` in the library was touched to add it. So the checks here
+ * are arithmetic and honesty: every row lands in exactly one panel, a grid
+ * that claims a shared axis has one, and a chart that cannot share an axis
+ * says so rather than letting twelve differently-scaled plates look like a
+ * comparison.
+ */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const facet = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const f = await import('/js/studio/facet.js');
+  const a11y = await import('/js/studio/a11y.js');
+
+  const valueOf = (it) => Number(it.value != null ? it.value : (it.data || 0));
+  const out = { cap: f.MAX_PANELS };
+
+  /* A wide table: one column naming the panel, two drawing it. */
+  const regions = ['North', 'South', 'East', 'West'];
+  const issues = ['Billing', 'Delivery', 'Returns', 'Product'];
+  const rows = [];
+  let sourceTotal = 0;
+  regions.forEach((r, ri) => issues.forEach((s, si) => {
+    const v = 10 + ri * 13 + si * 7;
+    sourceTotal += v;
+    rows.push([r, s, String(v)]);
+  }));
+  const table = { headers: ['Region', 'Issue', 'Count'], rows };
+  out.sourceTotal = sourceTotal;
+
+  const def = reg.getChart('bar-lollipop');
+  const spec = reg.newSpec(def);
+  out.applied = f.facetByColumn(def, spec, table, 0);
+
+  const panels = f.panelSpecs(def, spec);
+  out.count = panels.length;
+  out.names = panels.map((p) => p.name);
+  out.perPanel = panels.map((p) => (p.spec.items || []).length);
+  out.panelTotal = panels.reduce((sum, p) =>
+    sum + (p.spec.items || []).reduce((s, it) => s + valueOf(it), 0), 0);
+
+  /* Shared scales, on a chart that has an axis to share. */
+  out.bound = f.boundKeys(def);
+  out.sharedMaxima = panels.map((p) => p.spec.opts.max);
+  out.dataPeak = Math.max.apply(null, panels.map((p) =>
+    Math.max.apply(null, (p.spec.items || []).map(valueOf))));
+
+  spec.facet.scales = 'free';
+  out.freeMaxima = f.panelSpecs(def, spec).map((p) => p.spec.opts.max);
+  spec.facet.scales = 'shared';
+
+  /* The export carries the panels, and a chart nobody faceted carries none. */
+  const faceted = eng.generateCode(def, spec);
+  out.exportPlates = (faceted.html.match(/oc-facet-plate/g) || []).length;
+  out.exportIds = out.names.every((n, i) => faceted.html.indexOf('id="chart-' + i + '"') >= 0);
+  out.exportNames = out.names.every((n) => faceted.js.indexOf(n) >= 0);
+  out.exportCss = faceted.css.indexOf('.oc-facets') >= 0;
+  out.exportRuns = faceted.standalone.indexOf('oc-facet-plate') >= 0;
+
+  const plain = eng.generateCode(def, reg.newSpec(def));
+  out.plainClean = plain.html.indexOf('oc-facet') < 0
+    && plain.css.indexOf('oc-facets') < 0
+    && plain.js.indexOf('const panels =') < 0;
+
+  /* The accessible layer keeps the column the panels were split by. */
+  out.summary = a11y.chartSummary(def, spec);
+  const tbl = a11y.chartTable(def, spec);
+  out.tableHeaders = tbl ? tbl.headers : [];
+  out.tableRows = tbl ? tbl.rows.length : 0;
+
+  /* Switching it off is a no-op, not an edit. */
+  const before = def.toText(spec);
+  delete spec.facet;
+  out.offIsNoop = def.toText(spec) === before;
+  out.offDrawsOne = f.panelSpecs(def, spec) === null;
+
+  /* One panel per series needs no new data at all. */
+  const bar = reg.getChart('bar-vertical');
+  const barSpec = reg.newSpec(bar);
+  out.seriesResult = f.facetBySeries(bar, barSpec);
+  const seriesPanels = f.panelSpecs(bar, barSpec);
+  out.seriesCount = seriesPanels ? seriesPanels.length : 0;
+  out.seriesEachOne = !!seriesPanels && seriesPanels.every((p) => p.spec.series.length === 1);
+  /* And a chart with no axis bound says so instead of pretending. */
+  out.honest = f.scaleSharing(bar);
+
+  /* A slider called "Largest city" is not an axis maximum. */
+  out.notAxes = ['city-map', 'proportional-symbol-map', 'flow-map', 'word-cloud']
+    .map((id) => {
+      const d = reg.getChart(id);
+      const b = d ? f.boundKeys(d) : null;
+      return id + ':' + (b && (b.max || b.min) ? (b.max || b.min) : 'none');
+    });
+
+  /* The cap, and saying out loud when it bit. */
+  const many = { headers: ['Bucket', 'Issue', 'Count'], rows: [] };
+  for (let i = 0; i < 30; i++) {
+    for (let j = 0; j < 3; j++) many.rows.push(['B' + i, issues[j], String(5 + i + j)]);
+  }
+  const capped = reg.newSpec(def);
+  f.facetByColumn(def, capped, many, 0);
+  out.capped = f.panelSpecs(def, capped).length;
+  out.cappedNote = f.facetNote(def, capped);
+
+  /* What can be split on, and what cannot. */
+  const mixed = {
+    headers: ['id', 'Region', 'Count'],
+    rows: rows.map((r, i) => [String(1000 + i), r[0], r[2]]),
+  };
+  out.offered = f.facetableColumns(mixed).map((c) => c.name);
+
+  /* Layout never goes past four across. */
+  out.columns = [1, 4, 9, 24].map((n) => f.panelColumns(n));
+  return out;
+});
+
+check(facet.applied.ok, 'a column splits a table into panels', facet.applied.message);
+check(facet.count === 4, 'one panel per distinct value', String(facet.count));
+check(facet.names.join(',') === 'North,South,East,West',
+  'panels keep the order the file put them in', facet.names.join(','));
+check(facet.panelTotal === facet.sourceTotal,
+  'every row lands in exactly one panel',
+  facet.panelTotal + ' vs ' + facet.sourceTotal);
+check(facet.perPanel.every((n) => n === 4), 'and each panel got its own rows',
+  facet.perPanel.join(','));
+check(!!facet.bound.max, 'an "Axis maximum" slider is recognised as one',
+  JSON.stringify(facet.bound));
+check(new Set(facet.sharedMaxima).size === 1 && facet.sharedMaxima[0] >= facet.dataPeak,
+  'matched scales put every panel on the same axis',
+  facet.sharedMaxima.join(',') + ' over a peak of ' + facet.dataPeak);
+check(new Set(facet.freeMaxima).size === 1 && facet.freeMaxima[0] !== facet.sharedMaxima[0],
+  'and independent scales leave every panel on its own',
+  facet.freeMaxima.join(',') + ' vs ' + facet.sharedMaxima.join(','));
+check(facet.notAxes.every((s) => s.endsWith(':none')),
+  'a "Largest city" slider is not mistaken for an axis', facet.notAxes.join(' '));
+check(!facet.honest.can && /own axis|scaled to itself/i.test(facet.honest.why),
+  'a chart that cannot share an axis says so', facet.honest.why);
+check(facet.exportPlates === facet.count && facet.exportIds,
+  'the export carries one plate per panel', String(facet.exportPlates));
+check(facet.exportNames && facet.exportCss && facet.exportRuns,
+  'with the panel names, the grid styles and the whole page');
+check(facet.plainClean, 'and a chart nobody faceted carries none of it');
+check(/4 small multiples/.test(facet.summary) && /same axis|own data/.test(facet.summary),
+  'the description says how many panels and whether they compare',
+  facet.summary.slice(0, 200));
+check(facet.tableHeaders.indexOf('Region') >= 0 && facet.tableRows === 16,
+  'the data table keeps the column the panels were split by',
+  facet.tableHeaders.join(',') + ' over ' + facet.tableRows + ' rows');
+check(facet.offIsNoop && facet.offDrawsOne,
+  'switching the split off is a no-op, not an edit');
+check(facet.seriesResult.ok && facet.seriesCount >= 2 && facet.seriesEachOne,
+  'a chart splits by series with no new data',
+  JSON.stringify(facet.seriesResult) + ' ' + facet.seriesCount);
+check(facet.capped === facet.cap, 'the panel cap holds', String(facet.capped));
+check(/30 values/.test(facet.cappedNote) && facet.cappedNote.indexOf(String(facet.cap)) >= 0,
+  'and says out loud that it bit', facet.cappedNote);
+check(facet.offered.join(',') === 'Region',
+  'neither an id column nor a number column is offered as a split',
+  facet.offered.join(','));
+check(facet.columns.join(',') === '1,2,3,4', 'the grid never goes past four across',
+  facet.columns.join(','));
+
+/* And it works in the studio, on a real page, without leaking a chart per
+ * rebuild. Twelve Chart.js instances left behind on every control edit is the
+ * failure mode a grid makes twelve times as likely as a single chart did. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+const facetUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tab = (re) => [...document.querySelectorAll('.dlg-tab')].find((t) => re.test(t.textContent));
+  const live = () => (window.Chart ? Object.keys(window.Chart.instances || {}).length : -1);
+
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+
+  tab(/Paste text/).click();
+  await sleep(250);
+  const ta = document.querySelector('.dlg textarea');
+  let csv = 'Region,Month,Sales\n';
+  ['North', 'South', 'East'].forEach((r, ri) => {
+    ['Jan', 'Feb', 'Mar', 'Apr'].forEach((m, mi) => {
+      csv += r + ',' + m + ',' + (20 + ri * 15 + mi * 6) + '\n';
+    });
+  });
+  ta.value = csv;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(400);
+  tab(/^\s*Table\s*$/).click();
+  await sleep(350);
+
+  const strip = document.querySelector('.dlg-facet');
+  const offered = strip ? [...strip.querySelectorAll('.facet-chip')].map((b) => b.textContent) : [];
+  const chip = strip && [...strip.querySelectorAll('.facet-chip')].find((b) => /^Region/.test(b.textContent));
+  if (!chip) return { offered, split: false };
+  chip.click();
+  await sleep(120);
+
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Use this data/.test(b.textContent)).click();
+  await sleep(1400);
+
+  const host = document.querySelector('.chart-host');
+  const grid = host.querySelector('.oc-facets');
+  const shot = {
+    offered,
+    split: !!grid,
+    panels: grid ? grid.querySelectorAll('.oc-facet').length : 0,
+    names: grid ? [...grid.querySelectorAll('.oc-facet-name')].map((n) => n.textContent) : [],
+    canvases: grid ? grid.querySelectorAll('canvas').length : 0,
+    control: !!document.querySelector('.facet-ctrl'),
+    liveAfterFirst: live(),
+  };
+
+  // A blank panel is a rendered panel as far as the DOM is concerned, so look
+  // at the pixels.
+  shot.painted = grid ? [...grid.querySelectorAll('canvas')].every((c) => {
+    const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 8) return true;
+    return false;
+  }) : false;
+
+  // Three rebuilds: the count must not climb, and there must still be one grid.
+  const app = window.openCharts;
+  for (let i = 0; i < 3; i++) { app.rebuild(); await sleep(500); }
+  shot.liveAfterRebuilds = live();
+  shot.gridsAfterRebuilds = document.querySelectorAll('.chart-host .oc-facets').length;
+  shot.panelsAfterRebuilds = document.querySelectorAll('.chart-host .oc-facet').length;
+
+  // And switching it off comes back to one chart.
+  const sel = [...document.querySelectorAll('.facet-ctrl select')][0];
+  if (sel) {
+    sel.value = '';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(900);
+  }
+  shot.offAgain = !document.querySelector('.chart-host .oc-facets');
+  shot.liveAfterOff = live();
+  return shot;
+});
+
+check(facetUi.offered.some((t) => /^Region/.test(t)),
+  'the data editor offers the column that could split the table',
+  facetUi.offered.join(' | '));
+check(facetUi.split && facetUi.panels === 3,
+  'applying it draws a grid of panels', String(facetUi.panels));
+check(facetUi.names.join(',') === 'North,South,East',
+  'each panel is named for the value it holds', facetUi.names.join(','));
+check(facetUi.canvases === 3 && facetUi.painted,
+  'and every one of them actually drew something',
+  facetUi.canvases + ' canvases');
+check(facetUi.control, 'the studio carries a small-multiples control');
+check(facetUi.liveAfterRebuilds === facetUi.liveAfterFirst,
+  'three rebuilds leak no charts',
+  facetUi.liveAfterFirst + ' → ' + facetUi.liveAfterRebuilds);
+check(facetUi.gridsAfterRebuilds === 1 && facetUi.panelsAfterRebuilds === 3,
+  'and leave exactly one grid behind',
+  facetUi.gridsAfterRebuilds + ' grids, ' + facetUi.panelsAfterRebuilds + ' panels');
+check(facetUi.offAgain && facetUi.liveAfterOff <= facetUi.liveAfterFirst,
+  'turning it off comes back to one chart',
+  String(facetUi.liveAfterOff));
+/* And the export runs — which is the whole promise. A grid that draws in the
+ * studio and throws in somebody else's page would be worse than no feature:
+ * the studio's job here is to hand over working code. One chart per renderer,
+ * because the five code paths are five separate loops. */
+const facetExports = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const f = await import('/js/studio/facet.js');
+  const picked = new Map();
+  for (const def of reg.CHARTS) {
+    const engine = eng.engineOf(def);
+    if (picked.has(engine)) continue;
+    if (!f.seriesKeyOf(def)) continue;
+    const spec = reg.newSpec(def);
+    if (!f.facetBySeries(def, spec).ok) continue;
+    const panels = f.panelSpecs(def, spec);
+    if (!panels || panels.length < 2) continue;
+    const code = eng.generateCode(def, spec);
+    if (/Code generation failed/.test(code.standalone)) continue;
+    picked.set(engine, { id: def.id, engine, panels: panels.length, html: code.standalone });
+  }
+  return [...picked.values()];
+});
+
+let facetExportsOk = 0;
+for (const item of facetExports) {
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  const route = `/facet-export-${item.id}.html`;
+  generated.set(route, item.html);
+  await probe.goto(base + route, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(1500);
+  const state = await probe.evaluate(() => {
+    const plates = [...document.querySelectorAll('.oc-facet-plate')];
+    const drew = plates.map((p) => {
+      const c = p.querySelector('canvas');
+      if (c && c.width) {
+        const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        for (let i = 3; i < px.length; i += 4 * 97) if (px[i] > 10) return true;
+        return false;
+      }
+      const svg = p.querySelector('svg');
+      if (svg) return svg.querySelectorAll('path,circle,rect,line').length > 3;
+      return p.children.length > 0 && p.textContent.trim().length > 0;
+    });
+    return {
+      plates: plates.length,
+      drew: drew.filter(Boolean).length,
+      names: [...document.querySelectorAll('.oc-facet-name')].map((n) => n.textContent),
+    };
+  });
+  await probe.close();
+  const why = errs.length ? errs[0]
+    : state.plates !== item.panels ? `${state.plates} plates for ${item.panels} panels`
+      : `${state.drew} of ${state.plates} panels drew`;
+  if (check(state.plates === item.panels && state.drew === item.panels && !errs.length,
+    `a faceted export runs: ${item.id} (${item.engine})`, why)) facetExportsOk++;
+  check(state.names.length === item.panels,
+    `and names every panel: ${item.id}`, state.names.join(','));
+}
+check(facetExports.length >= 3, 'faceted exports were checked on more than one renderer',
+  facetExports.map((e) => e.engine).join(','));
+
+console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetUi.panels} in the studio, ${facetExportsOk}/${facetExports.length} exports run`);
+
 /* Suite 27 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
 // to check the message, and the browser logs every failed fetch — so the one

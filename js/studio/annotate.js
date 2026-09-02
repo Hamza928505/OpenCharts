@@ -229,10 +229,17 @@ export { drawAnnotations };
  * The element a chart actually occupies, given the element it was rendered
  * into. The studio hands over its own host; an export has a `.chart-wrap`
  * around the canvas, or the `#chart` div a D3 mount was given.
+ *
+ * A faceted chart is checked first, and the grid wins: a note about a set of
+ * small multiples is a remark about the comparison, so it is placed over the
+ * whole grid rather than repeated into every panel. Painting one note twelve
+ * times would multiply a single observation by the number of panels.
  */
 export function plateOf(root) {
   if (!root) return null;
-  return root.querySelector(':scope > .chart-wrap') || root;
+  return root.querySelector(':scope > .oc-facets')
+    || root.querySelector(':scope > .chart-wrap')
+    || root;
 }
 
 /** Whether a spec carries anything worth painting. */

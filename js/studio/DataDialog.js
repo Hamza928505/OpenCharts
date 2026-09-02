@@ -28,6 +28,7 @@ import {
   OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns,
 } from './transform.js';
 import { toast } from './toast.js';
+import { facetableColumns, facetByColumn, facetSource, isFaceted } from './facet.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -98,7 +99,14 @@ export function openDataDialog(def, spec, onApply, seedText) {
 
   /* ── initial table ──────────────────────────────────────────────────── */
 
-  const currentText = typeof def.toText === 'function' ? def.toText(spec) : '';
+  // A faceted chart's spec no longer holds the column it was split by — the
+  // panels each got a table with that column already spent. The editor has to
+  // open on the whole thing, or the reader cannot see, let alone change, the
+  // column their grid is built on.
+  const facetTable = facetSource(spec);
+  const currentText = facetTable
+    ? toCSV(facetTable.headers, facetTable.rows)
+    : (typeof def.toText === 'function' ? def.toText(spec) : '');
   const fromChart = !(seedText && seedText.trim()) && !!(currentText && currentText.trim());
   const startText = seedText && seedText.trim()
     ? seedText
@@ -107,12 +115,23 @@ export function openDataDialog(def, spec, onApply, seedText) {
   // handed over from a file does not, so that one still has to be worked out.
   const start = parseTable(startText, fromChart ? true : expectedCols);
 
+  // Declared before the grid because the grid asks for it while it renders:
+  // a column being split on is not the chart's data, so it is not validated as
+  // a number.
+  let facetBy = facetTable ? String(spec.facet.by || '') : null;
+
   const grid = createDataGrid({
     headers: start.headers.length ? start.headers : ['Label', 'Value'],
     rows: start.rows,
     shape: desc.shape,
     minRows: 1,
-    onChange: () => { status.textContent = ''; status.className = 'dlg-status'; },
+    skipColumn: (headers) => (facetBy ? headers.indexOf(facetBy) : -1),
+    onChange: () => {
+      status.textContent = '';
+      status.className = 'dlg-status';
+      // Adding or renaming a column changes what can be split on.
+      refreshFacet();
+    },
   });
 
   /* ── tabs ───────────────────────────────────────────────────────────── */
@@ -155,6 +174,11 @@ export function openDataDialog(def, spec, onApply, seedText) {
       refreshPastePreview();
     }
     if (onEnter[id]) onEnter[id]();
+    // `grid.setData` does not fire `onChange`, and it is how the paste tab,
+    // the pickers and the Shape tab all write — so the split strip is rebuilt
+    // on every route back to the table rather than trusting an edit event
+    // that three of the four ways in never send.
+    refreshFacet();
   }
 
   /* Tab 1 — the grid */
@@ -165,6 +189,53 @@ export function openDataDialog(def, spec, onApply, seedText) {
     'Click a cell and type. <kbd>Tab</kbd> moves across, <kbd>Enter</kbd> moves down. '
     + 'You can paste a block straight from Excel or Sheets into any cell — it fills from there.';
   gridPanel.appendChild(gridNote);
+
+  /* Splitting one table into a grid of charts.
+   *
+   * It lives under the table rather than in a tab of its own, because unlike
+   * a transform it is not a step that runs — the table is unchanged and the
+   * split is a property of the chart. The strip is only there when a column
+   * could actually carry it; offering "split by" over a table with no
+   * repeating column would be a control that never works.
+   *
+   * The choice is remembered by column *name*, not index: adding a column in
+   * the grid moves every index to its right, and a split that silently
+   * changed which column it was on would be worse than one that forgot. */
+  const facetStrip = el('div', 'dlg-facet');
+
+  function refreshFacet() {
+    const data = grid.getData();
+    const options = facetableColumns(data);
+    const names = options.map((o) => o.name);
+    if (facetBy && !names.includes(facetBy)) facetBy = null;
+
+    facetStrip.innerHTML = '';
+    facetStrip.hidden = !options.length;
+    if (!options.length) return;
+
+    facetStrip.appendChild(el('span', 'dlg-facet-label', 'Split into one chart per'));
+    const buttons = [];
+    const paint = () => buttons.forEach((b) => b.classList.toggle('on', b._by === facetBy));
+    [{ name: null, label: 'Nothing' },
+      ...options.map((o) => ({ name: o.name, label: `${o.name} · ${o.values}` }))]
+      .forEach((opt) => {
+        const b = el('button', 'facet-chip', opt.label);
+        b.type = 'button';
+        b._by = opt.name;
+        b.addEventListener('click', () => {
+          facetBy = opt.name;
+          paint();
+          // The cells in that column stop being numbers the moment it becomes
+          // a facet, so the validation marks have to catch up.
+          grid.refresh();
+        });
+        buttons.push(b);
+        facetStrip.appendChild(b);
+      });
+    paint();
+  }
+
+  gridPanel.appendChild(facetStrip);
   addTab('grid', 'Table', gridPanel);
 
   /* Tab 2 — the place pickers */
@@ -992,6 +1063,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
 
   async function doApply() {
     if (activeTab === 'paste') commitPaste();
+    // Apply can be pressed from any tab, so make sure the chosen split column
+    // still exists in the table being applied.
+    refreshFacet();
 
     const check = grid.validate();
     if (!check.ok) {
@@ -1005,12 +1079,24 @@ export function openDataDialog(def, spec, onApply, seedText) {
       if (!proceed) { select('grid'); return; }
     }
 
-    const res = applyData(def, spec, grid.getData());
+    const data = grid.getData();
+    const col = facetBy ? (data.headers || []).indexOf(facetBy) : -1;
+    // A split reads the whole table and a plain apply reads the whole table;
+    // the difference is only what happens to one column, so they are one
+    // decision here rather than two code paths the reader has to choose
+    // between.
+    const res = col >= 0
+      ? facetByColumn(def, spec, data, col)
+      : applyData(def, spec, data);
     if (!res.ok) {
       status.textContent = res.message;
       status.className = 'dlg-status bad';
       return;
     }
+    // Turning the split off is an explicit act, not a side effect of applying
+    // data — but a facet by a column that is no longer chosen has to go, or
+    // the chart would keep drawing panels from a table nobody asked it to.
+    if (col < 0 && isFaceted(spec) && spec.facet.kind === 'value') delete spec.facet;
     toast(res.message, 'ok');
     onApply(res.message);
     dismiss();
@@ -1037,5 +1123,6 @@ export function openDataDialog(def, spec, onApply, seedText) {
   document.addEventListener('keydown', onKey);
 
   pasteArea.value = startText;
+  refreshFacet();
   select('grid');
 }

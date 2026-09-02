@@ -2754,6 +2754,110 @@ body[data-focus="1"] .stage-data { display: none; }
   .seg-btn { font-size: 11px; padding: .34rem .2rem; }
 }
 
+/* ── Small multiples ─────────────────────────────────────────────────────────
+ *
+ * The grid a faceted chart draws into. Restated here rather than imported from
+ * `FACET_CSS` for the same reason the annotation overlay is: that block is
+ * written for somebody else's page, so it carries literal hex and a
+ * `prefers-color-scheme` query. The studio has a theme *toggle*, which a media
+ * query cannot see, so in here the colours are tokens.
+ *
+ * `--oc-facet-cols` is written on the element by `facetMarkup`, so the column
+ * count is the same number in the preview and in the export.
+ */
+.oc-facets {
+  display: grid;
+  grid-template-columns: repeat(var(--oc-facet-cols, 2), minmax(0, 1fr));
+  gap: 18px 20px;
+  position: relative;
+}
+
+.oc-facet { min-width: 0; }
+
+.oc-facet-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  margin: 0 0 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-soft);
+  /* One line, clipped, whole name on hover: a wrapped panel title pushes its
+     plate below the others and the grid loses the baseline that makes it a
+     comparison. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oc-facet-plate { position: relative; min-width: 0; }
+.oc-facet-plate canvas { display: block; width: 100%; }
+
+@media (max-width: 640px) {
+  .oc-facets { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── The Small multiples control ─────────────────────────────────────────── */
+.facet-ctrl { display: flex; flex-direction: column; gap: .5rem; }
+
+.facet-note {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.facet-warn {
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin: 0;
+  color: var(--a-amber);
+}
+
+/* ── Splitting a table, in the data editor ───────────────────────────────── */
+.dlg-facet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+  margin-top: .6rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--rule);
+}
+
+.dlg-facet[hidden] { display: none; }
+
+.dlg-facet-label {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin-right: .15rem;
+}
+
+.facet-chip {
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.2;
+  padding: .28rem .55rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.facet-chip:hover { border-color: var(--ink-faint); }
+.facet-chip:active { transform: scale(.96); }
+
+.facet-chip.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* Short viewports (landscape phones): the drawer must still scroll. */
 @media (max-height: 520px) {
   .rail { padding-top: 1rem; padding-bottom: 1rem; }
