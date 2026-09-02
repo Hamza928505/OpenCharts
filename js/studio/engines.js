@@ -10,7 +10,9 @@
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe } from './cdn.js';
+import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
+import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
 
 export const ENGINE_LABEL = {
   chartjs: 'Chart.js',
@@ -75,16 +77,32 @@ function heightFor(def, opts) {
  */
 export function renderChart(def, host, spec, opts = {}) {
   host.innerHTML = '';
+  // A canvas is a rectangle of pixels and an SVG of paths is barely better, so
+  // the host carries the name. Set here rather than per renderer: it is the
+  // one line every engine passes through, and it is the same label the
+  // exported markup gets, from the same function.
+  host.setAttribute('role', 'img');
+  host.setAttribute('aria-label', chartLabel(def, spec));
   const engine = engineOf(def);
   const width = Math.max(120, host.clientWidth || host.offsetWidth || 600);
   const height = heightFor(def, opts);
   const ctxInfo = { width, height, compact: !!opts.compact };
+
+  // Annotations are DOM laid over the plate, so they reflow on resize without
+  // anyone redrawing them. What they do not survive is a renderer clearing its
+  // own host, which is why this is called from inside those mounts rather than
+  // once at the end — and why it rebuilds rather than checking a flag.
+  const annotate = () => drawAnnotations(plateOf(host), spec.annotations);
 
   if (engine === 'chartjs') {
     if (typeof window.Chart === 'undefined') {
       return failure(host, 'Chart.js failed to load.');
     }
     const wrap = document.createElement('div');
+    // The same class the exported markup gives it, so `plateOf` finds the same
+    // element here as it does there — the preview and the export should not
+    // have two different ideas of where the chart's box is.
+    wrap.className = 'chart-wrap';
     wrap.style.cssText = `position:relative;width:100%;height:${height}px`;
     const canvas = document.createElement('canvas');
     wrap.appendChild(canvas);
@@ -92,6 +110,7 @@ export function renderChart(def, host, spec, opts = {}) {
     try {
       const config = def.chartjs.build(spec, ctxInfo);
       const chart = new window.Chart(canvas, config);
+      annotate();
       return { engine, chart, canvas };
     } catch (err) {
       return failure(host, err.message);
@@ -116,6 +135,7 @@ export function renderChart(def, host, spec, opts = {}) {
         drawError(ctx, w, height, err.message);
       }
       attachCanvasTips(canvas, regions);
+      annotate();
     };
     draw();
     return { engine, canvas, redraw: draw };
@@ -131,6 +151,7 @@ export function renderChart(def, host, spec, opts = {}) {
       try {
         def.d3.mount(host, spec, w, height, ctxInfo);
         if (!opts.compact) attachTips(host);
+        annotate();
       } catch (err) {
         failure(host, err.message);
       }
@@ -153,6 +174,7 @@ export function renderChart(def, host, spec, opts = {}) {
       const { data, config } = def.native.build(spec, ctxInfo);
       const chart = new def.native.Class(canvas, { data, ...config });
       if (!opts.compact && chart.enableTooltip) chart.enableTooltip();
+      annotate();
       return { engine, chart, canvas };
     } catch (err) {
       return failure(host, err.message);
@@ -165,6 +187,7 @@ export function renderChart(def, host, spec, opts = {}) {
     try {
       def.dom.mount(host, spec, ctxInfo);
       if (!opts.compact) attachTips(host);
+      annotate();
     } catch (err) {
       failure(host, err.message);
     }
@@ -257,6 +280,9 @@ export function renderLegend(container, items, inst) {
 /* ── Code generation ─────────────────────────────────────────────────────── */
 
 const BASE_CSS = `.chart-card {
+  /* The card is a figure now, and a figure carries a browser default
+     margin of 1em 40px that the card never wanted. */
+  margin: 0;
   background: #ffffff;
   border: 1px solid #e3e0d7;
   border-radius: 16px;
@@ -398,7 +424,15 @@ function helperSource(block) {
   return helpers.map((fn) => toFunctionSource(fn)).join('\n\n') + '\n\n';
 }
 
-/** The HTML fragment a chart needs. */
+/**
+ * The HTML fragment a chart needs.
+ *
+ * Wrapped in a `<figure>` carrying a description and the data as a table,
+ * because a canvas is a blank box to a screen reader and this generator is
+ * what puts charts on other people's sites. Both are derived — see
+ * `a11y.js` — so a chart cannot ship an accessible layer that disagrees with
+ * what it draws.
+ */
 function buildHTML(def, spec) {
   const engine = engineOf(def);
   const legend = def.legend ? def.legend(spec) : null;
@@ -406,26 +440,37 @@ function buildHTML(def, spec) {
 
   if (def.html) return def.html(spec, { hasLegend });
 
+  // The mark itself carries the short label, so a reader landing on the
+  // graphic hears what it is; the long description hangs off the figure.
+  const label = escapeText(chartLabel(def, spec));
   const inner = (engine === 'd3' || engine === 'dom')
-    ? `  <div id="chart"></div>`
-    : `  <div class="chart-wrap">\n    <canvas id="chart"></canvas>\n  </div>`;
+    ? `  <div id="chart" role="img" aria-label="${label}"></div>`
+    : `  <div class="chart-wrap">\n    <canvas id="chart" role="img" aria-label="${label}"></canvas>\n  </div>`;
+
+  const table = tableMarkup(def, spec);
 
   return [
-    `<div class="chart-card">`,
+    `<figure class="chart-card" aria-describedby="chart-desc">`,
+    `  <p id="chart-desc" class="visually-hidden">${escapeText(chartSummary(def, spec))}</p>`,
     inner,
     hasLegend ? `  <div class="legend" id="legend"></div>` : null,
-    `</div>`,
+    table ? indent(table, 2) : null,
+    `</figure>`,
   ].filter(Boolean).join('\n');
 }
 
 /** The CSS a chart needs: shared base plus any per-chart extras. */
 function buildCSS(def, spec) {
   const engine = engineOf(def);
-  const parts = [BASE_CSS];
+  const parts = [BASE_CSS, A11Y_CSS];
 
   if (engine === 'd3' || engine === 'dom') {
     parts.push(`#chart {\n  width: 100%;\n  min-height: ${heightFor(def, {})}px;\n}`);
   }
+  // Only where there is something to lay over the plate, so the export of a
+  // chart nobody annotated is byte-for-byte what it was before the feature
+  // existed. A chart's own CSS comes after, and can therefore restyle it.
+  if (hasAnnotations(spec)) parts.push(ANNOTATION_CSS);
   if (def.css) parts.push(typeof def.css === 'function' ? def.css(spec) : def.css);
   return tidy(parts.join('\n\n'));
 }
@@ -447,11 +492,48 @@ function publicSpec(spec) {
   return out;
 }
 
+/**
+ * The spec as the exported renderer sees it.
+ *
+ * `annotations` is dropped on the way out. It is emitted as a `const` of its
+ * own beside the overlay that reads it, and that separation is a statement
+ * about what reads what: `draw` and `mount` read the spec, and neither of them
+ * has ever heard of an annotation. On the two renderers that emit no spec at
+ * all — Chart.js and the custom engine — it is also the only way to carry
+ * them.
+ */
+function specForCode(spec) {
+  const { annotations, ...rest } = publicSpec(spec);
+  return rest;
+}
+
+/**
+ * The overlay, as source: the annotations themselves and the one function that
+ * paints them. Empty for a chart nobody annotated, so nothing is added to the
+ * 114 exports that do not want it.
+ */
+function annotationDecl(spec) {
+  if (!hasAnnotations(spec)) return [];
+  return [
+    '',
+    `// Notes laid over the chart, positioned as a fraction of its box — so a`,
+    `// resize moves them with it and nothing has to be redrawn.`,
+    `const annotations = ${serialize(spec.annotations, 0)};`,
+    '',
+    toFunctionSource(drawAnnotations),
+  ];
+}
+
+/** The call that paints them, or nothing. */
+const annotationCall = (spec, target) =>
+  (hasAnnotations(spec) ? [`drawAnnotations(${target}, annotations);`] : []);
+
 function buildJS(def, spec) {
   const engine = engineOf(def);
   const legend = def.legend ? def.legend(spec) : null;
   const hasLegend = !!(legend && legend.length);
   const header = dependencyHeader(def, dependenciesFor(def));
+  const annots = annotationDecl(spec);
 
   if (engine === 'chartjs') {
     const config = def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) });
@@ -461,6 +543,8 @@ function buildJS(def, spec) {
       `const config = ${serialize(config, 0)};`,
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
+      ...annots,
+      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
     ];
     if (hasLegend) lines.push('', legendCode(legend, true));
     return tidy(lines.join('\n'));
@@ -472,7 +556,8 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
-      `const spec = ${serialize(publicSpec(spec), 0)};`,
+      `const spec = ${serialize(specForCode(spec), 0)};`,
+      ...annots,
       '',
       helperSource(block).trim(),
       '',
@@ -506,6 +591,9 @@ function buildJS(def, spec) {
       '',
       `render();`,
       `window.addEventListener('resize', render);`,
+      // The wrap is never cleared — only the canvas inside it is — so the
+      // overlay is painted once and left to reflow on its own.
+      ...annotationCall(spec, 'canvas.parentElement'),
       ...(hasLegend ? ['', legendCode(legend, false)] : []),
     ].join('\n'));
   }
@@ -516,7 +604,8 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
-      `const spec = ${serialize(publicSpec(spec), 0)};`,
+      `const spec = ${serialize(specForCode(spec), 0)};`,
+      ...annots,
       '',
       helperSource(block).trim(),
       '',
@@ -529,6 +618,9 @@ function buildJS(def, spec) {
       `  host.innerHTML = '';`,
       `  mount(host, spec, host.clientWidth, ${h}, { width: host.clientWidth, height: ${h}, redraw: render });`,
       `  attachTips(host);`,
+      // The mount empties its host, so the overlay has to be laid back over it
+      // every time rather than painted once.
+      ...annotationCall(spec, 'host').map((line) => '  ' + line),
       `}`,
       '',
       `render();`,
@@ -554,6 +646,8 @@ function buildJS(def, spec) {
       // enableLegend takes the element itself, not an id — the studio passes a
       // node, so the exported code must too or it throws on innerHTML.
       hasLegend ? `chart.enableLegend(document.getElementById('legend'));` : '',
+      ...annots,
+      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
     ].join('\n'));
   }
 
@@ -562,7 +656,8 @@ function buildJS(def, spec) {
   return tidy([
     ...header,
     '',
-    `const spec = ${serialize(publicSpec(spec), 0)};`,
+    `const spec = ${serialize(specForCode(spec), 0)};`,
+    ...annots,
     '',
     helperSource(block).trim(),
     '',
@@ -573,6 +668,7 @@ function buildJS(def, spec) {
     `const host = document.getElementById('chart');`,
     `mount(host, spec);`,
     `attachTips(host);`,
+    ...annotationCall(spec, 'host'),
     ...(hasLegend ? ['', legendCode(legend, false)] : []),
   ].join('\n'));
 }
@@ -690,7 +786,12 @@ function buildStandalone(def, spec, html, css, js) {
 }
 
 function escapeText(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**

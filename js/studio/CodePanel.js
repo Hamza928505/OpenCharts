@@ -21,12 +21,18 @@ const TABS = [
   // `lang: 'text'` is not a highlighter — it is the fallthrough, which escapes
   // and returns the source untouched.
   { id: 'prompt',     label: 'AI Prompt',  lang: 'text', prose: true },
+  // The chart as data rather than as code: what the share link already
+  // serialises, written out where a person can read, diff and paste it.
+  // Highlighted as JS because JSON is a subset of it and the highlighter
+  // colours strings, numbers and punctuation the same way.
+  { id: 'spec',       label: 'Spec',       lang: 'js',   editable: true },
 ];
 
 /** What the copy toast calls each view. */
 const COPIED = {
   standalone: 'Standalone page',
   prompt: 'Prompt',
+  spec: 'Spec',
 };
 
 const PROMPT_LEAD = 'Copy this, then attach your own spreadsheet or CSV to any AI assistant. ';
@@ -38,7 +44,10 @@ export class CodePanel {
   constructor(root) {
     this.root = root;
     this.active = 'html';
-    this.code = { html: '', css: '', js: '', standalone: '', prompt: '', promptShort: '' };
+    this.code = { html: '', css: '', js: '', standalone: '', prompt: '', promptShort: '', spec: '' };
+    /** Set by StudioApp: (parsed) => ({ ok, message }). */
+    this.onApplySpec = null;
+    this.editing = false;
     this.filename = 'chart';
     this._build();
   }
@@ -96,7 +105,12 @@ export class CodePanel {
     this.dlBtn.innerHTML = '<span aria-hidden="true">↓</span> Download .html';
     this.dlBtn.addEventListener('click', () => this.download());
 
-    actions.append(this.copyBtn, this.dlBtn);
+    this.editBtn = document.createElement('button');
+    this.editBtn.className = 'btn btn-sm';
+    this.editBtn.type = 'button';
+    this.editBtn.addEventListener('click', () => this.toggleEdit());
+
+    actions.append(this.copyBtn, this.editBtn, this.dlBtn);
     bar.appendChild(actions);
 
     const scroll = document.createElement('div');
@@ -105,7 +119,15 @@ export class CodePanel {
     this.gutter.className = 'gutter';
     this.body = document.createElement('pre');
     this.body.className = 'code-body';
-    scroll.append(this.gutter, this.body);
+    // One textarea, reused: the Spec tab swaps to it to take a pasted spec
+    // and swaps back after. A second highlighted view would have to be kept
+    // in step with this one for no gain.
+    this.editor = document.createElement('textarea');
+    this.editor.className = 'code-edit';
+    this.editor.spellcheck = false;
+    this.editor.hidden = true;
+    this.editor.setAttribute('aria-label', 'Chart spec, as JSON');
+    scroll.append(this.gutter, this.body, this.editor);
 
     this.note = document.createElement('div');
     this.note.className = 'code-note';
@@ -153,6 +175,9 @@ export class CodePanel {
   }
 
   show(tabId) {
+    // Switching tabs abandons an unapplied edit rather than carrying it to a
+    // view it does not belong to.
+    if (this.editing && tabId !== 'spec') this.editing = false;
     this.active = tabId;
     this.tabButtons.forEach((b) => b.classList.toggle('active', b.dataset.tab === tabId));
     this._paint();
@@ -162,6 +187,26 @@ export class CodePanel {
   _paint() {
     const tab = TABS.find((t) => t.id === this.active) || TABS[0];
     const src = this._srcFor(this.active);
+
+    // While editing, the textarea owns the view and must not be repainted from
+    // under the typist — a rebuild fires on every control change, and one of
+    // those landing mid-paste would discard what was pasted.
+    this.editor.hidden = !this.editing;
+    this.body.hidden = !!this.editing;
+    if (this.editing) {
+      this.gutter.hidden = true;
+      this.modeSwitch.hidden = true;
+      this.dlBtn.style.display = 'none';
+      this.editBtn.hidden = false;
+      this.editBtn.textContent = 'Apply spec';
+      this.editBtn.classList.add('btn-primary');
+      this.note.textContent = 'Paste a spec over this and apply it. '
+        + 'A spec for another chart opens that chart.';
+      return;
+    }
+    this.editBtn.classList.remove('btn-primary');
+    this.editBtn.hidden = !tab.editable;
+    this.editBtn.textContent = 'Paste a spec';
 
     this.body.innerHTML = highlight(src, tab.lang);
     this.body.classList.toggle('prose', !!tab.prose);
@@ -190,6 +235,43 @@ export class CodePanel {
 
     // Downloading only makes sense for the complete document.
     this.dlBtn.style.display = this.active === 'standalone' ? '' : 'none';
+  }
+
+  /** Swap between reading the spec and editing it. */
+  toggleEdit() {
+    if (!this.editing) {
+      this.editing = true;
+      this.editor.value = this._srcFor('spec');
+      this._paint();
+      this.editor.focus();
+      this.editor.setSelectionRange(0, 0);
+      return;
+    }
+    this.applyEdit();
+  }
+
+  applyEdit() {
+    let parsed;
+    try {
+      parsed = JSON.parse(this.editor.value);
+    } catch (err) {
+      // Say where it broke. "Unexpected token } in JSON at position 412" is
+      // the one part of a parse error that is actually useful.
+      toast(`That is not valid JSON — ${err.message}`, 'bad');
+      return;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      toast('A spec has to be a JSON object.', 'bad');
+      return;
+    }
+    const res = this.onApplySpec ? this.onApplySpec(parsed) : { ok: false, message: 'Nothing to apply to.' };
+    if (!res || !res.ok) {
+      toast((res && res.message) || 'That spec could not be applied.', 'bad');
+      return;
+    }
+    this.editing = false;
+    this._paint();
+    toast(res.message || 'Spec applied', 'ok');
   }
 
   async copy() {

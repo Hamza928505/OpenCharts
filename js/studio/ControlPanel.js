@@ -16,7 +16,13 @@ import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
 import { createCombobox } from './Combobox.js';
 import { createCheckList } from './CheckList.js';
-import { loadCountries, loadCities, countryItems, findCountryEntry } from './geodata.js';
+import {
+  loadCountries, loadCities, countryItems, findCountryEntry,
+  loadCountryMeta, localCityName,
+} from './geodata.js';
+import { flagIcon } from './flags.js';
+import { confusablePairs, describePairs, simulate, CVD_KINDS } from './cvd.js';
+import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
 
@@ -92,7 +98,7 @@ const parseLabels = (text) =>
 
 /* ── colour picker popover ───────────────────────────────────────────────── */
 
-function attachColourPicker(swatch, initial, onPick) {
+function attachColourPicker(swatch, initial, onPick, onClear) {
   // A native <input type="color"> gives the OS picker for free; the swatch
   // strip above it covers the common case in one click.
   const input = document.createElement('input');
@@ -130,6 +136,18 @@ function attachColourPicker(swatch, initial, onPick) {
       'width:20px;height:20px;background:conic-gradient(red,yellow,lime,aqua,blue,magenta,red);';
     custom.addEventListener('click', (ev) => { ev.stopPropagation(); input.click(); });
     pop.appendChild(custom);
+
+    // Somewhere that has a default worth returning to needs a way back to it.
+    // Only offered where the caller has one — a series colour is always a
+    // colour, but an annotation's is "whatever the chart's ink is" until
+    // somebody says otherwise.
+    if (typeof onClear === 'function') {
+      const auto = el('button', 'palette-auto', 'Auto');
+      auto.type = 'button';
+      auto.title = 'Back to the default colour';
+      auto.addEventListener('click', (ev) => { ev.stopPropagation(); onClear(); close(); });
+      pop.appendChild(auto);
+    }
 
     swatch.style.position = 'relative';
     swatch.appendChild(pop);
@@ -371,25 +389,180 @@ function widgetColors(ctrl, spec, notify) {
   const wrap = field(ctrl.label || 'Colours');
   const strip = el('div', 'palette');
 
+  // Which deficiency the strip is currently showing, or '' for normal vision.
+  let showing = '';
+
+  const warn = el('p', 'palette-warn');
+  const sim = el('button', 'palette-sim');
+  sim.type = 'button';
+
+  /** What to call series i in the warning — its own name if the chart has one. */
+  const nameAt = (i) => {
+    const names = ctrl.names && ctrl.names(spec);
+    return (names && names[i]) || '';
+  };
+
   function paint() {
     strip.innerHTML = '';
     const list = getPath(spec, key) || [];
     list.forEach((colour, i) => {
       const dot = el('span', 'palette-dot');
-      dot.style.background = colour;
-      dot.title = (ctrl.names && ctrl.names(spec)[i]) || colour;
+      // The dot shows the simulated colour while previewing, but the picker
+      // still edits the real one — you are inspecting the palette, not
+      // recolouring the chart to something nobody chose.
+      dot.style.background = showing ? simulate(colour, showing) : colour;
+      dot.title = nameAt(i) || colour;
       attachColourPicker(dot, colour, (next) => {
         list[i] = next;
-        dot.style.background = next;
         notify();
+        paint();
       });
       strip.appendChild(dot);
     });
+    paintWarning(list);
   }
 
+  function paintWarning(list) {
+    // Only the colours this chart actually uses. Checking the whole 8-colour
+    // palette would report pairs no reader will ever see side by side.
+    const pairs = confusablePairs(list);
+    warn.textContent = describePairs(pairs, nameAt);
+    warn.hidden = !pairs.length;
+    sim.hidden = !pairs.length && !showing;
+    sim.textContent = showing
+      ? 'Back to normal vision'
+      : `See it as a ${(CVD_KINDS.find((k) => k.key === (pairs[0] || {}).kind) || CVD_KINDS[0]).label} reader`;
+    sim.dataset.kind = showing || (pairs[0] || {}).kind || CVD_KINDS[0].key;
+  }
+
+  sim.addEventListener('click', () => {
+    showing = showing ? '' : (sim.dataset.kind || CVD_KINDS[0].key);
+    paint();
+  });
+
+  wrap.append(strip, warn, sim);
   paint();
-  wrap.appendChild(strip);
   wrap._repaint = paint;
+  return wrap;
+}
+
+/**
+ * Notes on the chart — the one control every chart in the library carries.
+ *
+ * **The panel holds what a note says; the chart holds where it goes.** Two
+ * number fields are a poor way to find the spot a label looks right in, and a
+ * good way to make somebody count pixels — so position is dragged on the plate
+ * and never appears here. The hint below the list is the only thing that says
+ * so, which is why it is not optional.
+ *
+ * Adding is three buttons rather than a type dropdown plus an Add: picking
+ * what to add *is* the action, and one click should do it.
+ */
+function widgetAnnotations(ctrl, spec, notify) {
+  const key = ctrl.key || 'annotations';
+  const wrap = field(ctrl.label || 'Notes on the chart');
+  const list = el('div', 'annot-list');
+  const adder = el('div', 'annot-add');
+
+  /** The live array, created on first use so an unannotated spec stays clean. */
+  const ensure = () => {
+    let items = getPath(spec, key);
+    if (!Array.isArray(items)) { items = []; setPath(spec, key, items); }
+    return items;
+  };
+  const current = () => (Array.isArray(getPath(spec, key)) ? getPath(spec, key) : []);
+
+  /** A structural change repaints the list; a typed character does not. */
+  const changed = (repaint) => { if (repaint) paint(); notify(); };
+
+  function row(a, i) {
+    const kind = ANNOTATION_TYPES.find((t) => t.type === a.type) || ANNOTATION_TYPES[0];
+    const node = el('div', 'annot-row');
+    node.dataset.i = String(i);
+
+    const glyph = el('span', 'annot-kind', kind.glyph);
+    glyph.title = kind.label;
+    node.appendChild(glyph);
+
+    const text = el('input', 'input annot-text');
+    text.type = 'text';
+    text.value = a.text || '';
+    text.placeholder = a.type === 'note' ? 'Say what it marks' : 'Label (optional)';
+    text.addEventListener('input', () => { a.text = text.value; changed(false); });
+    node.appendChild(text);
+
+    // One button whose job depends on the kind. A rule and a band need to turn
+    // ninety degrees; a note needs to be able to point at something.
+    const flip = el('button', 'annot-btn');
+    flip.type = 'button';
+    if (a.type === 'note') {
+      flip.textContent = '↗';
+      flip.classList.toggle('is-on', !!a.arrow);
+      flip.title = a.arrow ? 'Remove the arrow' : 'Point an arrow at something';
+      flip.addEventListener('click', () => {
+        a.arrow = a.arrow ? null : defaultArrow(a);
+        changed(true);
+      });
+    } else {
+      const upright = a.axis === 'x';
+      flip.textContent = upright ? '↕' : '↔';
+      flip.title = upright ? 'Vertical — click to lay it flat' : 'Horizontal — click to stand it up';
+      flip.addEventListener('click', () => {
+        a.axis = upright ? 'y' : 'x';
+        changed(true);
+      });
+    }
+    node.appendChild(flip);
+
+    const dot = el('span', 'palette-dot annot-dot');
+    dot.style.background = a.color || 'transparent';
+    if (!a.color) dot.classList.add('is-auto');
+    dot.title = a.color || 'Default colour';
+    attachColourPicker(dot, a.color || '#6C63D8',
+      (hex) => { a.color = hex; changed(true); },
+      () => { delete a.color; changed(true); });
+    node.appendChild(dot);
+
+    const del = el('button', 'annot-btn annot-del', '✕');
+    del.type = 'button';
+    del.title = 'Remove';
+    del.addEventListener('click', () => {
+      current().splice(i, 1);
+      changed(true);
+    });
+    node.appendChild(del);
+
+    return node;
+  }
+
+  function paint() {
+    list.innerHTML = '';
+    const items = current();
+    if (!items.length) {
+      const blank = el('p', 'annot-empty', 'Nothing marked yet.');
+      list.appendChild(blank);
+    } else {
+      items.forEach((a, i) => list.appendChild(row(a, i)));
+    }
+    hint.hidden = !items.length;
+  }
+
+  const hint = el('p', 'annot-hint', 'Drag it on the chart to place it.');
+
+  ANNOTATION_TYPES.forEach((t) => {
+    const add = el('button', 'btn btn-sm annot-new', `+ ${t.label}`);
+    add.type = 'button';
+    add.title = t.hint;
+    add.addEventListener('click', () => {
+      const items = ensure();
+      items.push(newAnnotation(t.type, items.length));
+      changed(true);
+    });
+    adder.appendChild(add);
+  });
+
+  wrap.append(list, adder, hint);
+  paint();
   return wrap;
 }
 
@@ -601,10 +774,16 @@ function widgetCountries(ctrl, spec, notify) {
   const chips = el('div', 'country-chips');
   wrap.appendChild(chips);
 
+  /** Atlas name → ISO2, so a chip can find its own flag. Empty until loaded. */
+  const isoByName = new Map();
+
   const box = createCombobox({
     items: [],
     placeholder: ctrl.placeholder || 'Loading countries…',
     emptyText: 'No country by that name',
+    // The item's `icon` is an ISO2 code; turning it into a picture is this
+    // call site's job, because this is the one that knows it lists countries.
+    renderIcon: (iso2) => flagIcon(iso2),
     onSelect: (value) => {
       if (!value) return;
       const list = getPath(spec, ctrl.key) || [];
@@ -630,7 +809,13 @@ function widgetCountries(ctrl, spec, notify) {
     }
     list.forEach((name, i) => {
       const chip = el('span', 'country-chip');
-      chip.appendChild(el('span', null, name));
+      // `iso` is filled in once the country list has loaded — a chip painted
+      // before then is a name with no flag, not a broken one.
+      const iso = isoByName.get(name);
+      if (iso) chip.appendChild(flagIcon(iso));
+      // Named, because the flag is a bare span in here too and `> span` used
+      // to be a reliable way of saying "the country".
+      chip.appendChild(el('span', 'country-chip-name', name));
       const x = el('button', 'country-chip-x', '✕');
       x.type = 'button';
       x.title = `Remove ${name}`;
@@ -647,7 +832,9 @@ function widgetCountries(ctrl, spec, notify) {
   }
 
   loadCountries().then((all) => {
+    all.forEach((c) => { if (c.iso2) isoByName.set(c.name, c.iso2); });
     box.setItems(countryItems(all, { onlyWithCities: !!ctrl.onlyWithCities }));
+    paint();
     // Normalise whatever the spec held to the atlas's own spelling, so a saved
     // config that said "USA" now shows — and matches — the real feature.
     const list = getPath(spec, ctrl.key) || [];
@@ -697,6 +884,7 @@ function widgetCities(ctrl, spec, notify) {
   const list = createCheckList({
     placeholder: 'Search cities…',
     emptyText: 'Choose a country above and its cities appear here.',
+    renderIcon: (iso2) => flagIcon(iso2),
     onChange: (picked) => apply(picked),
   });
   wrap.appendChild(list.el);
@@ -761,6 +949,9 @@ function widgetCities(ctrl, spec, notify) {
   /* ── load ─────────────────────────────────────────────────────────────── */
 
   loadCountries().then(async (all) => {
+    // Local spellings are decoration, so the list must not wait on them
+    // failing — `localCityName` simply answers '' until they arrive.
+    await loadCountryMeta().catch(() => {});
     const wanted = [].concat(getPath(spec, from) || []).filter(Boolean);
     const entries = wanted.map((n) => findCountryEntry(all, n)).filter((c) => c && c.iso2);
     countryNames = entries.map((c) => c.name);
@@ -775,14 +966,29 @@ function widgetCities(ctrl, spec, notify) {
     lists.forEach((cities, i) => cities.forEach((c) => {
       // Two countries can share a city name; the first one focused wins, which
       // is the same rule the map itself uses for overlapping marks.
-      if (!universe.has(c.name)) universe.set(c.name, { ...c, country: entries[i].name });
+      if (!universe.has(c.name)) {
+        universe.set(c.name, { ...c, country: entries[i].name, iso2: entries[i].iso2 });
+      }
     }));
 
-    list.setItems([...universe.values()].map((c) => ({
-      value: c.name,
-      label: c.name,
-      note: entries.length > 1 ? c.country : '',
-    })), true);
+    const many = entries.length > 1;
+    list.setItems([...universe.values()].map((c) => {
+      // The curated list names about five cities per country, so most rows
+      // have no local spelling and simply do not get one. Inventing a
+      // transliteration for the other 156,000 would put names on the map
+      // that no source stands behind.
+      const local = localCityName(c.iso2, c.name);
+      return {
+        value: c.name,
+        label: c.name,
+        sub: local,
+        search: local ? `${c.name} ${local}` : c.name,
+        // A flag only earns its place when the list spans countries; on a
+        // single-country map it would be the same picture on every row.
+        icon: many ? c.iso2 : '',
+        note: many ? c.country : '',
+      };
+    }), true);
 
     const on = places().map((p) => String(p.name)).filter((n) => universe.has(n));
     list.setSelected(on);
@@ -813,6 +1019,7 @@ const WIDGETS = {
   color:   widgetColor,
   colors:  widgetColors,
   values:  widgetValues,
+  annotations: widgetAnnotations,
 };
 
 /* ── panel ───────────────────────────────────────────────────────────────── */

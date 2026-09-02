@@ -8,6 +8,20 @@
  * Cities are split per country for a reason: the full list is 4.4MB, but the
  * country somebody actually picks is between 4KB and 363KB. Nothing is fetched
  * until a country is chosen, and each country is fetched at most once.
+ *
+ * There is a second country file, `data/country-meta.json`, and it is
+ * deliberately not merged into the first. `countries.json` is the **atlas** —
+ * Natural Earth's names, the polygons a map can draw, the gazetteer's city
+ * counts — and decides what a map can focus on. `country-meta.json` is the
+ * **presentation layer** — flag, local-language name, ISO3, region — and
+ * decides how a country is shown once it has been picked. Neither list is a
+ * superset of the other: the atlas carries ten territories the curated list
+ * omits (Greenland, Taiwan, Kosovo, Israel) and the curated list carries
+ * twenty-nine microstates too small to be a polygon at 110m (San Marino,
+ * Monaco, Tuvalu). Keyed by ISO2 and merged here, both keep their coverage.
+ *
+ * The metadata is decoration, so its absence is never fatal: a failed fetch
+ * leaves every country its atlas name and the pickers work unchanged.
  */
 
 const ROOT = new URL('../../', import.meta.url);
@@ -16,18 +30,40 @@ let countriesPromise = null;
 const cityCache = new Map();
 const cityPromises = new Map();
 
+/** iso2 → { name, iso3, region, local?, lang?, cities? }. Null until loaded. */
+let meta = null;
+let metaPromise = null;
+/** iso2 → Map(englishCityName → localCityName), built on first ask. */
+const localCityCache = new Map();
+
 /**
  * Every country on the world map, whether or not it has a city list.
  * @returns {Promise<Array<{name:string, iso2:string, cities:number}>>}
  */
 export function loadCountries() {
   if (!countriesPromise) {
-    countriesPromise = fetch(new URL('data/countries.json', ROOT))
+    const atlas = fetch(new URL('data/countries.json', ROOT))
       .then((r) => {
         if (!r.ok) throw new Error(`countries.json: ${r.status}`);
         return r.json();
-      })
-      .then((rows) => rows.map(([name, iso2, cities]) => ({ name, iso2, cities })))
+      });
+
+    countriesPromise = Promise.all([atlas, loadCountryMeta().catch(() => ({}))])
+      .then(([rows, extra]) => rows.map(([name, iso2, cities]) => {
+        const m = (iso2 && extra[iso2]) || null;
+        return {
+          name,
+          iso2,
+          cities,
+          // The atlas name wins. It is what the map labels itself with and
+          // what `countryKey` resolves against; swapping in the curated
+          // spelling here would leave the picker naming a country the map
+          // does not answer to.
+          iso3: m ? m.iso3 : '',
+          region: m ? m.region : '',
+          local: (m && m.local) || '',
+        };
+      }))
       .catch((err) => {
         // A failed fetch must not poison the cache — a retry should be able to
         // succeed after, say, the dev server is restarted.
@@ -36,6 +72,64 @@ export function loadCountries() {
       });
   }
   return countriesPromise;
+}
+
+/**
+ * The curated country metadata, fetched once.
+ *
+ * Callers that only want decoration should swallow the rejection: everything
+ * this file returns works without it.
+ *
+ * @returns {Promise<Record<string,{name:string,iso3:string,region:string,local?:string,lang?:string,cities?:Array}>>}
+ */
+export function loadCountryMeta() {
+  if (meta) return Promise.resolve(meta);
+  if (!metaPromise) {
+    metaPromise = fetch(new URL('data/country-meta.json', ROOT))
+      .then((r) => {
+        if (!r.ok) throw new Error(`country-meta.json: ${r.status}`);
+        return r.json();
+      })
+      .then((data) => { meta = data || {}; return meta; })
+      .catch((err) => { metaPromise = null; throw err; });
+  }
+  return metaPromise;
+}
+
+/** One country's metadata, or null. Empty until `loadCountryMeta()` resolves. */
+export function countryMeta(iso2) {
+  const c = String(iso2 || '').toUpperCase();
+  return (meta && meta[c]) || null;
+}
+
+/**
+ * The local-language spelling of a city, or ''.
+ *
+ * The curated list holds about five cities per country, so this answers for
+ * the capital and the largest few and stays quiet about the other 156,000 —
+ * which is the honest outcome. Inventing a transliteration for every
+ * gazetteer entry would put spellings on the map that no source stands
+ * behind, the same rule that keeps charts from generating their own data.
+ */
+export function localCityName(iso2, name) {
+  const c = String(iso2 || '').toUpperCase();
+  if (!c || !name || !meta) return '';
+  let lookup = localCityCache.get(c);
+  if (!lookup) {
+    lookup = new Map();
+    for (const row of (meta[c] && meta[c].cities) || []) {
+      if (row.length > 1 && row[1]) lookup.set(cityKey(row[0]), row[1]);
+    }
+    localCityCache.set(c, lookup);
+  }
+  return lookup.get(cityKey(name)) || '';
+}
+
+/** Loose enough that `Mazar-i-Sharif` and `Mazar i Sharif` are one city. */
+function cityKey(name) {
+  return String(name == null ? '' : name)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 /**
@@ -134,7 +228,18 @@ export function findCountryEntry(list, query) {
     || null;
 }
 
-/** Items for a country Combobox, countries with cities listed first-class. */
+/**
+ * Items for a country Combobox, countries with cities listed first-class.
+ *
+ * `icon` is the ISO2 code rather than an image: the widget asks `flags.js`
+ * for the picture, so a picker that never opens never costs a flag, and this
+ * module keeps no opinion about how an icon is drawn.
+ *
+ * `search` carries the local-language name alongside the atlas one, so
+ * someone typing `Deutschland` or `مصر` finds the country the map calls
+ * `Germany` and `Egypt`. The label still shows the atlas spelling — it is
+ * what the map answers to.
+ */
 export function countryItems(list, { onlyWithCities = false } = {}) {
   return list
     .filter((c) => (onlyWithCities ? c.cities > 0 : true))
@@ -143,5 +248,8 @@ export function countryItems(list, { onlyWithCities = false } = {}) {
       label: c.name,
       note: c.cities ? `${c.cities.toLocaleString()} cities` : '',
       iso2: c.iso2,
+      icon: c.iso2 || '',
+      sub: c.local || '',
+      search: c.local ? `${c.name} ${c.local}` : c.name,
     }));
 }

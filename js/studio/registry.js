@@ -31,6 +31,7 @@ import { timeseriesCharts } from './charts/timeseries.js';
 import { engineCharts } from './charts/engine.js';
 import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
 import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
+import { ANNOTATION_CONTROL } from './annotate.js';
 
 /** Category display order in the gallery and the rail. */
 export const CATEGORY_ORDER = [
@@ -94,6 +95,16 @@ ALL.forEach((def) => {
     const controls = def.controls || (def.controls = []);
     const already = controls.some((c) => c.type === 'data');
     if (!already) controls.unshift({ ...DATA_CONTROL });
+  }
+
+  // A note, a rule and a shaded band are positioned as a fraction of the
+  // plate, which asks nothing of the renderer — so every chart can be
+  // annotated and none of them had to be told how.
+  {
+    const controls = def.controls || (def.controls = []);
+    if (!controls.some((c) => c.type === 'annotations')) {
+      controls.push({ ...ANNOTATION_CONTROL });
+    }
   }
 
   def.engine = engineOf(def);

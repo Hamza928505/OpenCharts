@@ -59,28 +59,44 @@ let touchedNames = 0;
 const examples = [];
 
 const nextCities = new Map();
+let merged = 0;
 for (const file of readdirSync(CITY_DIR)) {
   if (file === '_index.json') continue;
+  const iso2 = file.slice(0, 2);
   const rows = JSON.parse(readFileSync(join(CITY_DIR, file), 'utf8'));
   let changed = false;
 
   const next = rows.map((row) => {
-    const clean = cleanCityName(row[0]);
+    // The country decides whether this name is a transliteration.
+    const clean = cleanCityName(row[0], iso2);
     if (clean === row[0]) return row;
     changed = true;
     touchedNames++;
-    if (examples.length < 20) examples.push(`${file.slice(0, 2)}  ${row[0]} → ${clean}`);
+    if (examples.length < 20) examples.push(`${iso2}  ${row[0]} → ${clean}`);
     return [clean, row[1], row[2]];
   });
 
   if (!changed) continue;
   touchedFiles++;
+
+  // Folding can make two rows identical — the gazetteer carries `Ḩulwān` and
+  // `Hulwan` for the same place. Only an exact match on name *and* both
+  // coordinates is a duplicate; two real towns that happen to share a folded
+  // name are still two towns, and dropping one would lose a place.
+  const seen = new Set();
+  const deduped = next.filter((r) => {
+    const key = `${r[0]}|${r[1]}|${r[2]}`;
+    if (seen.has(key)) { merged++; return false; }
+    seen.add(key);
+    return true;
+  });
+
   // Renaming can reorder, and the picker lists cities alphabetically.
-  next.sort((a, b) => a[0].localeCompare(b[0]));
-  nextCities.set(file, next);
+  deduped.sort((a, b) => a[0].localeCompare(b[0]));
+  nextCities.set(file, deduped);
 }
 
-say(`cities: ${touchedNames} names in ${touchedFiles} countries`);
+say(`cities: ${touchedNames} names in ${touchedFiles} countries, ${merged} exact duplicates merged`);
 examples.forEach((e) => say('  ' + e));
 
 /* ── write ───────────────────────────────────────────────────────────────── */

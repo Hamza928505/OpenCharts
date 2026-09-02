@@ -56,12 +56,20 @@
       </span>
     </a>
 
-    <div class="search" style="max-width:none">
+    <div class="search">
       <span aria-hidden="true" style="color:var(--ink-faint);font-size:12px">⌕</span>
       <input id="rail-search" type="search" placeholder="Filter charts…" aria-label="Filter charts">
     </div>
 
     <div id="rail-list"></div>
+
+    <!-- Sits at the foot of the rail rather than its head: collapsing is
+         something you do after you have found your chart, not before. -->
+    <button class="rail-collapse" id="rail-collapse" type="button"
+            aria-label="Collapse the chart list" aria-expanded="true">
+      <span class="rail-collapse-mark" aria-hidden="true">«</span>
+      <span class="rail-collapse-text">Collapse</span>
+    </button>
   </nav>
   <div class="rail-scrim" id="rail-scrim"></div>
 
@@ -103,6 +111,11 @@
           <div class="stage-bar">
             <span class="stage-title" id="stage-title"></span>
             <div class="stage-actions">
+              <button class="btn btn-sm" id="btn-focus" type="button"
+                      title="Hide everything but the chart (Ctrl+Shift+F)"
+                      aria-pressed="false">
+                <span aria-hidden="true">⤢</span> Focus
+              </button>
               <button class="btn btn-sm" id="btn-reset" type="button">Reset</button>
               <button class="btn btn-sm" id="btn-png" type="button">Export image</button>
               <button class="btn btn-sm" id="btn-prompt" type="button" title="Copy an AI prompt for this chart — paste it into any assistant along with your own spreadsheet">
@@ -119,6 +132,9 @@
           </div>
           <div class="legend" id="legend"></div>
           <div class="metrics" id="metrics" style="display:none"></div>
+          <!-- The same table the export carries, from the same function, so
+               what a reader gets here and what they ship cannot disagree. -->
+          <div class="stage-data" id="chart-data"></div>
         </section>
 
         <!-- What this chart loads, and from where -->

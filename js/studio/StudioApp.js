@@ -19,11 +19,23 @@ import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 import { takeHandOff } from './DataMatch.js';
 import { applyData } from './dataio.js';
+import { initMotion, markChanged } from './motion.js';
+import { tableMarkup } from './a11y.js';
+import { attachAnnotationDrag, plateOf } from './annotate.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
 /** Which rail categories the visitor has collapsed. */
 const RAIL_KEY = 'opencharts.rail';
+
+/**
+ * Whether the rail is collapsed to its spine.
+ *
+ * A separate key from `RAIL_KEY` on purpose: that one holds a JSON map of
+ * which categories are open, and writing 'mini' over it would throw away
+ * every group the reader had arranged.
+ */
+const RAIL_MODE_KEY = 'opencharts.rail-mode';
 
 /** CSS.escape is not in every browser this may be opened in. */
 const cssEscape = (value) => {
@@ -39,12 +51,14 @@ export class StudioApp {
     this.spec = null;
     this.inst = null;
     this.codePanel = new CodePanel($('#codepanel'));
+    this.codePanel.onApplySpec = (parsed) => this._applySpec(parsed);
     this.sourcesEl = $('#sources');
     this.helpEl = $('#help');
 
     this._cacheDom();
     this._buildRail();
     this._bindChrome();
+    initMotion();
 
     // Re-render on width change; charts that draw to raw canvas need it, and
     // Chart.js handles its own resize but a rebuild keeps everything in step.
@@ -81,6 +95,7 @@ export class StudioApp {
     this.stageTitle = $('#stage-title');
     this.idxEl      = $('#chart-idx');
     this.searchEl   = $('#rail-search');
+    this.dataEl     = $('#chart-data');
   }
 
   _idFromUrl() {
@@ -122,6 +137,7 @@ export class StudioApp {
         `<span class="caret" aria-hidden="true">`
         + `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2l3.5 3-3.5 3"/></svg>`
         + `</span>`
+        + `<span class="rail-group-ico" aria-hidden="true">${GLYPHS[group.name] || ''}</span>`
         + `<span>${escapeHtml(group.name)}</span>`
         + `<span class="n">${matches.length}</span>`;
 
@@ -146,6 +162,17 @@ export class StudioApp {
       body.appendChild(inner);
 
       head.addEventListener('click', () => {
+        // Collapsed, the head is a glyph and its body is not on screen, so
+        // toggling it would look like nothing happened. It opens the rail and
+        // its own group instead — one click back to a list you can read.
+        if (document.body.dataset.rail === 'mini') {
+          this._setRailMini(false);
+          wrap.dataset.open = 'true';
+          head.setAttribute('aria-expanded', 'true');
+          this._setGroupOpen(group.name, true);
+          this._markActive();
+          return;
+        }
         const next = wrap.dataset.open !== 'true';
         wrap.dataset.open = String(next);
         head.setAttribute('aria-expanded', String(next));
@@ -218,6 +245,41 @@ export class StudioApp {
     });
   }
 
+  /**
+   * Collapse the rail to its spine, or open it again.
+   *
+   * The width change does not fire a window resize, so the hand-drawn
+   * renderers have to be told — and told *after* the transition, or they
+   * measure a host that is still moving.
+   */
+  _setRailMini(on) {
+    document.body.dataset.rail = on ? 'mini' : '';
+    const btn = $('#rail-collapse');
+    if (btn) {
+      btn.setAttribute('aria-expanded', String(!on));
+      btn.setAttribute('aria-label', on ? 'Expand the chart list' : 'Collapse the chart list');
+      btn.title = on ? 'Expand the chart list' : 'Collapse the chart list';
+    }
+    // A private window throws on write; the mode still works, it just will not
+    // be remembered — the same bargain `theme.js` makes.
+    try { localStorage.setItem(RAIL_MODE_KEY, on ? 'mini' : 'full'); } catch { /* not fatal */ }
+    this._afterLayoutChange();
+  }
+
+  /** Everything but the plate. */
+  _setFocus(on) {
+    document.body.dataset.focus = on ? '1' : '';
+    const btn = $('#btn-focus');
+    if (btn) btn.setAttribute('aria-pressed', String(on));
+    this._afterLayoutChange();
+  }
+
+  /** Re-measure once the chrome has finished moving. */
+  _afterLayoutChange() {
+    clearTimeout(this._layoutTimer);
+    this._layoutTimer = setTimeout(() => this._onResize(), 240);
+  }
+
   _closeRailDrawer() {
     $('#rail')?.classList.remove('open');
     $('#rail-scrim')?.classList.remove('open');
@@ -244,6 +306,19 @@ export class StudioApp {
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
 
+    // Restore the rail the way it was left. Read once, here, rather than at
+    // module load: a private window can throw on read too.
+    let savedRail = null;
+    try { savedRail = localStorage.getItem(RAIL_MODE_KEY); } catch { /* not fatal */ }
+    if (savedRail === 'mini') this._setRailMini(true);
+
+    $('#rail-collapse')?.addEventListener('click', () => {
+      this._setRailMini(document.body.dataset.rail !== 'mini');
+    });
+    $('#btn-focus')?.addEventListener('click', () => {
+      this._setFocus(document.body.dataset.focus !== '1');
+    });
+
     const railToggle = $('#rail-toggle');
     const rail = $('#rail');
     const scrim = $('#rail-scrim');
@@ -253,13 +328,29 @@ export class StudioApp {
     });
     scrim?.addEventListener('click', () => this._closeRailDrawer());
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this._closeRailDrawer();
+      if (e.key !== 'Escape') return;
+      this._closeRailDrawer();
+      // Escape is the way out of a mode you may have entered by accident.
+      if (document.body.dataset.focus === '1') this._setFocus(false);
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.target.matches('input, textarea, select')) return;
+      // Ctrl+Shift+F works while typing; it is a view command, not a text one.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        this._setFocus(document.body.dataset.focus !== '1');
+        return;
+      }
+      // `e.target` is not always an Element — a key event dispatched at the
+      // document has the document as its target, and `document.matches` does
+      // not exist. Reaching for it there throws and kills the handler, taking
+      // the bracket shortcuts with it.
+      const t = e.target;
+      if (t && typeof t.matches === 'function' && t.matches('input, textarea, select')) return;
       if (e.key === '[') this._step(-1);
       if (e.key === ']') this._step(1);
+      // A bare key, so it stays out of the way of the browser's own.
+      if (e.key === '\\') this._setRailMini(document.body.dataset.rail !== 'mini');
     });
   }
 
@@ -409,13 +500,26 @@ export class StudioApp {
   rebuild() {
     if (!this.def) return;
     destroyInstance(this.inst);
+    if (this._stopAnnotDrag) this._stopAnnotDrag();
     this.inst = renderChart(this.def, this.host, this.spec);
+
+    // A note is placed by dragging it, not by typing two numbers, so the
+    // binding is re-made whenever the plate under it is. Torn down first:
+    // four of the five renderers draw into the host itself, which outlives
+    // the rebuild and would otherwise collect a listener per edit.
+    this._stopAnnotDrag = attachAnnotationDrag(
+      plateOf(this.host), this.spec.annotations || [], () => this._onEdit(),
+    );
 
     const items = this.def.legend ? this.def.legend(this.spec) : null;
     renderLegend(this.legendEl, items, this.inst);
     this._renderMetrics();
 
     const code = generateCode(this.def, this.spec);
+    // The chart as data. Self-describing, so a spec pasted into a different
+    // chart's studio can open the chart it actually belongs to rather than
+    // being merged into one that will ignore half of it.
+    code.spec = JSON.stringify({ chart: this.def.id, spec: this.spec }, null, 2);
     // Built here rather than inside generateCode: the prompt quotes the
     // Standalone export, so it has to come after it, and it is a brief about
     // the chart rather than one of its four code views.
@@ -424,8 +528,40 @@ export class StudioApp {
     code.prompt = buildPrompt(this.def, this.spec, code, 'full');
     code.promptShort = buildPrompt(this.def, this.spec, code, 'data');
     this.codePanel.setCode(code, this.def.id);
+    if (this.dataEl) this.dataEl.innerHTML = tableMarkup(this.def, this.spec);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
     if (this.helpEl) renderHelp(this.helpEl, this.def, this.spec, () => this.editData());
+  }
+
+  /**
+   * Take a pasted spec.
+   *
+   * Merged over the chart's defaults rather than replacing them — the same
+   * rule a share link follows, so a spec written before the chart gained an
+   * option still opens instead of rendering with holes in it.
+   *
+   * @returns {{ ok: boolean, message: string }}
+   */
+  _applySpec(parsed) {
+    // The panel writes `{ chart, spec }`; a bare spec object from somewhere
+    // else is accepted too rather than refused on a technicality.
+    const inner = parsed.spec && typeof parsed.spec === 'object' && !Array.isArray(parsed.spec)
+      ? parsed.spec
+      : parsed;
+    const wantId = typeof parsed.chart === 'string' ? parsed.chart : '';
+
+    if (wantId && wantId !== this.def.id) {
+      const def = getChart(wantId);
+      if (!def) return { ok: false, message: `No chart called "${wantId}" — check the id.` };
+      this.load(wantId, { shared: inner });
+      return { ok: true, message: `Opened ${def.title} from the pasted spec` };
+    }
+
+    this.spec = { ...newSpec(this.def), ...inner };
+    if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
+    buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+    this.rebuild();
+    return { ok: true, message: 'Spec applied' };
   }
 
   _renderMetrics() {
@@ -435,10 +571,23 @@ export class StudioApp {
       this.metricsEl.innerHTML = '';
       return;
     }
+    // What each figure read before this rebuild, so only the ones that moved
+    // are marked. Flashing the whole row on every keystroke would make the
+    // signal meaningless — the point is to say *which* number changed.
+    const previous = [...this.metricsEl.querySelectorAll('.metric-value')].map((n) => n.textContent);
+
     this.metricsEl.style.display = 'grid';
     this.metricsEl.innerHTML = metrics.map((m) =>
       `<div class="metric"><div class="metric-label">${escapeHtml(m.label)}</div>`
       + `<div class="metric-value">${escapeHtml(m.value)}</div></div>`).join('');
+
+    // Only when the row kept its shape; a different set of metrics is a new
+    // chart, not a changed value.
+    if (previous.length === metrics.length) {
+      this.metricsEl.querySelectorAll('.metric-value').forEach((node, i) => {
+        if (previous[i] !== undefined && previous[i] !== node.textContent) markChanged(node);
+      });
+    }
   }
 
   _onResize() {
@@ -509,6 +658,15 @@ const GLYPHS = {
   'Flow':          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 4h5c3 0 3 8 6 8h3"/><path d="M1 11h4"/></svg>',
   'Comparison':    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12L14 4"/><circle cx="2" cy="12" r="1.6" fill="currentColor"/><circle cx="14" cy="4" r="1.6" fill="currentColor"/></svg>',
   'Custom Engine': '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.4l5.7 3.3v6.6L8 14.6 2.3 11.3V4.7z"/><circle cx="8" cy="8" r="2.1"/></svg>',
+  // The five that used to fall through to the bar glyph. Harmless in the
+  // expanded rail, where the category is spelled out beside it — but the
+  // collapsed spine is nothing *but* the glyph, so five categories sharing
+  // one mark would make five of the fifteen unreachable by sight.
+  'Deviation':     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 8h14"/><rect x="3" y="3" width="3" height="5" rx=".8" fill="currentColor" stroke="none"/><rect x="10" y="8" width="3" height="5" rx=".8" fill="currentColor" stroke="none"/></svg>',
+  'Network':       '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 3M4 4l2 8M12 7l-6 5"/><circle cx="4" cy="4" r="1.9" fill="currentColor" stroke="none"/><circle cx="12.2" cy="7" r="1.7" fill="currentColor" stroke="none"/><circle cx="6" cy="12.4" r="1.7" fill="currentColor" stroke="none"/></svg>',
+  'Finance':       '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2.5v11M11.5 2.5v11"/><rect x="2" y="5" width="4" height="5" rx=".7" fill="currentColor" stroke="none"/><rect x="9.5" y="7" width="4" height="5" rx=".7" fill="currentColor" stroke="none"/></svg>',
+  'Geo':           '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.4"/><path d="M1.7 8h12.6M8 1.6c1.9 2 2.9 4 2.9 6.4S9.9 12.4 8 14.4c-1.9-2-2.9-4-2.9-6.4S6.1 3.6 8 1.6z"/></svg>',
+  'KPI & Micro':   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M1.5 11.5l3-3 2.5 2 3.5-5"/><path d="M11 5.5h3.5V9"/></svg>',
 };
 
 function glyph(def) {

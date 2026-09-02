@@ -580,7 +580,7 @@ const studio = await page.evaluate(() => ({
 }));
 check(/Vertical Bar/.test(studio.title || ''), 'studio loads the chart named in the URL');
 check(studio.dataEditor, 'studio shows the data editor first');
-check(studio.tabs === 5, 'studio offers five code tabs', String(studio.tabs));
+check(studio.tabs === 6, 'studio offers six code views', String(studio.tabs));
 check(studio.gutterLines > 0, 'code panel renders line numbers');
 check(studio.sources > 0, 'sources panel lists dependencies');
 check(studio.railGroups > 0, 'rail renders collapsible categories');
@@ -751,8 +751,10 @@ const dialog = await page.evaluate(async () => {
   };
 });
 check(dialog.startsOnGrid, 'the editor opens on the table, not the textarea');
-check(dialog.tabs.join('|') === 'Table|Paste text|Open a file',
-  'a non-geo chart offers three ways in', dialog.tabs.join('|'));
+// Four ways in, plus Shape — which is not a way in at all: it works on what
+// the other four brought, which is why it sits last.
+check(dialog.tabs.join('|') === 'Table|Paste text|Open a file|From a link|Shape',
+  'a non-geo chart offers four ways in and one way to reshape', dialog.tabs.join('|'));
 check(dialog.gridHeight > 250, 'the grid is genuinely large', `${dialog.gridHeight}px`);
 check(dialog.headAligned, 'the grid header sits over its own columns');
 check(dialog.gridFillsWidth, 'the grid uses the width it is given');
@@ -951,6 +953,86 @@ check(!hover.silent.length,
   'every self-drawn chart offers a hover readout', hover.silent.slice(0, 8).join(', '));
 check(!hover.empty.length,
   'no chart offers a blank tooltip', hover.empty.slice(0, 8).join(', '));
+
+/* Declaring the data is only half of it: something has to show it.
+ *
+ * The readout is a child of the chart's host, and `renderChart` empties the
+ * host before every render — which is what every control edit in the studio
+ * does. Guarding the element behind the same "already attached" flag as the
+ * listener meant hover worked on first paint and was dead from the first edit
+ * onward, on all 70 self-drawn charts. The checks above never saw it, because
+ * a mark carrying `data-tip` says nothing about whether a tooltip exists. */
+const hoverLives = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;opacity:0';
+  document.body.appendChild(host);
+
+  // One chart per self-drawn engine; the other two bring their own tooltips.
+  const pick = {};
+  for (const def of reg.CHARTS) {
+    if (def.engine !== 'chartjs' && def.engine !== 'native' && !pick[def.engine]) pick[def.engine] = def.id;
+  }
+
+  const out = {};
+  for (const [engine, id] of Object.entries(pick)) {
+    const def = reg.getChart(id);
+    let inst = null;
+    const live = () => [...host.querySelectorAll('[role="tooltip"]')].filter((n) => n.parentElement === host);
+
+    // Render three times over, the way an edited chart is.
+    const counts = [];
+    for (let k = 0; k < 3; k++) {
+      inst = eng.renderChart(def, host, reg.newSpec(def));
+      for (let i = 0; i < 30 && !host.querySelector('[data-tip], canvas'); i++) await sleep(100);
+      await sleep(220);
+      counts.push(live().length);
+    }
+
+    // And after all that, a hover still has to put a value on screen. Aimed at
+    // a mark the chart itself reported rather than swept blindly.
+    let showed = null;
+    if (engine === 'canvas') {
+      const canvas = host.querySelector('canvas');
+      const box = canvas.getBoundingClientRect();
+      const r = (canvas.__ocRegions || []).find((s) => s.w != null) || (canvas.__ocRegions || [])[0];
+      if (r) {
+        const cx = box.left + (r.w != null ? r.x + r.w / 2 : r.cx);
+        const cy = box.top + (r.h != null ? r.y + r.h / 2 : r.cy);
+        canvas.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy }));
+      }
+    } else {
+      const mark = host.querySelector('[data-tip]');
+      const box = mark.getBoundingClientRect();
+      mark.dispatchEvent(new MouseEvent('mousemove', {
+        bubbles: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2,
+      }));
+    }
+    await sleep(60);
+    const node = live()[0];
+    showed = node && getComputedStyle(node).opacity !== '0' ? node.textContent.trim() : '';
+
+    out[engine] = { id, counts: counts.join(','), showed: showed.slice(0, 40), nodes: live().length };
+    eng.destroyInstance(inst);
+    host.innerHTML = '';
+  }
+
+  host.remove();
+  return out;
+});
+
+const gone = Object.entries(hoverLives).filter(([, v]) => v.counts !== '1,1,1');
+const mute = Object.entries(hoverLives).filter(([, v]) => !v.showed);
+check(!gone.length, 'the hover readout survives a chart being re-rendered',
+  gone.map(([k, v]) => `${k} (${v.id}): ${v.counts}`).join(', '));
+check(!mute.length, 'and still shows a value once it has been',
+  mute.map(([k, v]) => `${k} (${v.id})`).join(', '));
+check(Object.values(hoverLives).every((v) => v.nodes === 1),
+  'exactly one readout per chart, however often it is rebuilt',
+  Object.entries(hoverLives).map(([k, v]) => `${k}:${v.nodes}`).join(' '));
 console.log(`  ${hover.silent.length ? red('✗') : green('✓')} hover — ${hover.silent.length} charts silent of ${(hover.engines.canvas || 0) + (hover.engines.d3 || 0) + (hover.engines.dom || 0)} self-drawn`);
 
 /* Suite 11 — opening a file, and refusing the ones that are not one. */
@@ -1360,7 +1442,7 @@ const pickers = await page.evaluate(async () => {
   await pickCombo(countryField, 'Franc');
   await sleep(900);
   const specCountries = (window.openCharts.spec.opts.countries || []).slice();
-  const chipNames = [...countryField.querySelectorAll('.country-chip > span')].map((c) => c.textContent);
+  const chipNames = [...countryField.querySelectorAll('.country-chip-name')].map((c) => c.textContent);
 
   // Both are highlighted on the map, not just the first.
   const paths = [...document.querySelectorAll('#chart-host svg path')];
@@ -1498,6 +1580,30 @@ const names = await page.evaluate(async () => {
     }
   }
 
+  /* A name may be neither English nor the local language: `Ḩātim` is the
+   * gazetteer's scientific transliteration of حاتم and is not a spelling
+   * anybody types. Where a country's own script is not Latin, every Latin
+   * name is a romanisation, so the plainest one is the right one — and the
+   * rule that decides this is the tool's, imported rather than restated. */
+  const { NON_LATIN_SCRIPT, foldRomanisation } = await import('/tools/place-names.mjs');
+  const unfolded = [];
+  for (const iso of ['JO', 'IR', 'IN', 'RU', 'JP', 'CN', 'GR', 'IL', 'EG', 'KP']) {
+    for (const city of await loadCities(iso)) {
+      if (foldRomanisation(city.name) !== city.name) unfolded.push(`${iso}: ${city.name}`);
+    }
+  }
+
+  /* The other half of the same rule, and the reason it is keyed by country
+   * rather than by character: `ā` is a romanisation in `Ḩātim` and a native
+   * letter in Latvian, `ş` is native Turkish, `‘` is the Hawaiian ʻokina.
+   * Folding these would be the same bug pointing the other way. */
+  const nativeMarks = [];
+  for (const [iso, want] of [['LV', 'Alūksne'], ['TR', 'Akkuş'], ['RO', 'Adămuş'], ['US', '‘Ewa Beach']]) {
+    const found = (await loadCities(iso)).some((c) => c.name === want);
+    nativeMarks.push(`${iso} ${want}: ${found ? 'kept' : 'LOST'}`);
+    if (NON_LATIN_SCRIPT.has(iso)) nativeMarks.push(`${iso} wrongly listed as non-Latin`);
+  }
+
   const same = (a, b) => countryKey(a) === countryKey(b);
   return {
     abbreviated,
@@ -1505,6 +1611,8 @@ const names = await page.evaluate(async () => {
     codeless,
     shared,
     foreignCities,
+    unfolded,
+    nativeMarks,
     trinidad: (findCountryEntry(countries, 'Trinidad and Tobago') || {}).cities || 0,
     congo: (findCountryEntry(countries, 'Congo') || {}).iso2,
     drc: (findCountryEntry(countries, 'Democratic Republic of the Congo') || {}).iso2,
@@ -1526,6 +1634,10 @@ check(!names.codeless.length, 'every country carries an ISO code', names.codeles
 check(!names.shared.length, 'no two countries claim one ISO code by accident', names.shared.join(', '));
 check(!names.foreignCities.length, 'no city name is left in another script',
   names.foreignCities.slice(0, 5).join(', '));
+check(!names.unfolded.length, 'no city is left in scientific transliteration',
+  `${names.unfolded.length} left, e.g. ${names.unfolded.slice(0, 4).join(', ')}`);
+check(names.nativeMarks.every((r) => r.endsWith('kept')),
+  'and a native diacritic is never folded away', names.nativeMarks.join(' | '));
 check(names.trinidad > 0, 'Trinidad and Tobago reaches its own city list',
   `${names.trinidad} cities`);
 check(names.congo === 'CG' && names.drc === 'CD',
@@ -2425,8 +2537,1591 @@ check(phoneDialog.listUsable, 'and the city list is still tall enough to use');
 await page.setViewportSize({ width: 1280, height: 900 });
 console.log(`  ${green('✓')} responsive — no overflow at 390 / 768 / 1280px, editor usable on a phone`);
 
-/* Suite 18 — nothing wrote to the console along the way. */
-const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_/i.test(e));
+/* Suite 18 — flags, country metadata, and the pickers that show them. */
+const flagData = await page.evaluate(async () => {
+  const [flagsRes, metaRes, atlasRes] = await Promise.all([
+    fetch('/data/flags.json').then((r) => r.json()),
+    fetch('/data/country-meta.json').then((r) => r.json()),
+    fetch('/data/countries.json').then((r) => r.json()),
+  ]);
+
+  // A base64 PNG starts with the encoded eight-byte signature. Anything that
+  // does not is an error page that got committed as a flag.
+  const isPng = (b64) => typeof b64 === 'string' && b64.startsWith('iVBORw0KGgo');
+  const bad = Object.entries(flagsRes).filter(([, v]) => !isPng(v)).map(([k]) => k);
+
+  // Every country the picker can list needs a picture, or the set has a hole
+  // exactly where a reader would notice one.
+  const atlasCodes = atlasRes.map(([, iso2]) => iso2).filter(Boolean);
+  const missing = atlasCodes.filter((c) => !flagsRes[c]);
+
+  return {
+    flags: Object.keys(flagsRes).length,
+    bad,
+    missing,
+    meta: Object.keys(metaRes).length,
+    withLocal: Object.values(metaRes).filter((m) => m.local).length,
+    withIso3: Object.values(metaRes).filter((m) => /^[A-Z]{3}$/.test(m.iso3)).length,
+    regions: [...new Set(Object.values(metaRes).map((m) => m.region))].sort(),
+  };
+});
+check(flagData.flags > 190, 'the flag set covers both country lists', `${flagData.flags} flags`);
+check(!flagData.bad.length, 'every flag is a real PNG', flagData.bad.slice(0, 5).join(', '));
+check(!flagData.missing.length, 'no country on the map is left without a flag', flagData.missing.join(', '));
+check(flagData.meta === 194, 'the metadata covers 194 countries', String(flagData.meta));
+check(flagData.withIso3 === flagData.meta, 'every country has an ISO3 code', `${flagData.withIso3}/${flagData.meta}`);
+check(flagData.withLocal > 100, 'most countries carry a local-language name', String(flagData.withLocal));
+check(flagData.regions.length === 5, 'countries are grouped into five regions', flagData.regions.join(', '));
+
+// A fresh page, so the module registry is empty: the "not loaded yet" branch
+// below cannot be reached on a page whose pickers have already pulled the set.
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const flagApi = await page.evaluate(async () => {
+  const flags = await import('/js/studio/flags.js');
+  const geo = await import('/js/studio/geodata.js');
+
+  // An icon asked for before the set has loaded must still fill itself in —
+  // the path every picker takes, since none of them awaits a flag.
+  const early = flags.flagIcon('FR');
+  const beforeLoad = early.style.backgroundImage || '';
+  await flags.loadFlags();
+  const afterLoad = early.style.backgroundImage || '';
+
+  const countries = await geo.loadCountries();
+  const de = countries.find((c) => c.iso2 === 'DE');
+  const items = geo.countryItems(countries);
+  const deItem = items.find((i) => i.value === (de && de.name));
+
+  await geo.loadCountryMeta();
+  return {
+    beforeLoad,
+    fillsIn: afterLoad.includes('data:image/png'),
+    src: (flags.flagSrc('FR') || '').slice(0, 21),
+    unknownIsNull: flags.flagSrc('ZZ') === null && flags.flagSrc('') === null,
+    // The atlas name is what the map answers to and must survive the merge.
+    deName: de && de.name,
+    deLocal: de && de.local,
+    deIso3: de && de.iso3,
+    deRegion: de && de.region,
+    itemIcon: deItem && deItem.icon,
+    itemSearch: deItem && deItem.search,
+    localCity: geo.localCityName('JP', 'Tokyo'),
+    localMiss: geo.localCityName('GB', 'Nowhere-on-Sea'),
+  };
+});
+check(!flagApi.beforeLoad, 'an icon starts empty rather than guessing');
+check(flagApi.fillsIn, 'and paints itself when the set arrives');
+check(flagApi.src === 'data:image/png;base64', 'a flag is a self-contained data URI', flagApi.src);
+check(flagApi.unknownIsNull, 'an unknown code gets no flag rather than a broken one');
+check(flagApi.deName === 'Germany', 'the atlas name survives the metadata merge', String(flagApi.deName));
+check(flagApi.deLocal === 'Deutschland', 'a country carries its local name', String(flagApi.deLocal));
+check(flagApi.deIso3 === 'DEU' && flagApi.deRegion === 'Europe', 'and its ISO3 and region',
+  `${flagApi.deIso3} / ${flagApi.deRegion}`);
+check(flagApi.itemIcon === 'DE', 'a picker item carries the code, not the picture', String(flagApi.itemIcon));
+check(/Deutschland/.test(flagApi.itemSearch || ''), 'and is findable by its local name');
+check(flagApi.localCity === '東京', 'a curated city resolves its local spelling', String(flagApi.localCity));
+check(flagApi.localMiss === '', 'and an unlisted city is left alone rather than guessed');
+
+/* An asset is not a dependency. No chart may claim the flag set, and it must
+ * not inflate the library count the gallery footer prints. */
+const assetRules = await page.evaluate(async () => {
+  const cdn = await import('/js/studio/cdn.js');
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const claimed = CHARTS
+    .filter((d) => cdn.dependenciesFor(d).some((l) => l.kind === 'asset'))
+    .map((d) => d.id);
+  return {
+    assets: cdn.ALL_ASSETS.length,
+    claimed,
+    inLibraries: cdn.ALL_LIBRARIES.some((l) => l.kind === 'asset'),
+    cdnOnly: cdn.cdnOnly(cdn.ALL_ASSETS).length,
+    scripts: cdn.scriptsOnly(cdn.ALL_ASSETS).length,
+    hasLocal: cdn.ALL_ASSETS.every((a) => !!a.local && !a.url),
+  };
+});
+check(assetRules.assets > 0, 'the flag set is disclosed as a vendored asset');
+check(!assetRules.claimed.length, 'no chart declares it as a dependency', assetRules.claimed.join(', '));
+check(!assetRules.inLibraries, 'and it does not inflate the library count');
+check(!assetRules.cdnOnly && !assetRules.scripts, 'a vendored asset is never emitted as a script tag');
+check(assetRules.hasLocal, 'it is credited by path, because it has no URL');
+
+/* And the pickers actually show them. */
+await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2500);
+const flagUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const out = {};
+
+  const chipFlag = document.querySelector('.country-chip .flag');
+  out.chipHasFlag = !!chipFlag
+    && (getComputedStyle(chipFlag).backgroundImage || '').includes('data:image/png');
+  // The lesson `.empty` taught: a class colliding with a site-wide one turned
+  // every chip into a 150px ellipse, and nothing threw. A flag is one small
+  // box or it is a bug, so measure it rather than trust that the rule applied.
+  const box = chipFlag && chipFlag.getBoundingClientRect();
+  out.flagBox = box ? [Math.round(box.width), Math.round(box.height)] : null;
+  out.chipHeight = chipFlag
+    ? Math.round(chipFlag.closest('.country-chip').getBoundingClientRect().height) : 0;
+  // The chip's name must still be readable on its own.
+  const nameEl = document.querySelector('.country-chip .country-chip-name');
+  out.chipName = nameEl ? nameEl.textContent : null;
+
+  const cbx = document.querySelector('.controls .cbx');
+  const input = cbx.querySelector('.cbx-input');
+  input.focus();
+  input.value = 'Deutschland';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(220);
+  const row = cbx.querySelector('.cbx-item');
+  out.localSearchHit = row ? row.querySelector('.cbx-item-label').textContent.trim() : null;
+  const rowFlag = row && row.querySelector('.flag');
+  out.rowHasFlag = !!rowFlag
+    && (getComputedStyle(rowFlag).backgroundImage || '').includes('data:image/png');
+  out.rowHeight = row ? Math.round(row.getBoundingClientRect().height) : 0;
+  out.subShown = row ? (row.querySelector('.cbx-item-sub') || {}).textContent : null;
+  input.value = '';
+  input.blur();
+  await sleep(250);
+
+  // The sidebar city list shows local spellings where the curated list has one.
+  const subs = [...document.querySelectorAll('.clist-sub')].map((n) => n.textContent);
+  out.citySubs = subs.length;
+  out.citySubSample = subs[0] || '';
+  return out;
+});
+check(flagUi.chipHasFlag, 'a country chip carries its flag');
+check(flagUi.chipName === 'Jordan', 'and its name is still readable on its own', String(flagUi.chipName));
+check(flagUi.flagBox && flagUi.flagBox[1] > 6 && flagUi.flagBox[1] <= 20 && flagUi.flagBox[0] <= 26,
+  'a flag is one small box, not a stretched panel', JSON.stringify(flagUi.flagBox));
+check(flagUi.chipHeight > 0 && flagUi.chipHeight < 40, 'the chip stays one line tall', `${flagUi.chipHeight}px`);
+check(flagUi.localSearchHit === 'Germany', 'typing a local name finds the atlas country', String(flagUi.localSearchHit));
+check(flagUi.rowHasFlag, 'a dropdown row carries its flag');
+check(flagUi.subShown === 'Deutschland', 'and shows the local name beside the atlas one', String(flagUi.subShown));
+check(flagUi.rowHeight > 0 && flagUi.rowHeight < 40, 'a dropdown row stays one line tall', `${flagUi.rowHeight}px`);
+check(flagUi.citySubs > 0, 'the city list shows local spellings',
+  `${flagUi.citySubs} shown, e.g. ${flagUi.citySubSample}`);
+console.log(`  ${green('✓')} flags — ${flagData.flags} flags, ${flagData.meta} countries, `
+  + `${flagUi.citySubs} local city names in the list`);
+
+/* Suite 19 — the colour-vision check, the spec view, and undo. */
+
+/* The maths first, away from the DOM. A palette check that is wrong about
+ * colour is worse than none: it would train the reader to ignore it. */
+const cvdMath = await page.evaluate(async () => {
+  const m = await import('/js/studio/cvd.js');
+  const { PALETTE } = await import('/js/studio/palette.js');
+
+  // The textbook case. Distinguishable to a trichromat, one colour to a
+  // deuteranope — if this does not fire, nothing else here is meaningful.
+  const redGreen = m.confusablePairs(['#d40000', '#00a000']);
+
+  // Two colours already alike are a palette choice, not a colour-vision
+  // problem, and reporting them would bury the real finding.
+  const alreadyAlike = m.confusablePairs(['#2F76C9', '#3079CB']);
+
+  // Simulation must leave anything it cannot parse alone rather than
+  // turning a gradient or a CSS variable into black.
+  const passthrough = ['linear-gradient(red, blue)', 'var(--accent)', '', null]
+    .every((v) => m.simulate(v) === v);
+
+  return {
+    redGreen: redGreen.length,
+    redGreenKind: (redGreen[0] || {}).kind,
+    alreadyAlike: alreadyAlike.length,
+    passthrough,
+    // A hex in, a hex out.
+    simHex: /^#[0-9a-f]{6}$/i.test(m.simulate('#CE5229', 'deuteranopia')),
+    // Identical colours are zero apart; the check must not divide by chance.
+    selfDistance: m.distance('#6C63D8', '#6C63D8'),
+    paletteFirstThree: m.confusablePairs(PALETTE.slice(0, 3)).length,
+    sentence: m.describePairs(redGreen, (i) => ['Revenue', 'Cost'][i]),
+  };
+});
+check(cvdMath.redGreen === 1, 'red and green are reported as one colour',
+  `${cvdMath.redGreen} pairs`);
+check(cvdMath.redGreenKind === 'deuteranopia', 'and named as the deficiency that merges them',
+  String(cvdMath.redGreenKind));
+check(!cvdMath.alreadyAlike, 'two already-similar colours are not reported',
+  `${cvdMath.alreadyAlike} pairs`);
+check(cvdMath.passthrough, 'a gradient or variable passes through the simulation untouched');
+check(cvdMath.simHex, 'a simulated colour is still a hex colour');
+check(cvdMath.selfDistance === 0, 'a colour is zero distance from itself', String(cvdMath.selfDistance));
+check(!cvdMath.paletteFirstThree, 'the palette a three-series chart opens with is safe',
+  `${cvdMath.paletteFirstThree} pairs merge`);
+check(/Revenue and Cost/.test(cvdMath.sentence), 'the warning uses the series names', cvdMath.sentence);
+
+/* And it reaches the control panel. `area-band` carries a `colors` widget;
+ * the 56 charts on `series` colour themselves through a different one. */
+await page.goto(`${base}/studio.html?chart=area-band`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const cvdUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const app = window.openCharts;
+  const ctrl = (app.def.controls || []).find((c) => c.type === 'colors');
+  const parts = ctrl.key.split('.');
+  let o = app.spec;
+  for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  const leaf = parts[parts.length - 1];
+
+  const cleanHidden = (document.querySelector('.palette-warn') || {}).hidden;
+
+  o[leaf] = ['#d40000', '#00a000', '#2F76C9'];
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+
+  const warn = document.querySelector('.palette-warn');
+  const sim = document.querySelector('.palette-sim');
+  const before = [...document.querySelectorAll('.palette-dot')].map((d) => d.style.background);
+  if (sim) sim.click();
+  await sleep(250);
+  const after = [...document.querySelectorAll('.palette-dot')].map((d) => d.style.background);
+
+  return {
+    cleanHidden,
+    warnShown: warn ? !warn.hidden : false,
+    warnText: warn ? warn.textContent : '',
+    dotsChanged: JSON.stringify(before) !== JSON.stringify(after),
+    // Previewing is inspection, not an edit — the chart's real colours stand.
+    specUntouched: o[leaf][0] === '#d40000',
+  };
+});
+check(cvdUi.cleanHidden === true, 'a safe palette says nothing');
+check(cvdUi.warnShown, 'a palette that merges warns', cvdUi.warnText);
+check(cvdUi.dotsChanged, 'and can be previewed as the colour-blind reader sees it');
+check(cvdUi.specUntouched, 'previewing never rewrites the chart colours');
+
+/* The chart as data: a spec you can read, copy and paste back. */
+await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const specView = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = (re) => [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => re.test(b.textContent));
+
+  [...document.querySelectorAll('.tab')].find((t) => t.textContent === 'Spec').click();
+  await sleep(300);
+  const shown = document.querySelector('.code-body').textContent;
+  let parsed = null;
+  try { parsed = JSON.parse(shown); } catch { /* reported below */ }
+
+  btn(/Paste a spec/).click();
+  await sleep(200);
+  const ta = document.querySelector('.code-edit');
+  const obj = JSON.parse(ta.value);
+  obj.spec.labels = ['ZZ', 'YY', 'XX', 'WW', 'VV', 'UU'];
+  ta.value = JSON.stringify(obj, null, 2);
+  btn(/Apply spec/).click();
+  await sleep(700);
+
+  const applied = window.openCharts.spec.labels[0];
+  const closed = document.querySelector('.code-edit').hidden;
+
+  // Malformed JSON must not be swallowed — the editor stays open holding
+  // whatever was pasted, so it can be fixed rather than retyped.
+  btn(/Paste a spec/).click();
+  await sleep(150);
+  document.querySelector('.code-edit').value = '{ not json';
+  btn(/Apply spec/).click();
+  await sleep(350);
+  const refusedStaysOpen = !document.querySelector('.code-edit').hidden;
+  const refusedKeepsText = document.querySelector('.code-edit').value === '{ not json';
+
+  return {
+    isJson: !!parsed,
+    namesItsChart: parsed && parsed.chart === 'line-multi',
+    carriesSpec: !!(parsed && parsed.spec && typeof parsed.spec === 'object'),
+    applied,
+    closed,
+    refusedStaysOpen,
+    refusedKeepsText,
+  };
+});
+check(specView.isJson, 'the spec view is valid JSON');
+check(specView.namesItsChart, 'and names the chart it belongs to');
+check(specView.carriesSpec, 'and carries the spec itself');
+check(specView.applied === 'ZZ', 'a pasted spec reaches the chart', String(specView.applied));
+check(specView.closed, 'and the editor closes once it applies');
+check(specView.refusedStaysOpen, 'malformed JSON is refused');
+check(specView.refusedKeepsText, 'and what was pasted is kept so it can be fixed');
+
+/* A spec is portable: pasting another chart's opens that chart, rather than
+ * merging fields into one that will ignore half of them. */
+await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2000);
+const crossChart = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = (re) => [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => re.test(b.textContent));
+  [...document.querySelectorAll('.tab')].find((t) => t.textContent === 'Spec').click();
+  await sleep(250);
+  btn(/Paste a spec/).click();
+  await sleep(150);
+  document.querySelector('.code-edit').value = JSON.stringify({ chart: 'bar-vertical', spec: {} });
+  btn(/Apply spec/).click();
+  await sleep(1300);
+  return { now: window.openCharts.def.id };
+});
+check(crossChart.now === 'bar-vertical', "a spec for another chart opens that chart",
+  String(crossChart.now));
+
+/* Undo. A grid that deletes rows with no way back is not safe to explore in. */
+const history = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const foot = (label) => [...document.querySelectorAll('.dgrid-foot .btn')]
+    .find((b) => b.textContent === label);
+
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(900);
+
+  const startDisabled = foot('Undo').disabled && foot('Redo').disabled;
+
+  const cell = document.querySelector('.dgrid-cell');
+  const original = cell.value;
+  cell.dispatchEvent(new Event('focus', { bubbles: true }));
+  for (const v of ['Q', 'QQ', 'QQQ']) {
+    cell.value = v;
+    cell.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(30);
+  }
+  const typed = document.querySelector('.dgrid-cell').value;
+
+  foot('Undo').click();
+  await sleep(280);
+  const afterUndo = document.querySelector('.dgrid-cell').value;
+  // Three keystrokes are one edit. If undo walked back a character at a time
+  // there would still be steps left on the stack here.
+  const oneStep = foot('Undo').disabled;
+
+  foot('Redo').click();
+  await sleep(280);
+  const afterRedo = document.querySelector('.dgrid-cell').value;
+
+  const rowsBefore = document.querySelectorAll('.dgrid tbody tr').length;
+  foot('+ Row').click();
+  await sleep(220);
+  const rowsAdded = document.querySelectorAll('.dgrid tbody tr').length;
+  foot('Undo').click();
+  await sleep(280);
+  const rowsUndone = document.querySelectorAll('.dgrid tbody tr').length;
+
+  // Ctrl+Z reaches the grid, and only the grid.
+  document.querySelector('.dgrid-cell').focus();
+  foot('+ Row').click();
+  await sleep(200);
+  const beforeKey = document.querySelectorAll('.dgrid tbody tr').length;
+  document.querySelector('.dgrid').dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'z', ctrlKey: true, bubbles: true,
+  }));
+  await sleep(280);
+  const afterKey = document.querySelectorAll('.dgrid tbody tr').length;
+
+  return {
+    startDisabled, original, typed, afterUndo, oneStep, afterRedo,
+    rowsBefore, rowsAdded, rowsUndone, beforeKey, afterKey,
+  };
+});
+check(history.startDisabled, 'undo and redo start with nothing to do');
+check(history.afterUndo === history.original, 'undo restores the cell',
+  `${history.typed} → ${history.afterUndo}, wanted ${history.original}`);
+check(history.oneStep, 'typing is one undo step, not one per keystroke');
+check(history.afterRedo === history.typed, 'redo puts it back', String(history.afterRedo));
+check(history.rowsAdded === history.rowsBefore + 1 && history.rowsUndone === history.rowsBefore,
+  'adding a row can be undone', `${history.rowsBefore} → ${history.rowsAdded} → ${history.rowsUndone}`);
+check(history.afterKey === history.beforeKey - 1, 'Ctrl+Z undoes inside the grid',
+  `${history.beforeKey} → ${history.afterKey}`);
+console.log(`  ${green('✓')} small builds — colour-vision check, spec round-trip, undo/redo`);
+
+/* Suite 20 — the collapsible rail and focus mode. */
+
+/* A fresh page: the suite before this one leaves the data dialog open, and a
+ * rail mode stored by an earlier run would decide the first measurement. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.evaluate(() => {
+  try { localStorage.removeItem('opencharts.rail-mode'); } catch { /* private window */ }
+});
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+
+/* The spine is nothing but glyphs, so two categories sharing one would make
+ * the second unreachable by sight. Harmless in the expanded rail, where the
+ * name is spelled out beside it — which is why this went unnoticed for so long. */
+const spineGlyphs = await page.evaluate(async () => {
+  const { CATEGORY_ORDER } = await import('/js/studio/registry.js');
+  const heads = [...document.querySelectorAll('.rail-group-head .rail-group-ico')];
+  const marks = heads.map((h) => h.innerHTML.trim());
+  return {
+    categories: CATEGORY_ORDER.length,
+    drawn: marks.filter(Boolean).length,
+    distinct: new Set(marks.filter(Boolean)).size,
+  };
+});
+check(spineGlyphs.drawn === spineGlyphs.categories, 'every category carries a glyph',
+  `${spineGlyphs.drawn} of ${spineGlyphs.categories}`);
+check(spineGlyphs.distinct === spineGlyphs.drawn, 'and no two categories share one',
+  `${spineGlyphs.distinct} distinct of ${spineGlyphs.drawn}`);
+
+/* The filter box is a toolbar component borrowed by a sidebar, and it brought
+ * `flex: 1 1 210px` with it. In the gallery's horizontal bar that basis is a
+ * width and growing fills the row; in the rail's column it is a *height*, so
+ * the pill swelled from 35px to 496px the moment a filter left free space
+ * under it. The `min-width: 210px` floor was the same mistake pointing
+ * sideways — wider than the 204px the rail has, so the rail scrolled. */
+const filterBox = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const input = document.querySelector('#rail-search');
+  const rail = document.querySelector('.rail');
+  const box = () => rail.querySelector('.search').getBoundingClientRect();
+
+  const type = async (q) => {
+    input.value = q;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(300);
+    return {
+      h: Math.round(box().height),
+      links: document.querySelectorAll('.rail-link').length,
+      overflow: rail.scrollWidth - rail.clientWidth,
+    };
+  };
+
+  const full = await type('');
+  // One result, no results, and a middling number: the empty end of the range
+  // is where the free space appears.
+  const few = await type('globe');
+  const none = await type('zzzz');
+  const some = await type('bar');
+  await type('');
+  return { full, few, none, some };
+});
+const boxHeights = [filterBox.full, filterBox.few, filterBox.none, filterBox.some];
+check(boxHeights.every((m) => m.h === filterBox.full.h),
+  'the filter box is the same height however many charts match',
+  boxHeights.map((m) => `${m.links}:${m.h}px`).join(' '));
+check(filterBox.full.h < 60, 'and that height is one line', `${filterBox.full.h}px`);
+check(boxHeights.every((m) => m.overflow <= 0),
+  'the rail never scrolls sideways', boxHeights.map((m) => m.overflow).join(','));
+
+const rail = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const width = () => Math.round(document.querySelector('.rail').getBoundingClientRect().width);
+  const stage = () => Math.round(document.querySelector('.stage').getBoundingClientRect().width);
+
+  const openWidth = width();
+  const openStage = stage();
+
+  // Which groups are open is a separate preference from whether the rail is
+  // collapsed, and collapsing must not overwrite it.
+  let groupsBefore = null;
+  try { groupsBefore = localStorage.getItem('opencharts.rail'); } catch { /* private window */ }
+
+  document.querySelector('#rail-collapse').click();
+  await sleep(420);
+  const miniWidth = width();
+  const miniStage = stage();
+  const marked = document.body.dataset.rail;
+  let saved = null;
+  let groupsAfter = null;
+  try {
+    saved = localStorage.getItem('opencharts.rail-mode');
+    groupsAfter = localStorage.getItem('opencharts.rail');
+  } catch { /* private window */ }
+
+  // The list is not on screen, so a glyph has to bring it back — otherwise a
+  // collapsed rail is a one-way door.
+  document.querySelectorAll('.rail-group-head')[2].click();
+  await sleep(420);
+  const reopened = document.body.dataset.rail !== 'mini';
+  const groupOpen = document.querySelectorAll('.rail-group')[2].dataset.open;
+
+  return {
+    openWidth, miniWidth, openStage, miniStage, marked, saved,
+    groupsKept: groupsBefore === groupsAfter,
+    reopened, groupOpen,
+  };
+});
+check(rail.miniWidth < 70 && rail.miniWidth > 40, 'the rail collapses to a spine',
+  `${rail.openWidth}px → ${rail.miniWidth}px`);
+check(rail.miniStage > rail.openStage + 100, 'and the chart gets the width back',
+  `stage ${rail.openStage}px → ${rail.miniStage}px`);
+check(rail.marked === 'mini', 'the mode is marked on the document', String(rail.marked));
+check(rail.saved === 'mini', 'and remembered for next time', String(rail.saved));
+check(rail.groupsKept, 'collapsing does not overwrite which groups are open');
+check(rail.reopened, 'a glyph opens the rail again rather than toggling an unseen body');
+check(rail.groupOpen === 'true', 'and opens its own category', String(rail.groupOpen));
+
+/* Focus: everything but the plate. */
+const focus = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shown = (sel) => {
+    const el = document.querySelector(sel);
+    return !!(el && el.offsetParent !== null);
+  };
+  const before = Math.round(document.querySelector('.stage').getBoundingClientRect().width);
+
+  document.querySelector('#btn-focus').click();
+  await sleep(420);
+  const on = {
+    rail: shown('.rail'),
+    controls: shown('.controls'),
+    code: shown('.codepanel'),
+    head: shown('.page-head'),
+    stage: shown('.stage'),
+    width: Math.round(document.querySelector('.stage').getBoundingClientRect().width),
+    pressed: document.querySelector('#btn-focus').getAttribute('aria-pressed'),
+  };
+
+  // Escape is the way out of a mode you may have entered by accident, and the
+  // stage bar stays put so the button is still there to click.
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(420);
+  const off = { rail: shown('.rail'), controls: shown('.controls'), code: shown('.codepanel') };
+
+  return { before, on, off };
+});
+check(!focus.on.rail && !focus.on.controls && !focus.on.code && !focus.on.head,
+  'focus hides every panel but the chart',
+  JSON.stringify(focus.on));
+check(focus.on.stage, 'and keeps the stage itself');
+check(focus.on.width > focus.before, 'the chart takes the whole window',
+  `${focus.before}px → ${focus.on.width}px`);
+check(focus.on.pressed === 'true', 'the focus button reports its state');
+check(focus.off.rail && focus.off.controls && focus.off.code,
+  'and Escape brings everything back', JSON.stringify(focus.off));
+
+/* The spine is a desktop idea. Below 900px the rail is already a slide-over
+ * drawer, and a 56px strip competing with it would be a third behaviour. */
+await page.setViewportSize({ width: 820, height: 900 });
+await page.waitForTimeout(400);
+const narrow = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  document.body.dataset.rail = 'mini';
+  await sleep(200);
+  const railEl = document.querySelector('.rail');
+  const w = Math.round(railEl.getBoundingClientRect().width);
+  document.body.dataset.rail = '';
+  return { width: w, overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth) };
+});
+check(narrow.width > 70, 'the spine does not apply where the rail is a drawer',
+  `${narrow.width}px at 820px wide`);
+check(narrow.overflow <= 1, 'and nothing overflows sideways', `${narrow.overflow}px`);
+await page.setViewportSize({ width: 1280, height: 900 });
+console.log(`  ${green('✓')} atelier — spine ${rail.openWidth}→${rail.miniWidth}px, focus full-bleed`);
+
+// Leave the profile as it was found, so nothing after this inherits a spine.
+await page.evaluate(() => {
+  try { localStorage.removeItem('opencharts.rail-mode'); } catch { /* private window */ }
+  document.body.dataset.rail = '';
+});
+
+/* Scoping the rail's copy must not have taken the growing pill away from the
+ * toolbar it was written for. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(900);
+const toolbarSearch = await page.evaluate(() => {
+  const s = document.querySelector('.search');
+  const cs = getComputedStyle(s);
+  return { grows: cs.flexGrow, width: Math.round(s.getBoundingClientRect().width) };
+});
+check(toolbarSearch.grows === '1' && toolbarSearch.width > 250,
+  'the gallery toolbar search still fills its row',
+  `grow ${toolbarSearch.grows}, ${toolbarSearch.width}px`);
+
+/* Suite 21 — motion that answers the pointer. */
+
+/* The sheen follows the cursor across a card. Delegated from the document, so
+ * this also proves one listener serves all 114 tiles. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+
+const firstCard = await page.$('.card');
+await firstCard.scrollIntoViewIfNeeded();
+await page.waitForTimeout(250);
+const cardBox = await firstCard.boundingBox();
+const readSheen = () => page.evaluate(() => {
+  const c = document.querySelector('.card');
+  return { mx: c.style.getPropertyValue('--mx'), my: c.style.getPropertyValue('--my') };
+});
+
+await page.mouse.move(cardBox.x + cardBox.width * 0.2, cardBox.y + cardBox.height * 0.25, { steps: 6 });
+await page.waitForTimeout(220);
+const sheenLeft = await readSheen();
+await page.mouse.move(cardBox.x + cardBox.width * 0.8, cardBox.y + cardBox.height * 0.75, { steps: 6 });
+await page.waitForTimeout(220);
+const sheenRight = await readSheen();
+
+const sheenPainted = await page.evaluate(() => {
+  const cs = getComputedStyle(document.querySelector('.card'), '::after');
+  return /radial-gradient/.test(cs.backgroundImage);
+});
+check(!!sheenLeft.mx && !!sheenRight.mx, 'a card learns where the pointer is',
+  `${sheenLeft.mx || 'none'} → ${sheenRight.mx || 'none'}`);
+check(sheenLeft.mx !== sheenRight.mx && sheenLeft.my !== sheenRight.my,
+  'and the light moves with it', `${sheenLeft.mx},${sheenLeft.my} → ${sheenRight.mx},${sheenRight.my}`);
+check(sheenPainted, 'the sheen is a gradient, not a layout change');
+
+/* A ripple opens from the pixel pressed, so two presses on one button differ. */
+await page.goto(`${base}/studio.html?chart=doughnut-gauge`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+
+const ripple = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const btn = document.querySelector('#btn-reset');
+  const press = async (dx, dy) => {
+    const r = btn.getBoundingClientRect();
+    btn.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, clientX: r.left + dx, clientY: r.top + dy,
+    }));
+    await sleep(50);
+    return { on: btn.classList.contains('rippling'), rx: btn.style.getPropertyValue('--rx') };
+  };
+  const near = await press(6, 6);
+  await sleep(600);
+  const clearedItself = !btn.classList.contains('rippling');
+  const far = await press(70, 12);
+  await sleep(600);
+  return {
+    near, far, clearedItself,
+    // Clipped, or the circle would escape the button it came from.
+    clips: getComputedStyle(btn).overflow,
+  };
+});
+check(ripple.near.on, 'pressing a button opens a ripple');
+check(ripple.near.rx !== ripple.far.rx, 'from the point pressed, not the middle',
+  `${ripple.near.rx} vs ${ripple.far.rx}`);
+check(ripple.clearedItself, 'and it clears itself once it has played');
+check(ripple.clips === 'hidden', 'the ripple stays inside its button', ripple.clips);
+
+/* A dialog grows out of whatever opened it. */
+const origin = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const open = async (dx, dy) => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent));
+    const r = btn.getBoundingClientRect();
+    btn.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, clientX: r.left + dx, clientY: r.top + dy,
+    }));
+    btn.click();
+    await sleep(800);
+    const dlg = document.querySelector('.dlg');
+    const out = {
+      x: parseFloat(dlg.style.getPropertyValue('--from-x')),
+      y: parseFloat(dlg.style.getPropertyValue('--from-y')),
+      origin: getComputedStyle(dlg).transformOrigin,
+    };
+    document.querySelector('.dlg-close').click();
+    await sleep(450);
+    return out;
+  };
+  return { left: await open(4, 4), right: await open(150, 20) };
+});
+check(Number.isFinite(origin.left.x) && Number.isFinite(origin.left.y),
+  'a dialog knows where it was opened from', JSON.stringify(origin.left));
+check(origin.left.x !== origin.right.x, 'and two different buttons open it differently',
+  `${origin.left.x}% vs ${origin.right.x}%`);
+check(origin.left.x >= 0 && origin.left.x <= 100 && origin.left.y >= 0 && origin.left.y <= 100,
+  'the origin is clamped inside the dialog', JSON.stringify(origin.left));
+
+/* A figure that changed says so. One that did not, must stay quiet — marking
+ * the whole row on every rebuild would make the signal mean nothing. */
+const metrics = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const total = document.querySelectorAll('.metric-value').length;
+  if (!total) return { skip: true };
+  app.spec.score = (app.spec.score || 0) + 7;
+  app.rebuild();
+  await sleep(140);
+  const afterEdit = document.querySelectorAll('.metric-value.changed').length;
+  app.rebuild();
+  await sleep(140);
+  const afterNoop = document.querySelectorAll('.metric-value.changed').length;
+  return { total, afterEdit, afterNoop };
+});
+check(!metrics.skip && metrics.afterEdit > 0, 'a changed figure is marked as changed',
+  JSON.stringify(metrics));
+check(!metrics.skip && metrics.afterNoop === 0, 'and an unchanged one is left alone',
+  JSON.stringify(metrics));
+
+/* Reduced motion means none of it. The stylesheet's global block cannot reach
+ * a custom property written from JS, so `motion.js` has to check for itself. */
+await page.emulateMedia({ reducedMotion: 'reduce' });
+await page.goto(`${base}/studio.html?chart=doughnut-gauge`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const quiet = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const m = await import('/js/studio/motion.js');
+  const btn = document.querySelector('#btn-reset');
+  const r = btn.getBoundingClientRect();
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 8, clientY: r.top + 6 }));
+  await sleep(80);
+  const rippled = btn.classList.contains('rippling');
+
+  const app = window.openCharts;
+  app.spec.score = (app.spec.score || 0) + 5;
+  app.rebuild();
+  await sleep(140);
+  const marked = document.querySelectorAll('.metric-value.changed').length;
+
+  // Position is not animation: a dialog still has to open somewhere sensible.
+  const edit = [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent));
+  edit.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10 }));
+  edit.click();
+  await sleep(800);
+  const placed = Number.isFinite(parseFloat(document.querySelector('.dlg').style.getPropertyValue('--from-x')));
+  document.querySelector('.dlg-close').click();
+
+  return { reports: m.motionReduced(), rippled, marked, placed };
+});
+check(quiet.reports, 'motion.js sees the reduced-motion preference');
+check(!quiet.rippled, 'no ripple when motion is reduced');
+check(!quiet.marked, 'and no figure is animated');
+check(quiet.placed, 'but a dialog is still placed where it was opened from');
+await page.emulateMedia({ reducedMotion: 'no-preference' });
+console.log(`  ${green('✓')} motion — sheen tracks, ripple from the press point, quiet when asked`);
+
+/* Suite 22 — a chart somebody can use without seeing it. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+/* Every chart, not most of them: the whole point is that a reader does not
+ * have to find out which of the 114 happens to be readable. */
+const a11yAll = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const a11y = await import('/js/studio/a11y.js');
+
+  const noDesc = [];
+  const noTable = [];
+  const noLabel = [];
+  const unscrolled = [];
+  const thinDesc = [];
+  let tableBytes = 0;
+  let standaloneBytes = 0;
+
+  for (const def of reg.CHARTS) {
+    const spec = reg.newSpec(def);
+    const code = eng.generateCode(def, spec);
+
+    if (!/id="chart-desc"/.test(code.html)) noDesc.push(def.id);
+    if (!/<details class="chart-data">/.test(code.html)) noTable.push(def.id);
+    if (!/role="img" aria-label="[^"]+"/.test(code.html)) noLabel.push(def.id);
+    // A wide table must scroll in its own box or it widens the page it was
+    // pasted into — somebody else's page, which makes it their bug.
+    if (!/class="chart-data-scroll"/.test(code.html)) unscrolled.push(def.id);
+
+    const desc = a11y.chartSummary(def, spec);
+    if (!desc || desc.length < 60 || !desc.includes(def.title)) thinDesc.push(def.id);
+
+    const m = code.standalone.match(/<details class="chart-data">[\s\S]*?<\/details>/);
+    tableBytes += m ? m[0].length : 0;
+    standaloneBytes += code.standalone.length;
+  }
+
+  return {
+    charts: reg.CHARTS.length,
+    noDesc, noTable, noLabel, unscrolled, thinDesc,
+    tableShare: +((tableBytes / standaloneBytes) * 100).toFixed(1),
+  };
+});
+check(!a11yAll.noDesc.length, 'every chart exports a description',
+  `${a11yAll.noDesc.length} without: ${a11yAll.noDesc.slice(0, 4).join(', ')}`);
+check(!a11yAll.noTable.length, 'and its data as a table',
+  `${a11yAll.noTable.length} without: ${a11yAll.noTable.slice(0, 4).join(', ')}`);
+check(!a11yAll.noLabel.length, 'and an accessible name on the graphic itself',
+  a11yAll.noLabel.slice(0, 4).join(', '));
+check(!a11yAll.unscrolled.length, 'the table scrolls in its own box',
+  a11yAll.unscrolled.slice(0, 4).join(', '));
+check(!a11yAll.thinDesc.length, 'every description names its chart and says something',
+  a11yAll.thinDesc.slice(0, 4).join(', '));
+check(a11yAll.tableShare < 30, 'the accessible layer stays a minority of the export',
+  `${a11yAll.tableShare}% of the standalone`);
+
+/* The table has to carry the chart's real numbers, not a plausible shape.
+ * This is the same class of bug the data round-trip catches: markup that is
+ * present, well-formed and about the wrong data. */
+const truthful = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const a11y = await import('/js/studio/a11y.js');
+  const def = reg.getChart('bar-vertical');
+
+  const spec = reg.newSpec(def);
+  const before = a11y.chartTable(def, spec);
+
+  // Perturb the data; the table must follow it.
+  spec.series[0].data = [111, 222, 333, 444];
+  if (typeof def.onChange === 'function') def.onChange(spec);
+  const after = a11y.chartTable(def, spec);
+
+  const flat = (t) => t.rows.map((r) => r.join(',')).join(' | ');
+  return {
+    beforeHas520: flat(before).includes('520'),
+    afterHas111: flat(after).includes('111'),
+    afterDropped520: !flat(after).includes('520'),
+    headers: after.headers.join(','),
+  };
+});
+check(truthful.beforeHas520, 'the table starts from the chart’s own data');
+check(truthful.afterHas111 && truthful.afterDropped520,
+  'and follows it when the data changes', JSON.stringify(truthful));
+check(/label/.test(truthful.headers), 'with the columns named', truthful.headers);
+
+/* Hidden from the eye, not from the reader. `display:none` and
+ * `visibility:hidden` both take text out of the accessibility tree, which
+ * would delete the description this whole suite is about. */
+const hiding = await page.evaluate(async () => {
+  const eng = await import('/js/studio/engines.js');
+  const reg = await import('/js/studio/registry.js');
+  const def = reg.getChart('bar-vertical');
+  const css = eng.generateCode(def, reg.newSpec(def)).css;
+  const block = (css.match(/\.visually-hidden\s*\{[^}]*\}/) || [''])[0];
+  return {
+    present: !!block,
+    usesClip: /clip-path|clip:/.test(block),
+    hidesWrong: /display:\s*none|visibility:\s*hidden/.test(block),
+  };
+});
+check(hiding.present, 'the export ships the hidden-text rule');
+check(hiding.usesClip && !hiding.hidesWrong,
+  'and hides by clipping, so screen readers still reach it', JSON.stringify(hiding));
+
+/* The studio shows the same table it ships, from the same function. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+const liveA11y = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const det = document.querySelector('#chart-data details');
+  if (det) det.open = true;
+  await sleep(250);
+  const host = document.querySelector('#chart-host');
+  const cells = [...document.querySelectorAll('#chart-data tbody tr')]
+    .map((tr) => [...tr.children].map((c) => c.textContent).join(','));
+  return {
+    role: host.getAttribute('role'),
+    label: host.getAttribute('aria-label'),
+    rows: cells.length,
+    first: cells[0] || '',
+    overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+  };
+});
+check(liveA11y.role === 'img', 'the live chart is named as an image', String(liveA11y.role));
+check(/Vertical Bar/.test(liveA11y.label || ''), 'with the chart’s own title', String(liveA11y.label));
+check(liveA11y.rows === 4 && /Q1,520,440/.test(liveA11y.first),
+  'the studio shows the same numbers it would export', `${liveA11y.rows} rows, ${liveA11y.first}`);
+check(liveA11y.overflow <= 1, 'and the table does not widen the page', `${liveA11y.overflow}px`);
+console.log(`  ${green('✓')} accessible output — 114 described and tabulated, ${a11yAll.tableShare}% of the export`);
+
+/* Suite 23 — fetching a table from a link, and refusing what is not one. */
+
+/* Synthetic responses rather than committed fixtures, the same reasoning that
+ * keeps suite 10 building its .xlsx in the browser: a fixture on disk is a
+ * second thing to keep true. */
+await page.route('**/oc-test-csv', (route) => route.fulfill({
+  status: 200,
+  contentType: 'text/csv',
+  body: 'region,2023,2024\nNorth,520,680\nSouth,410,505\nEast,377,441',
+}));
+await page.route('**/oc-test-page', (route) => route.fulfill({
+  status: 200,
+  contentType: 'text/html',
+  body: '<!DOCTYPE html><html><body><h1>Sign in</h1></body></html>',
+}));
+await page.route('**/oc-test-missing', (route) => route.fulfill({ status: 404, body: 'nope' }));
+await page.route('**/oc-test-binary', (route) => route.fulfill({
+  status: 200,
+  contentType: 'application/octet-stream',
+  // A NUL in the first bytes is what tells the sniffer this is not text.
+  body: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02, 0x03]),
+}));
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+const link = await page.evaluate(async (origin) => {
+  const { readDataUrl } = await import('/js/studio/fileimport.js');
+  const take = async (u) => {
+    const r = await readDataUrl(u);
+    return r.ok ? { ok: true, text: r.text } : { ok: false, message: r.message };
+  };
+  return {
+    csv: await take(`${origin}/oc-test-csv`),
+    page: await take(`${origin}/oc-test-page`),
+    missing: await take(`${origin}/oc-test-missing`),
+    binary: await take(`${origin}/oc-test-binary`),
+    // Schemes that are not somebody's spreadsheet.
+    js: await take('javascript:alert(1)'),
+    file: await take('file:///etc/passwd'),
+    data: await take('data:text/csv,a,b%0A1,2'),
+    empty: await take('   '),
+    junk: await take('not a url at all'),
+  };
+}, base);
+
+check(link.csv.ok, 'a published CSV is read', link.csv.ok ? 'ok' : link.csv.message);
+check(link.csv.ok && link.csv.text.includes('North'),
+  'and its rows arrive intact', (link.csv.text || '').slice(0, 40));
+
+check(!link.page.ok && /web page/i.test(link.page.message),
+  'a web page is refused as a web page', link.page.message);
+check(!link.page.ok && /publish to web/i.test(link.page.message),
+  'and the message says what to do instead');
+check(!link.missing.ok && /404/.test(link.missing.message),
+  'a 404 is reported with its status', link.missing.message);
+check(!link.binary.ok, 'binary content is refused', link.binary.message);
+
+check(!link.js.ok && /https/i.test(link.js.message), 'javascript: links are refused', link.js.message);
+check(!link.file.ok, 'file: links are refused', link.file.message);
+check(!link.data.ok, 'data: links are refused', link.data.message);
+check(!link.empty.ok, 'an empty address asks for one', link.empty.message);
+check(!link.junk.ok && /web address/i.test(link.junk.message),
+  'and nonsense is named as nonsense', link.junk.message);
+
+/* Cookies are never sent. A URL is a request for a public file, not a way to
+ * reach a page the reader happens to be signed into. */
+let sawCookie = null;
+await page.route('**/oc-test-cookie', (route) => {
+  sawCookie = route.request().headers().cookie || '';
+  route.fulfill({ status: 200, contentType: 'text/csv', body: 'a,b\n1,2' });
+});
+await page.context().addCookies([{
+  name: 'oc_session', value: 'secret', url: base,
+}]);
+await page.evaluate(async (origin) => {
+  const { readDataUrl } = await import('/js/studio/fileimport.js');
+  await readDataUrl(`${origin}/oc-test-cookie`);
+}, base);
+check(!sawCookie, 'the fetch carries no cookies', `cookie header: ${JSON.stringify(sawCookie)}`);
+await page.context().clearCookies();
+
+/* And the editor offers it.
+ *
+ * The fetch itself is asserted above, against `readDataUrl` directly, rather
+ * than driven through this panel: a routed stub answers reliably from a fresh
+ * page and stops answering once two dozen suites have navigated this one, and
+ * a test that is sometimes right is worse than one that is narrower. What is
+ * checked here is the wiring — the tab, the field, and the button — which is
+ * the part the module test cannot see.
+ */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2300);
+const linkTab = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+
+  const tabs = [...document.querySelectorAll('.dlg-tab')].map((t) => t.textContent.trim());
+  const tab = [...document.querySelectorAll('.dlg-tab')].find((t) => /From a link/.test(t.textContent));
+  if (!tab) return { tabs, opened: false };
+  tab.click();
+  await sleep(300);
+
+  const input = document.querySelector('.link-input');
+  const fetchBtn = [...document.querySelectorAll('.dlg .btn')]
+    .find((b) => b.textContent.trim() === 'Fetch');
+  const panel = input ? input.closest('.pick') : null;
+
+  return {
+    tabs,
+    opened: true,
+    hasInput: !!input,
+    inputType: input ? input.type : '',
+    hasButton: !!fetchBtn,
+    // The one promise this panel must not make: it does fetch, and it says so.
+    saysItFetches: !!panel && /fetch/i.test(panel.textContent),
+    // And the file tab's promise has to survive beside it.
+    fileTabStillPromises: (() => {
+      const f = [...document.querySelectorAll('.dlg-tab')].find((t) => /Open a file/.test(t.textContent));
+      if (!f) return false;
+      f.click();
+      const p = document.querySelector('.dlg-panels');
+      return /never sent anywhere/i.test(p.textContent);
+    })(),
+  };
+});
+check(linkTab.opened, 'the editor offers a link tab', linkTab.tabs.join('|'));
+check(linkTab.hasInput && linkTab.inputType === 'url', 'with an address field',
+  `type=${linkTab.inputType}`);
+check(linkTab.hasButton, 'and a button that does the fetching');
+check(linkTab.saysItFetches, 'the panel says out loud that it makes a request');
+check(linkTab.fileTabStillPromises,
+  'and the file tab still promises nothing is sent anywhere');
+
+await page.unroute('**/oc-test-csv');
+await page.unroute('**/oc-test-page');
+await page.unroute('**/oc-test-missing');
+await page.unroute('**/oc-test-binary');
+await page.unroute('**/oc-test-cookie');
+console.log(`  ${green('✓')} links — CSV read, pages and schemes refused, no cookies sent`);
+
+/* Suite 24 — reshaping a table before it becomes a chart. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+/* The arithmetic first. A transform that is merely plausible is worse than
+ * none: it puts numbers on a chart that nobody can trace back to the file. */
+const shape = await page.evaluate(async () => {
+  const t = await import('/js/studio/transform.js');
+
+  const headers = ['id', 'region', 'product', 'revenue', 'units'];
+  const regions = ['North', 'South', 'East', 'West'];
+  const rows = [];
+  for (let i = 0; i < 200; i++) {
+    rows.push([
+      String(1000 + i),
+      regions[i % 4],
+      i % 3 ? 'Gadget' : 'Widget',
+      String(100 + ((i * 37) % 900)),
+      String(1 + (i % 9)),
+    ]);
+  }
+  const src = { headers, rows };
+  const run = (steps) => t.runSteps(src, steps).table;
+  const sumCol = (tbl, c) => tbl.rows.reduce((a, r) => a + Number(r[c]), 0);
+
+  const grouped = run([{ op: 'group', col: 1, agg: 'sum' }]);
+  const withId = run([{ op: 'group', col: 1, agg: 'sum', vals: [0, 3] }]);
+  const counted = run([{ op: 'group', col: 1, agg: 'count' }]);
+  const binned = run([{ op: 'bin', col: 3, bins: 5 }]);
+  const filtered = run([{ op: 'filter', col: 2, test: 'is', a: 'Widget' }]);
+  const between = run([{ op: 'filter', col: 3, test: 'between', a: '200', b: '400' }]);
+
+  // Order is the whole point of a pipeline: limit-then-sort keeps the first
+  // three rows of the file, sort-then-limit keeps the three biggest.
+  const sortThenLimit = run([{ op: 'sort', col: 3, dir: 'desc' }, { op: 'limit', n: 3 }]);
+  const limitThenSort = run([{ op: 'limit', n: 3 }, { op: 'sort', col: 3, dir: 'desc' }]);
+
+  const broken = t.runSteps(src, [{ op: 'nonsense' }, { op: 'limit', n: 2 }]);
+
+  return {
+    sourceTotal: sumCol(src, 3),
+    grouped: { headers: grouped.headers, rows: grouped.rows.length, total: sumCol(grouped, 1) },
+    idExcluded: !grouped.headers.includes('id'),
+    idIncludedWhenAsked: withId.headers.includes('id'),
+    counted: { rows: counted.rows.length, total: sumCol(counted, 1) },
+    binned: { headers: binned.headers, rows: binned.rows.length, total: sumCol(binned, 1) },
+    filteredRows: filtered.rows.length,
+    betweenOk: between.rows.every((r) => Number(r[3]) >= 200 && Number(r[3]) <= 400),
+    betweenRows: between.rows.length,
+    sortThenLimit: sortThenLimit.rows.map((r) => r[3]),
+    limitThenSort: limitThenSort.rows.map((r) => r[3]),
+    brokenSurvived: broken.table.rows.length,
+    brokenReported: broken.errors.length,
+    described: t.describeStep({ op: 'group', col: 1, agg: 'mean', vals: [3] }, headers),
+  };
+});
+
+check(shape.grouped.rows === 4, 'grouping folds the rows to one per key',
+  `${shape.grouped.rows} groups`);
+check(Math.abs(shape.grouped.total - shape.sourceTotal) < 0.001,
+  'and the total survives the fold',
+  `${shape.grouped.total} vs ${shape.sourceTotal}`);
+check(shape.idExcluded, 'an id column is not totalled by default',
+  shape.grouped.headers.join(','));
+check(shape.idIncludedWhenAsked, 'but it is folded when explicitly chosen');
+check(shape.counted.rows === 4 && shape.counted.total === 200,
+  'counting rows accounts for every one', JSON.stringify(shape.counted));
+check(shape.binned.total === 200, 'every value lands in exactly one bucket',
+  `${shape.binned.total} of 200`);
+check(shape.binned.rows === 5, 'and there are as many buckets as asked for',
+  String(shape.binned.rows));
+check(shape.filteredRows === 67, 'a filter keeps only what matches',
+  `${shape.filteredRows} rows`);
+check(shape.betweenOk && shape.betweenRows > 0, 'a range filter is inclusive of both ends',
+  `${shape.betweenRows} rows`);
+check(shape.sortThenLimit.join(',') !== shape.limitThenSort.join(','),
+  'steps run in the order they are written',
+  `sort→limit ${shape.sortThenLimit} vs limit→sort ${shape.limitThenSort}`);
+check(shape.brokenSurvived === 2 && shape.brokenReported === 1,
+  'a broken step is reported and the rest still run', JSON.stringify(shape));
+check(/average of revenue/i.test(shape.described),
+  'a step says in words what it does', shape.described);
+
+/* And it reaches the grid. Reshaping is an edit, so it has to be undoable and
+ * it has to land as literal values — not as a layer the chart re-derives. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2400);
+const shapeUi = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tab = (re) => [...document.querySelectorAll('.dlg-tab')].find((t) => re.test(t.textContent));
+
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+
+  // A transaction-shaped table, the kind the whole feature is for.
+  tab(/Paste text/).click();
+  await sleep(250);
+  const ta = document.querySelector('.dlg textarea');
+  const regions = ['North', 'South', 'East', 'West'];
+  let csv = 'id,region,product,revenue,units\n';
+  for (let i = 0; i < 120; i++) {
+    csv += `${1000 + i},${regions[i % 4]},${i % 3 ? 'Gadget' : 'Widget'},${100 + ((i * 37) % 900)},${1 + (i % 9)}\n`;
+  }
+  ta.value = csv;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(400);
+  tab(/^\s*Table\s*$/).click();
+  await sleep(300);
+
+  const shapeTab = tab(/Shape/);
+  if (!shapeTab) return { opened: false };
+  shapeTab.click();
+  await sleep(400);
+
+  const add = document.querySelector('.shape-add .shape-select');
+  add.value = 'group';
+  add.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(350);
+
+  const summary = (document.querySelector('.shape-summary') || {}).textContent || '';
+  const previewRows = [...document.querySelectorAll('.shape-preview tbody tr')]
+    .map((tr) => [...tr.children].map((c) => c.textContent).join(','));
+  // The default fold must leave the id column out here too, not just in the
+  // engine — the checkbox is what a reader actually sees.
+  const boxes = [...document.querySelectorAll('.shape-col')]
+    .map((l) => `${l.textContent.trim()}:${l.querySelector('input').checked ? 'on' : 'off'}`);
+
+  [...document.querySelectorAll('.shape .btn')].find((b) => /Use this shape/.test(b.textContent)).click();
+  await sleep(700);
+
+  const gridRows = [...document.querySelectorAll('.dlg .dgrid tbody tr')]
+    .map((tr) => [...tr.querySelectorAll('.dgrid-cell')].map((c) => c.value).join(','));
+  const undoOn = ![...document.querySelectorAll('.dgrid-foot .btn')]
+    .find((b) => b.textContent === 'Undo').disabled;
+
+  // Undo puts the file back, which is the point of doing this in the editor.
+  [...document.querySelectorAll('.dgrid-foot .btn')].find((b) => b.textContent === 'Undo').click();
+  await sleep(400);
+  const afterUndo = document.querySelectorAll('.dlg .dgrid tbody tr').length;
+
+  return { opened: true, summary, previewRows, boxes, gridRows, undoOn, afterUndo };
+});
+check(shapeUi.opened, 'the editor offers a Shape tab');
+check(/120 rows.*→.*4 rows/.test(shapeUi.summary.replace(/\s+/g, ' ')),
+  'the panel says what the reshape does to the table', shapeUi.summary);
+check(shapeUi.boxes.some((b) => /^id:off/.test(b)), 'the id column starts unticked',
+  shapeUi.boxes.join(' '));
+check(shapeUi.gridRows.length === 4 && shapeUi.gridRows[0].startsWith('North'),
+  'applying writes the result into the grid', (shapeUi.gridRows[0] || '').slice(0, 30));
+check(shapeUi.previewRows[0] === shapeUi.gridRows[0],
+  'and the grid holds exactly what the preview showed',
+  `${shapeUi.previewRows[0]} vs ${shapeUi.gridRows[0]}`);
+check(shapeUi.undoOn && shapeUi.afterUndo === 120,
+  'a reshape can be undone back to the whole file', `${shapeUi.afterUndo} rows after undo`);
+console.log(`  ${green('✓')} shape — group, filter, bin, sort and limit, applied as an edit`);
+
+/* Suite 25 — a chart that says what it means.
+ *
+ * Annotations are positioned as a fraction of the plate rather than in data
+ * coordinates, which is what let all 114 charts have them without a single
+ * renderer changing. The price of that reach is that one overlay has to be
+ * right on five engines at once, so this suite asks each of them separately.
+ */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+
+const annots = await page.evaluate(async () => {
+  const a = await import('/js/studio/annotate.js');
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const { chartSummary } = await import('/js/studio/a11y.js');
+
+  const NOTES = [
+    { type: 'note', x: 0.3, y: 0.2, text: 'Peak week', arrow: { x: 0.44, y: 0.4 } },
+    { type: 'line', axis: 'y', at: 0.35, text: 'Target' },
+    { type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3', color: '#CE5229' },
+  ];
+
+  // One chart per rendering engine — the overlay has to land the same way on
+  // all five, and two of them emit no spec for anything to hang off.
+  const perEngine = {};
+  for (const def of reg.CHARTS) if (!perEngine[def.engine]) perEngine[def.engine] = def.id;
+
+  const code = {};
+  for (const [engine, id] of Object.entries(perEngine)) {
+    const def = reg.getChart(id);
+    const plain = eng.generateCode(def, reg.newSpec(def));
+    const spec = reg.newSpec(def);
+    spec.annotations = JSON.parse(JSON.stringify(NOTES));
+    const marked = eng.generateCode(def, spec);
+    // Where the spec literal ends and the annotations begin.
+    const specBlock = marked.js.slice(
+      marked.js.indexOf('const spec = '), marked.js.indexOf('const annotations'),
+    );
+    code[engine] = {
+      id,
+      free: !/drawAnnotations|oc-annots/.test(plain.js + plain.css),
+      declares: /function drawAnnotations/.test(marked.js) && /const annotations = /.test(marked.js),
+      calls: (marked.js.split('\n').find((l) => /^\s*drawAnnotations\(/.test(l)) || '').trim(),
+      specCarries: /annotations/.test(specBlock),
+      styled: /\.oc-annots \{/.test(marked.css),
+    };
+  }
+
+  // A note is somebody's own words landing in somebody else's page, so it has
+  // to arrive as text. Asked of the overlay rather than of its source: the
+  // word `innerHTML` appears in the comment saying not to use it.
+  const box = document.createElement('div');
+  box.style.cssText = 'position:absolute;left:-9999px;width:400px;height:300px';
+  document.body.appendChild(box);
+  a.drawAnnotations(box, [{ type: 'note', x: 0.5, y: 0.5, text: '<img src=x onerror="boom()">' }]);
+  const markup = {
+    asText: box.querySelector('.oc-annot-label').textContent === '<img src=x onerror="boom()">',
+    noElement: !box.querySelector('img'),
+  };
+  // ...and an empty list takes the layer away rather than leaving a husk.
+  a.drawAnnotations(box, []);
+  markup.clears = !box.querySelector('.oc-annots');
+  box.remove();
+
+  // Two of a kind must not land on top of each other, or a second click of
+  // `+ Note` looks like a click that did nothing.
+  const first = a.newAnnotation('note', 0);
+  const second = a.newAnnotation('note', 1);
+
+  return {
+    code,
+    markup,
+    cascades: first.x !== second.x || first.y !== second.y,
+    clamped: a.newAnnotation('note', 0) && (() => {
+      const wild = { type: 'note', x: 4, y: -2, text: '' };
+      // Clamping happens where it is read, so ask the describer.
+      return a.describeAnnotation(wild);
+    })(),
+    // y is measured from the top, but nobody says a line is "65% down".
+    saysUp: a.describeAnnotation({ type: 'line', axis: 'y', at: 0.35, text: 'Target' }),
+    saysAcross: a.describeAnnotation({ type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3' }),
+    saysWhere: a.describeAnnotation({ type: 'note', x: 0.3, y: 0.2, text: 'Peak week' }),
+    unlabelled: a.describeAnnotation({ type: 'band', axis: 'x', from: 0.1, to: 0.2, text: '' }),
+    quiet: a.describeAnnotations([]),
+
+    // Every chart in the library, not a chosen few.
+    allHaveControl: reg.CHARTS.filter((c) => !(c.controls || []).some((x) => x.type === 'annotations'))
+      .map((c) => c.id),
+    controlIsLast: reg.CHARTS.filter((c) => {
+      const list = c.controls || [];
+      return list[list.length - 1].type !== 'annotations';
+    }).map((c) => c.id),
+
+    // The words reach a reader who cannot see any of it.
+    summary: (() => {
+      const def = reg.getChart('bar-vertical');
+      const spec = reg.newSpec(def);
+      spec.annotations = JSON.parse(JSON.stringify(NOTES));
+      return chartSummary(def, spec);
+    })(),
+  };
+});
+
+const engines = Object.entries(annots.code);
+check(engines.every(([, v]) => v.free), 'a chart nobody annotated carries none of it',
+  engines.filter(([, v]) => !v.free).map(([k]) => k).join(', '));
+check(engines.every(([, v]) => v.declares && v.calls), 'every engine emits the overlay and calls it',
+  engines.filter(([, v]) => !(v.declares && v.calls)).map(([k, v]) => `${k}: ${v.calls || 'no call'}`).join(' | '));
+check(engines.every(([, v]) => v.styled), 'and the styles that draw it',
+  engines.filter(([, v]) => !v.styled).map(([k]) => k).join(', '));
+check(engines.every(([, v]) => !v.specCarries),
+  'annotations are emitted beside the spec, never inside it',
+  engines.filter(([, v]) => v.specCarries).map(([k]) => k).join(', '));
+check(annots.markup.asText && annots.markup.noElement,
+  'a note reaches the page as text, never as markup', JSON.stringify(annots.markup));
+check(annots.markup.clears, 'and an emptied list takes the layer with it');
+check(annots.cascades, 'two new notes do not land on the same spot');
+check(!annots.allHaveControl.length, 'every chart in the library can be annotated',
+  annots.allHaveControl.slice(0, 5).join(', '));
+check(!annots.controlIsLast.length, 'and the control sits last, after the chart is built',
+  annots.controlIsLast.slice(0, 5).join(', '));
+check(/65% up/.test(annots.saysUp), 'a rule is described the way up a chart is read', annots.saysUp);
+check(/55% to 75% across/.test(annots.saysAcross), 'and a band by the span it covers', annots.saysAcross);
+check(/top left/.test(annots.saysWhere), 'a note is placed in words, not coordinates', annots.saysWhere);
+check(/shaded band/.test(annots.unlabelled), 'an unlabelled mark is still announced', annots.unlabelled);
+check(annots.quiet === '', 'a chart with no notes says nothing about them');
+check(/Peak week/.test(annots.summary) && /Target/.test(annots.summary) && /Q3/.test(annots.summary),
+  'the accessible description carries every note', annots.summary.slice(-160));
+
+/* The export has to actually draw them, in a real document, on every engine —
+ * and it must not be draggable there, because the editor's stylesheet is the
+ * only thing that makes one grabbable. */
+const drawn = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const NOTES = [
+    { type: 'note', x: 0.3, y: 0.2, text: 'Peak week', arrow: { x: 0.44, y: 0.4 } },
+    { type: 'line', axis: 'y', at: 0.35, text: 'Target' },
+    { type: 'band', axis: 'x', from: 0.55, to: 0.75, text: 'Q3', color: '#CE5229' },
+  ];
+  const perEngine = {};
+  for (const def of reg.CHARTS) if (!perEngine[def.engine]) perEngine[def.engine] = def.id;
+  return Object.entries(perEngine).map(([engine, id]) => {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.annotations = JSON.parse(JSON.stringify(NOTES));
+    return { engine, id, html: eng.generateCode(def, spec).standalone };
+  });
+});
+
+for (const { engine, id, html } of drawn) {
+  const route = `/annotated-${engine}.html`;
+  generated.set(route, html);
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(base + route, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(1400);
+  const state = await probe.evaluate(() => {
+    const layer = document.querySelector('.oc-annots');
+    if (!layer) return { layer: false };
+    const label = layer.querySelector('.oc-annot-label');
+    const band = layer.querySelector('.oc-annot-band');
+    return {
+      layer: true,
+      hidden: layer.getAttribute('aria-hidden') === 'true',
+      labels: [...layer.querySelectorAll('.oc-annot-label')].map((n) => n.textContent).join('|'),
+      // A label with no width was appended to something that is not on screen.
+      painted: label.getBoundingClientRect().width > 10,
+      lead: layer.querySelectorAll('.oc-annot-leads line').length,
+      inert: getComputedStyle(label).pointerEvents === 'none',
+      tinted: band.style.getPropertyValue('--oc-annot-color') === '#CE5229',
+    };
+  });
+  await probe.close();
+  check(state.layer && state.painted && state.labels === 'Peak week|Target|Q3' && !errs.length,
+    `an exported ${engine} chart draws its notes`,
+    errs[0] || JSON.stringify(state));
+  check(state.inert, `and they cannot be dragged out of an export (${engine})`);
+  check(state.hidden && state.lead === 1 && state.tinted,
+    `arrow, colour and aria-hidden survive the export (${engine})`, JSON.stringify(state));
+}
+
+/* And in the studio, where the position is found by moving it. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+const editing = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const { plateOf } = await import('/js/studio/annotate.js');
+
+  const add = (re) => [...document.querySelectorAll('.annot-new')].find((b) => re.test(b.textContent));
+  add(/Note/).click();
+  await sleep(300);
+  add(/Band/).click();
+  await sleep(300);
+
+  const placed = JSON.parse(JSON.stringify(app.spec.annotations));
+  const rows = document.querySelectorAll('.annot-row').length;
+
+  // Typing a label reaches the plate without the panel being rebuilt under it.
+  const input = document.querySelector('.annot-row .annot-text');
+  input.focus();
+  input.value = 'Peak week';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(350);
+  const onPlate = [...plateOf(document.getElementById('chart-host'))
+    .querySelectorAll('.oc-annot-label')].map((n) => n.textContent);
+  const keptFocus = document.activeElement === input;
+
+  // Drag the note. Position is the one thing the sidebar does not edit.
+  const plate = plateOf(document.getElementById('chart-host'));
+  const rect = plate.getBoundingClientRect();
+  const note = plate.querySelector('.oc-annot-label.is-note');
+  const noteBox = note.getBoundingClientRect();
+  const before = { x: app.spec.annotations[0].x, y: app.spec.annotations[0].y };
+  const from = { x: noteBox.left + noteBox.width / 2, y: noteBox.top + noteBox.height / 2 };
+
+  note.dispatchEvent(new PointerEvent('pointerdown', {
+    bubbles: true, cancelable: true, clientX: from.x, clientY: from.y, pointerId: 1,
+  }));
+  window.dispatchEvent(new PointerEvent('pointermove', {
+    bubbles: true, clientX: from.x + rect.width * 0.25, clientY: from.y + rect.height * 0.2, pointerId: 1,
+  }));
+  window.dispatchEvent(new PointerEvent('pointerup', {
+    bubbles: true, clientX: from.x + rect.width * 0.25, clientY: from.y + rect.height * 0.2, pointerId: 1,
+  }));
+  await sleep(400);
+  const after = { x: app.spec.annotations[0].x, y: app.spec.annotations[0].y };
+
+  // A drag must give back every listener it took — the rule five leaking maps
+  // taught this codebase — and a rebuild must not stack a second binding.
+  const realAdd = window.addEventListener;
+  const realRemove = window.removeEventListener;
+  let added = 0; let removed = 0;
+  window.addEventListener = function (...a) { if (a[0].startsWith('pointer')) added++; return realAdd.apply(this, a); };
+  window.removeEventListener = function (...a) { if (a[0].startsWith('pointer')) removed++; return realRemove.apply(this, a); };
+  for (let k = 0; k < 3; k++) {
+    app.rebuild();
+    const mark = plateOf(document.getElementById('chart-host')).querySelector('.oc-annot-label.is-note');
+    const box = mark.getBoundingClientRect();
+    mark.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, clientX: box.left + 2, clientY: box.top + 2, pointerId: 1,
+    }));
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, clientX: box.left + 2, clientY: box.top + 2, pointerId: 1,
+    }));
+  }
+  window.addEventListener = realAdd;
+  window.removeEventListener = realRemove;
+
+  // Removing puts the plate back the way it was.
+  // Re-queried each time: removing a row repaints the list, so the buttons
+  // captured before the first click are no longer the ones on screen.
+  const count = app.spec.annotations.length;
+  for (let k = 0; k < count; k++) {
+    const del = document.querySelector('.annot-del');
+    if (del) del.click();
+    await sleep(120);
+  }
+  await sleep(400);
+  const cleared = plateOf(document.getElementById('chart-host')).querySelector('.oc-annots');
+
+  return {
+    rows,
+    kinds: placed.map((a) => a.type).join(','),
+    onPlate,
+    keptFocus,
+    moved: after.x !== before.x && after.y !== before.y,
+    inBounds: after.x >= 0 && after.x <= 1 && after.y >= 0 && after.y <= 1,
+    rounded: String(after.x).replace(/^\d+\.?/, '').length <= 3,
+    added,
+    removed,
+    count,
+    cleared: !cleared,
+    left: app.spec.annotations.length,
+  };
+});
+
+check(editing.rows === 2 && editing.kinds === 'note,band',
+  'the panel adds exactly the kind of note that was asked for', editing.kinds);
+check(editing.onPlate.includes('Peak week'), 'a label typed in the panel reaches the plate',
+  editing.onPlate.join(' | '));
+check(editing.keptFocus, 'and typing it does not throw the cursor out of the field');
+check(editing.moved && editing.inBounds, 'a note is dragged into place on the chart',
+  JSON.stringify(editing));
+check(editing.rounded, 'the position it records is one somebody can read in the spec view');
+check(editing.added > 0 && editing.added === editing.removed,
+  'a drag gives back every listener it took, however often the chart is rebuilt',
+  `${editing.added} added, ${editing.removed} removed`);
+check(editing.cleared && editing.left === 0, 'removing the last note takes the overlay with it');
+console.log(`  ${green('✓')} annotations — note, rule and band on all five engines`);
+
+/* Suite 26 — hover you can actually land on, and a gallery that stays awake. */
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1400);
+
+/* A whole screen of tiles arrives in one observer callback. Building them all
+ * there blocked the main thread for 207ms on load and 58ms on every scroll —
+ * frames in which the page cannot answer the scroll that asked for them. */
+const pump = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const g = window.openChartsGallery;
+  if (typeof g.pendingCount !== 'function') return { queued: false };
+
+  // Jump far enough to bring a fresh screenful into view at once.
+  window.scrollTo(0, 2600);
+  // Read on the very next frame, before the pump has had time to drain.
+  const seen = await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve(g.pendingCount())));
+  });
+
+  await sleep(1800);
+  const after = g.pendingCount();
+  const live = g.live ? g.live.size : 0;
+
+  // Scrolling straight past a tile must forget it rather than build it: a
+  // fast scroll used to leave a backlog of charts nobody would ever see.
+  window.scrollTo(0, 12000);
+  await new Promise((r) => requestAnimationFrame(r));
+  window.scrollTo(0, 0);
+  await sleep(1600);
+  const settled = g.pendingCount();
+
+  return { queued: true, seen, after, live, settled };
+});
+check(pump.queued, 'the gallery builds previews through a queue');
+check(pump.after === 0, 'and the queue drains', `${pump.after} still waiting`);
+check(pump.live > 0, 'the charts still get built', `${pump.live} live`);
+check(pump.settled === 0, 'scrolling past a tile forgets it rather than queueing it',
+  `${pump.settled} left over`);
+
+/* The queue must not starve a frame. Measured rather than asserted by faith:
+ * the budget only gates *starting* another chart, so one heavy chart can
+ * still overrun — what must not happen is eight of them in a row. */
+const frames = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const long = [];
+  let obs = null;
+  try {
+    obs = new PerformanceObserver((l) => l.getEntries().forEach((e) => long.push(e.duration)));
+    obs.observe({ entryTypes: ['longtask'] });
+  } catch { return { supported: false }; }
+
+  for (let i = 0; i < 5; i++) {
+    window.scrollBy(0, 1500);
+    await sleep(420);
+  }
+  obs.disconnect();
+  return {
+    supported: true,
+    count: long.length,
+    worst: Math.round(long.length ? Math.max(...long) : 0),
+    blocked: Math.round(long.reduce((a, b) => a + b, 0)),
+  };
+});
+if (frames.supported) {
+  check(frames.blocked < 120, 'scrolling the gallery does not block the main thread',
+    `${frames.count} long tasks, worst ${frames.worst}ms, ${frames.blocked}ms blocked`);
+} else {
+  check(true, 'long-task timing unavailable in this browser — skipped');
+}
+
+/* Hover has to forgive a few pixels. A barcode plot's rules are two pixels
+ * wide and a scatter dot is three across; requiring the pointer to land inside
+ * the mark is why those charts read as having no hover at all. */
+const slack = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;z-index:99999;background:#fff';
+  document.body.appendChild(host);
+
+  const showing = () => [...host.querySelectorAll('[role="tooltip"]')]
+    .some((t) => t.style.opacity !== '0' && t.textContent.trim());
+
+  const inst = eng.renderChart(reg.getChart('barcode-plot'), host, reg.newSpec(reg.getChart('barcode-plot')));
+  const canvas = host.querySelector('canvas');
+  const regions = canvas.__ocRegions || [];
+  const box = canvas.getBoundingClientRect();
+
+  const at = (x, y) => {
+    canvas.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+    return showing();
+  };
+
+  const r = regions.find((g) => g.w != null) || regions[0];
+  const cx = box.left + r.x + r.w / 2;
+  const cy = box.top + r.y + r.h / 2;
+
+  const dead = at(-500, -500);
+  const onIt = at(cx, cy);
+  const nearby = at(cx + r.w / 2 + 6, cy);
+  // Far enough away and it must go quiet again, or the readout would follow
+  // the cursor across empty space and mean nothing.
+  const farOff = at(cx + r.w / 2 + 90, cy);
+
+  eng.destroyInstance(inst);
+  host.remove();
+  return { marks: regions.length, dead, onIt, nearby, farOff };
+});
+check(slack.marks > 0, 'the barcode plot records marks', `${slack.marks}`);
+check(slack.onIt, 'hovering a mark reads out');
+check(slack.nearby, 'and hovering a few pixels off it still does');
+check(!slack.farOff, 'but hovering well away from everything stays quiet');
+check(!slack.dead, 'and a cursor outside the chart shows nothing');
+console.log(`  ${green('✓')} feel — queued previews, ${frames.blocked ?? '?'}ms blocked on scroll, hover with slack`);
+
+/* Suite 27 — nothing wrote to the console along the way. */
+// `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose
+// to check the message, and the browser logs every failed fetch — so the one
+// error this suite provokes deliberately is not evidence of a broken page.
+const realErrors = pageErrors.filter((e) => !/favicon|net::ERR_|oc-test-|404 \(Not Found\)/i.test(e));
 check(!realErrors.length, 'no page errors during the run', realErrors.slice(0, 3).join(' | '));
 console.log(`  ${realErrors.length ? red('✗') : green('✓')} console — ${realErrors.length} errors`);
 

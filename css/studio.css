@@ -61,6 +61,15 @@
   --shadow:    0 4px 18px rgba(23,22,20,.07), 0 1px 3px rgba(23,22,20,.04);
   --shadow-lg: 0 22px 56px rgba(23,22,20,.13), 0 4px 12px rgba(23,22,20,.05);
   --ease: cubic-bezier(.22,.61,.36,1);
+  /* One motion scale for the whole site. `fast` is acknowledgement — a press,
+     a tick; `base` is a state change you watch; `slow` is something arriving.
+     `spring` overshoots and is only for release, where a little bounce reads
+     as the surface pushing back. */
+  --dur-fast: 90ms;
+  --dur:      180ms;
+  --dur-slow: 300ms;
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
 
   --sidebar-w: 236px;
   --controls-w: 300px;
@@ -890,6 +899,53 @@ input[type="range"]::-moz-range-thumb {
 .palette-dot:hover { transform: scale(1.12); }
 .palette-dot.active { border-color: var(--ink); }
 
+/* Undo and redo sit apart from the two buttons that add to the table — they
+   act on the whole grid rather than extending it. */
+/* The Spec tab's editor. Sized and coloured as the code view it replaces, so
+   swapping between reading and editing does not move the page. */
+.code-edit {
+  flex: 1;
+  min-height: 320px;
+  width: 100%;
+  border: 0;
+  resize: none;
+  padding: .9rem 1rem;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+.code-edit:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.dgrid-undo { margin-left: .1rem; }
+.dgrid-undo:disabled { opacity: .38; cursor: default; }
+
+/* The colour-vision warning under a palette. Advisory, so it is a note in the
+   warning colour rather than an error state — the palette is still usable and
+   the reader may have chosen it deliberately. */
+.palette-warn {
+  margin: .45rem 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.palette-sim {
+  margin-top: .3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.palette-sim:hover { color: var(--accent); }
+.palette-sim:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
 /* ── Stage (preview) ─────────────────────────────────────────────────────── */
 .stage-wrap { display: flex; flex-direction: column; min-width: 0; }
 .stage {
@@ -1452,6 +1508,60 @@ input[type="range"]::-moz-range-thumb {
 .file-status.ok { color: var(--ok); }
 
 
+/* ── Flags ───────────────────────────────────────────────────────────────── */
+/* The vendored icon set in `data/flags.json` — 80px PNGs, base64, fetched once
+   by `flags.js`. Drawn as a background rather than an <img src> for two
+   reasons: a country with no flag falls back to its own two letters in the
+   same box instead of a broken-image glyph, and a data URI on a background
+   cannot be dragged out of the page as a file. */
+.flag {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--surface-2) center / cover no-repeat;
+  /* An inset rule rather than a border, so the box stays exactly 18×13 and
+     rows do not shift by a pixel when a flag loads. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent);
+  overflow: hidden;
+  /* Only ever seen by `.flag-blank`, but declared here so the letters sit in
+     the same box the picture would have filled. */
+  font-family: var(--mono);
+  font-size: 7.5px;
+  line-height: 13px;
+  text-align: center;
+  letter-spacing: -.02em;
+  color: var(--ink-faint);
+}
+.flag-blank { background-image: none; }
+
+/* The local-language name, beside the one the atlas uses. It is a sibling of
+   the label rather than a child, so the label's own text stays the item's
+   name — and it yields space first, because the name is what a reader is
+   scanning for. `isolate` keeps an Arabic or Hebrew spelling from reordering
+   the Latin text around it: without it a row reading "Egypt مصر" renders its
+   parts in the wrong order. */
+.cbx-item-sub,
+.clist-sub {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 11px;
+  unicode-bidi: isolate;
+  /* Takes the slack, so the local name sits against the name it belongs to
+     and anything after it — a city count — still lands on the right edge.
+     Without this the label grows instead and "Afghanistan" and "افغانستان"
+     end up at opposite ends of a wide row, reading as two columns. */
+  margin-right: auto;
+}
+/* Only a row that has one: elsewhere the label must keep growing, or a note
+   with no local name beside it loses its right edge. */
+.cbx-item:has(.cbx-item-sub) .cbx-item-label,
+.clist-row:has(.clist-sub) .clist-label { flex: 0 1 auto; }
+
 /* ── Country chips (sidebar) ─────────────────────────────────────────────── */
 .country-chips {
   display: flex;
@@ -1472,7 +1582,7 @@ input[type="range"]::-moz-range-thumb {
   font-size: 11.5px;
   max-width: 100%;
 }
-.country-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.country-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .country-chip-x {
   background: none;
   border: 0;
@@ -1778,6 +1888,741 @@ input[type="range"]::-moz-range-thumb {
 /* ── Mobile ──────────────────────────────────────────────────────────────── */
 .rail-toggle { display: none; }
 .rail-scrim { display: none; }
+
+/* ── The atelier: the plate, the spine and focus ──────────────────────────
+ *
+ * Three changes, all of them about giving the chart the room and the standing
+ * it deserves in a tool whose whole subject is the chart.
+ *
+ * Placed above the responsive section deliberately: everything here is desktop
+ * framing, and the media queries below have to keep the last word.
+ */
+
+/* ── The plate ────────────────────────────────────────────────────────────
+ *
+ * The stage stops being a card containing a chart and becomes a mat holding a
+ * print. The mat is the deep paper tone, the plate is the surface, and only
+ * the plate casts a shadow — a mat that floats above the page and a print that
+ * floats above the mat is two shadows arguing.
+ */
+.stage {
+  margin: 1.5rem 1.6rem 0;
+  padding: 0 0 .35rem;
+  background: var(--paper-deep);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: none;
+  overflow: visible;
+}
+.stage-bar {
+  background: transparent;
+  border-bottom: 0;
+  padding: .8rem 1.15rem .65rem;
+}
+.stage-title {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.stage-body {
+  margin: 0 1.15rem;
+  padding: 1.35rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-sm), 0 10px 26px -12px rgba(23, 22, 20, .22);
+  min-height: 300px;
+}
+:root:not([data-theme="light"]) .stage-body,
+:root[data-theme="dark"] .stage-body {
+  /* A dark ground swallows a drop shadow, so the plate is lifted by its own
+     edge instead of by a shadow nobody can see. */
+  box-shadow: none;
+  border-color: var(--rule-firm);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .stage-body { box-shadow: none; border-color: var(--rule-firm); }
+}
+/* The legend reads as the caption under the print, so it sits on the mat with
+   room above it — but only when there is one. */
+.legend:not(:empty) { padding: .95rem 1.3rem 1rem; }
+.metrics { padding-left: 1.3rem; padding-right: 1.3rem; }
+
+/* ── The spine ────────────────────────────────────────────────────────────
+ *
+ * Collapsed, the rail is one glyph per category. It is never *gone*: switching
+ * chart is the second most common thing anyone does here, and a hidden list
+ * would trade one click for two on every switch.
+ *
+ * Only above 900px. Below that the rail is already a slide-over drawer and a
+ * 56px spine would be a third behaviour competing with it.
+ */
+/* The rail's own bottom padding has to move onto the list, or a sticky footer
+   pinned to `bottom: 0` floats 2rem clear of the edge and chart names scroll
+   through the gap underneath it. */
+.rail { position: sticky; display: flex; flex-direction: column; padding-bottom: 0; }
+#rail-list { flex: 1; padding-bottom: .8rem; }
+
+/* `.search` is a toolbar component: `flex: 1 1 210px` and `min-width: 210px`
+   are sized for the gallery's *horizontal* bar, where 210px is a width and
+   growing fills the row. Both are wrong in a column, and wrong in two ways:
+   the basis becomes a height, so the pill swelled to 496px the moment a
+   filter left free vertical space below it; and the 210px floor is wider
+   than the 204px the rail actually has, so the rail scrolled sideways.
+   Neither is the toolbar's fault — the rail has to say what it needs. */
+.rail .search {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.rail .search input { min-width: 0; }
+
+.rail-group-ico {
+  display: none;
+  width: 16px; height: 16px;
+  flex: 0 0 16px;
+  color: var(--ink-faint);
+}
+.rail-group-ico svg { width: 100%; height: 100%; display: block; }
+
+.rail-collapse {
+  display: flex; align-items: center; gap: .5rem;
+  /* Sticky, not merely last: the rail scrolls 114 charts, and a control at the
+     bottom of that is a control nobody finds. `margin-top: auto` keeps it at
+     the foot when the list is short enough not to scroll. */
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: auto;
+  padding: .45rem .55rem;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  width: 100%;
+}
+.rail-collapse:hover { color: var(--accent); }
+.rail-collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rail-collapse-mark { font-size: 13px; line-height: 1; }
+
+@media (min-width: 901px) {
+  body[data-rail="mini"] { --sidebar-w: 56px; }
+
+  body[data-rail="mini"] .rail { padding-left: .5rem; padding-right: .5rem; align-items: stretch; }
+  body[data-rail="mini"] .brand { justify-content: center; gap: 0; }
+  body[data-rail="mini"] .brand > span:last-child,
+  body[data-rail="mini"] .rail .search,
+  body[data-rail="mini"] .rail-group-body,
+  body[data-rail="mini"] .rail-group-head .caret,
+  body[data-rail="mini"] .rail-group-head .n,
+  body[data-rail="mini"] .rail-group-head > span:not(.caret):not(.n):not(.rail-group-ico),
+  body[data-rail="mini"] .rail-collapse-text { display: none; }
+
+  body[data-rail="mini"] .rail-group-ico { display: block; }
+  body[data-rail="mini"] .rail-group-head {
+    justify-content: center;
+    padding: .55rem 0;
+    border-radius: var(--r-xs);
+  }
+  /* The active category still has to be findable at a glance, and the little
+     dot the expanded rail uses is too small to carry that on its own here. */
+  body[data-rail="mini"] .rail-group-head .here { display: none; }
+  body[data-rail="mini"] .rail-group:has(.rail-link.active) .rail-group-ico { color: var(--accent); }
+  body[data-rail="mini"] .rail-group:has(.rail-link.active) .rail-group-head { background: var(--accent-wash); }
+  body[data-rail="mini"] .rail-group-head:hover .rail-group-ico { color: var(--ink); }
+
+  body[data-rail="mini"] .rail-collapse { justify-content: center; padding: .5rem 0; }
+  body[data-rail="mini"] .rail-collapse-mark { transform: rotate(180deg); }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────
+ *
+ * Everything but the plate. Distinct from the embed attribute, which strips
+ * the studio permanently for an iframe — this is a mode you come back from,
+ * so the stage bar stays and keeps the way out visible.
+ */
+body[data-focus="1"] .rail,
+body[data-focus="1"] .rail-scrim,
+body[data-focus="1"] .controls,
+body[data-focus="1"] .codepanel,
+body[data-focus="1"] .sources,
+body[data-focus="1"] .help,
+body[data-focus="1"] .page-head { display: none; }
+
+body[data-focus="1"] .studio { grid-template-columns: minmax(0, 1fr); }
+body[data-focus="1"] .stage {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 100vh;
+  /* The plate is centred in the viewport and sized to the chart. Stretching it
+     instead left a 330px chart marooned in 750px of empty paper — a bigger
+     frame is not more focus. */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3.4rem 0 1rem;
+  position: relative;
+}
+body[data-focus="1"] .stage-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+}
+body[data-focus="1"] .stage-body {
+  flex: 0 0 auto;
+  margin: 0 clamp(1rem, 5vw, 4rem);
+}
+body[data-focus="1"] #btn-focus { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent); }
+body[data-focus="1"] .stage-bar { padding: .9rem clamp(1rem, 5vw, 4rem) .7rem; }
+body[data-focus="1"] .legend:not(:empty),
+body[data-focus="1"] .metrics { padding-left: clamp(1rem, 5vw, 4rem); padding-right: clamp(1rem, 5vw, 4rem); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rail { transition: width .2s var(--ease), flex-basis .2s var(--ease); }
+  .stage-body { transition: margin .2s var(--ease), padding .2s var(--ease); }
+}
+
+/* ── Shape: the transform pipeline in the data editor ─────────────────────
+ *
+ * Reads top to bottom as a sentence per step, because that is what it is:
+ * "keep rows where region is North", then "group by product, total of
+ * revenue". The numbered gutter is the one place a number is structural here —
+ * these steps genuinely run in order, and reordering them changes the answer.
+ */
+.shape-steps { display: flex; flex-direction: column; gap: .4rem; margin: .9rem 0 .6rem; }
+.shape-step {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .5rem .6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.shape-n {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  line-height: 1.9;
+  min-width: 1ch;
+}
+.shape-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .45rem;
+}
+.shape-word { font-size: 12.5px; color: var(--ink-soft); }
+.shape-select, .shape-number, .shape-text {
+  padding: .22rem .4rem;
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  max-width: 100%;
+}
+.shape-number { width: 5.5rem; }
+.shape-text { width: 8.5rem; }
+.shape-select:focus, .shape-number:focus, .shape-text:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.shape-cols { display: flex; flex-wrap: wrap; gap: .1rem .6rem; }
+.shape-col {
+  display: inline-flex; align-items: center; gap: .25rem;
+  font-size: 12px; color: var(--ink-soft); cursor: pointer;
+}
+.shape-col input { accent-color: var(--accent); margin: 0; }
+
+.shape-tools { flex: 0 0 auto; display: flex; gap: .1rem; }
+.shape-move {
+  border: 0; background: none; cursor: pointer;
+  color: var(--ink-faint); font-size: 11px;
+  padding: .2rem .3rem; border-radius: var(--r-xs);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.shape-move:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); }
+.shape-move:disabled { opacity: .3; cursor: default; }
+.shape-del:hover:not(:disabled) { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+.shape-add { margin-bottom: .9rem; }
+.shape-empty { font-size: 12px; color: var(--ink-faint); margin: 0; padding: .5rem .1rem; }
+
+.shape-summary {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--accent);
+  margin: .2rem 0 .5rem;
+}
+.shape-error { font-size: 12px; color: var(--bad); margin: 0 0 .3rem; }
+.shape-more { font-size: 11.5px; color: var(--ink-faint); margin: .4rem 0 0; }
+
+/* Its own scroll box: a reshaped table can be wider than the dialog. */
+.shape-preview {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.shape-preview table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.shape-preview th, .shape-preview td {
+  padding: .3rem .7rem; text-align: left;
+  border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+.shape-preview thead th {
+  background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft);
+}
+.shape-preview td { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.shape-preview tbody tr:last-child th,
+.shape-preview tbody tr:last-child td { border-bottom: 0; }
+
+/* The address field in the data editor's "From a link" tab. */
+.link-row { display: flex; gap: .5rem; margin: .9rem 0 .2rem; }
+.link-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: .5rem .7rem;
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.link-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.link-row .btn { flex: 0 0 auto; }
+
+/* ── The data, in words ───────────────────────────────────────────────────
+ *
+ * The same table `a11y.js` writes into every export, shown in the studio too.
+ * Not hidden here: the numbers behind a chart are worth having whether or not
+ * you can see the chart, and a reader who wants them should not have to open
+ * the data editor to look.
+ */
+.stage-data:not(:empty) { padding: 0 1.3rem 1.1rem; }
+.stage-data .chart-data { font-size: 12.5px; }
+.stage-data .chart-data > summary {
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: .25rem .3rem;
+  border-radius: var(--r-xs);
+  width: fit-content;
+  transition: color var(--dur) var(--ease);
+}
+.stage-data .chart-data > summary:hover { color: var(--accent); }
+.stage-data .chart-data > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Its own scroll box: a 40-column table must never widen the page. */
+.stage-data .chart-data-scroll {
+  overflow-x: auto;
+  margin-top: .6rem;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.stage-data .chart-data table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.stage-data .chart-data caption {
+  text-align: left;
+  padding: .55rem .7rem .35rem;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+.stage-data .chart-data th,
+.stage-data .chart-data td {
+  padding: .3rem .7rem;
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.stage-data .chart-data thead th {
+  position: sticky; top: 0;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.stage-data .chart-data td { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.stage-data .chart-data tbody th { font-weight: 500; }
+
+/* Focus mode is the chart alone. */
+body[data-focus="1"] .stage-data { display: none; }
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+ *
+ * One idea, applied everywhere: **motion starts where the user acted.**
+ *
+ * A press sinks under the finger, a ripple opens from the exact point that was
+ * clicked, a sheen tracks the cursor across a card, and a dialog grows out of
+ * the button that opened it. Nothing here loops, drifts or plays on arrival —
+ * animation that runs on its own is decoration, and this file has none of it.
+ *
+ * Everything is a transition or a one-shot animation, so the global
+ * `prefers-reduced-motion: reduce` block at the foot of this stylesheet
+ * neutralises the lot. The pointer-driven parts are guarded again in
+ * `motion.js`, because a custom property set from JS is not a transition and
+ * that block cannot reach it.
+ */
+
+/* ── Press ────────────────────────────────────────────────────────────────
+ *
+ * The single most-felt piece, and the one that was missing: before this the
+ * whole stylesheet carried one `:active` rule. A control that does not move
+ * under the pointer reads as a picture of a control.
+ *
+ * Scale rather than translate, so a press feels like depth rather than a slip,
+ * and `--dur-fast` down against a springy release — the surface gives way at
+ * once and pushes back a little.
+ */
+.btn,
+.tab,
+.filter,
+.seg-btn,
+.prompt-mode,
+.swatch,
+.dlg-tab,
+.dlg-close,
+.theme-toggle,
+.card-prompt,
+.rail-collapse,
+.palette-sim,
+.dgrid-del,
+.series-del,
+.country-chip-x,
+.pick-chip-x {
+  transition: transform var(--dur) var(--ease-spring),
+              background-color var(--dur) var(--ease),
+              border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease);
+}
+.btn:active:not(:disabled),
+.tab:active,
+.filter:active,
+.seg-btn:active,
+.prompt-mode:active,
+.swatch:active,
+.dlg-tab:active,
+.dlg-close:active,
+.theme-toggle:active,
+.card-prompt:active,
+.rail-collapse:active,
+.palette-sim:active,
+.dgrid-del:active,
+.series-del:active,
+.country-chip-x:active,
+.pick-chip-x:active {
+  transform: scale(.955);
+  transition-duration: var(--dur-fast);
+}
+
+/* Rows travel sideways instead: a list item that shrinks looks broken, but one
+   that gives a little in the direction of the pointer reads as being taken. */
+.rail-link,
+.cbx-item,
+.clist-row,
+.toggle-row,
+.series-row,
+.help-head,
+.rail-group-head {
+  transition: transform var(--dur) var(--ease-spring),
+              background-color var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+}
+.rail-link:active,
+.cbx-item:active,
+.clist-row:active,
+.toggle-row:active,
+.help-head:active,
+.rail-group-head:active { transform: translateX(2px); }
+
+/* These two already move on hover, so their press has to compose with it
+   rather than replace it — a swatch that shrinks to .955 mid-hover jumps. */
+.palette-dot { transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur) var(--ease); }
+.palette-dot:active { transform: scale(1.02); transition-duration: var(--dur-fast); }
+.card-shell:active { transform: translateY(-1px) scale(.995); transition-duration: var(--dur-fast); }
+
+/* A disabled control must not pretend to respond. */
+.btn:disabled { transform: none !important; }
+
+/* ── Ripple ───────────────────────────────────────────────────────────────
+ *
+ * Opens from the point that was pressed, not the middle of the button, so two
+ * clicks on opposite ends of the same control look different. `motion.js` sets
+ * `--rx` / `--ry` from the pointer and adds the class.
+ */
+.btn,
+.tab,
+.filter,
+.seg-btn,
+.prompt-mode,
+.dlg-tab,
+.card-prompt {
+  position: relative;
+  overflow: hidden;
+}
+.rippling::before {
+  content: '';
+  position: absolute;
+  left: var(--rx, 50%);
+  top: var(--ry, 50%);
+  width: 0; height: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .16;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: ripple 420ms var(--ease-out) forwards;
+}
+@keyframes ripple {
+  to { width: 240%; height: 240%; opacity: 0; }
+}
+
+/* ── Sheen ────────────────────────────────────────────────────────────────
+ *
+ * The gallery's signature: light travels across a card as the cursor does,
+ * the way it would across paper under a lamp. Chosen over a 3D tilt on
+ * purpose — the studio presents charts as prints, and a print does not
+ * swivel; the light over it moves.
+ *
+ * It is a background on a pseudo-element, so it costs no layout and cannot
+ * add to the page's scrollable width — which a rotated card would.
+ */
+.card { position: relative; }
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease);
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--accent) 13%, transparent),
+    transparent 68%
+  );
+}
+.card-shell:hover .card::after { opacity: 1; }
+
+/* ── Arrival ──────────────────────────────────────────────────────────────
+ *
+ * The dialog grows out of whatever opened it. `motion.js` writes the origin as
+ * a percentage of the dialog's own box, so the corner nearest the button is
+ * the corner that stays still.
+ */
+.dlg {
+  transform-origin: var(--from-x, 50%) var(--from-y, 50%);
+}
+
+/* ── Value changes ────────────────────────────────────────────────────────
+ *
+ * A KPI that swaps silently is a number you have to re-read to trust. This
+ * lifts it a few pixels as it changes, which is enough to say "this one
+ * moved" without asking anyone to wait for it.
+ */
+.metric-value { transition: color var(--dur) var(--ease); }
+.metric-value.changed { animation: metric-bump var(--dur-slow) var(--ease-out); }
+@keyframes metric-bump {
+  0%   { transform: translateY(-4px); opacity: .35; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────
+ *
+ * Keyboard focus gets the same acknowledgement a press does, and arrives
+ * rather than blinking on.
+ */
+:where(.btn, .tab, .filter, .seg-btn, .prompt-mode, .rail-link, .swatch):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  animation: focus-in var(--dur) var(--ease-out);
+}
+@keyframes focus-in {
+  from { outline-color: transparent; outline-offset: 6px; }
+}
+
+/* ── Annotations ──────────────────────────────────────────────────────────
+ *
+ * A note, a rule and a shaded band, laid over the plate as DOM rather than
+ * painted into the canvas — see `annotate.js` for why.
+ *
+ * The overlay's own rules are restated here rather than imported from
+ * `ANNOTATION_CSS`, for the same reason `.stage-data .chart-data` restates the
+ * accessible table's: that block is written for somebody else's page, so it
+ * carries literal hex and a `prefers-color-scheme` query. The studio has a
+ * theme *toggle*, which a media query cannot see, so in here the colours have
+ * to be tokens.
+ */
+.oc-annots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--sans);
+}
+
+.oc-annot-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.oc-annot-leads line {
+  stroke: var(--oc-annot-color, var(--ink-soft));
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+}
+
+.oc-annot-line { position: absolute; }
+.oc-annot-line.is-up { left: 0; right: 0; border-top: 1.5px dashed var(--oc-annot-color, var(--ink-soft)); }
+.oc-annot-line.is-across { top: 0; bottom: 0; border-left: 1.5px dashed var(--oc-annot-color, var(--ink-soft)); }
+
+.oc-annot-band { position: absolute; background: var(--oc-annot-color, var(--accent)); opacity: .1; }
+.oc-annot-band.is-up { left: 0; right: 0; }
+.oc-annot-band.is-across { top: 0; bottom: 0; }
+
+.oc-annot-edge { position: absolute; }
+
+.oc-annot-head {
+  position: absolute;
+  width: 7px; height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--oc-annot-color, var(--ink-soft));
+}
+
+.oc-annot-label {
+  position: absolute;
+  max-width: 45%;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--oc-annot-color, var(--ink));
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  white-space: pre-line;
+}
+.oc-annot-label.is-note { transform: translate(-50%, -50%); }
+.oc-annot-label.on-up { right: 2px; transform: translateY(-100%); }
+.oc-annot-label.on-across { top: 2px; transform: translateX(-50%); }
+.oc-annot-label.on-band-across { top: 2px; transform: translateX(-50%); }
+.oc-annot-label.on-band-up { left: 2px; transform: translateY(-50%); }
+/* An unlabelled note still has to be findable, or it cannot be dragged to
+   where its label is going to be needed. */
+.oc-annot-label.is-blank { color: var(--ink-faint); border: 1px dashed var(--rule-firm); }
+
+/* Grabbable only in the studio.
+ *
+ * This is the whole mechanism, and it is deliberately CSS rather than a flag
+ * passed into the overlay: the export never loads this stylesheet, so its
+ * annotations are inert without anything having to know it is an export. The
+ * gallery draws into `.card-canvas`, so its tiles stay inert too. */
+.chart-host .oc-annot { pointer-events: auto; }
+.chart-host .oc-annot-label { cursor: grab; }
+.chart-host .oc-annot-band { cursor: grab; }
+.chart-host .oc-annot-head { cursor: grab; }
+/* Set on the plate, which is `.chart-wrap` on a Chart.js chart and the host
+   itself on the other four — so the class is matched wherever it lands. It is
+   only ever written by the drag, which only ever runs here. */
+.is-annot-dragging .oc-annot { cursor: grabbing; }
+
+/* A rule is a border on a zero-height box, which is a two-pixel target. The
+   pseudo-element widens the grab without moving the line. */
+.chart-host .oc-annot-line::before { content: ''; position: absolute; }
+.chart-host .oc-annot-line.is-up::before { left: 0; right: 0; top: -6px; height: 13px; cursor: ns-resize; }
+.chart-host .oc-annot-line.is-across::before { top: 0; bottom: 0; left: -6px; width: 13px; cursor: ew-resize; }
+
+.chart-host .oc-annot-edge.is-across { top: 0; bottom: 0; width: 13px; margin-left: -6.5px; cursor: ew-resize; }
+.chart-host .oc-annot-edge.is-up { left: 0; right: 0; height: 13px; margin-top: -6.5px; cursor: ns-resize; }
+
+/* ── The Notes control ───────────────────────────────────────────────────── */
+.annot-list { display: flex; flex-direction: column; gap: .35rem; }
+
+.annot-row { display: flex; align-items: center; gap: .28rem; }
+.annot-kind {
+  flex: 0 0 16px;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+/* `.input` is 100% wide by default, which in a flex row is a floor, not a
+   width — the same trap `.rail .search` fell into. */
+.annot-text { flex: 1 1 auto; min-width: 0; padding: .3rem .45rem; font-size: 12px; }
+
+.annot-btn {
+  flex: 0 0 22px;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 1px solid var(--rule-firm); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink-soft);
+  font-size: 11px; line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+.annot-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
+.annot-btn:active { transform: scale(.92); }
+.annot-btn.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+.annot-del:hover { color: var(--bad); border-color: var(--bad); }
+
+/* Squared off to the same 22px as the two buttons beside it, so the trailing
+   controls read as one row rather than three sizes. */
+.annot-dot {
+  flex: 0 0 22px;
+  width: 22px; height: 22px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--rule-firm);
+}
+/* "Auto" is not a colour, so it must not look like one — and it must not look
+   like a disabled button either, which a plain empty square does. */
+.annot-dot.is-auto {
+  background: repeating-linear-gradient(
+    -45deg, var(--surface-2), var(--surface-2) 3px, var(--rule-firm) 3px, var(--rule-firm) 6px
+  );
+}
+
+.annot-add { display: flex; gap: .3rem; margin-top: .5rem; }
+.annot-new { flex: 1 1 0; min-width: 0; justify-content: center; padding: .3rem .3rem; }
+
+.annot-empty,
+.annot-hint {
+  margin: .45rem 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.annot-empty { margin: 0; }
+
+/* The colour popover's way back to no colour at all. */
+.palette-auto {
+  grid-column: span 8;
+  padding: .3rem;
+  border: 1px solid var(--rule-firm); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink-soft);
+  font-family: var(--sans); font-size: 11px;
+  cursor: pointer;
+}
+.palette-auto:hover { color: var(--ink); border-color: var(--ink-faint); }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 

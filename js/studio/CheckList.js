@@ -21,11 +21,17 @@ const el = (tag, cls, text) => {
 };
 
 /**
+ * An item may carry an `icon` and a `sub`, on the same terms as `Combobox.js`:
+ * `icon` is an opaque token passed to the caller's `renderIcon`, and `sub` is
+ * a quieter second label — a city's local-language spelling, where the
+ * curated list has one.
+ *
  * @param {object} opts
- * @param {Array<{value:string,label:string,note?:string}>} [opts.items]
+ * @param {Array<{value:string,label:string,note?:string,icon?:string,sub?:string,search?:string}>} [opts.items]
  * @param {string[]} [opts.selected]  values ticked to begin with
  * @param {string} [opts.placeholder]
  * @param {string} [opts.emptyText]   shown when the list has nothing in it
+ * @param {Function} [opts.renderIcon] (item.icon) => Element | null
  * @param {Function} [opts.onChange]  (selectedValues) => void
  * @returns {{el, setItems, getSelected, setSelected, clear, focus, count}}
  */
@@ -102,7 +108,14 @@ export function createCheckList(opts = {}) {
         notify();
       });
       row.classList.toggle('on', cb.checked);
-      row.append(cb, el('span', 'clist-label', item.label));
+      row.appendChild(cb);
+      if (opts.renderIcon && item.icon) {
+        const icon = opts.renderIcon(item.icon);
+        if (icon) row.appendChild(icon);
+      }
+      // A sibling, not a child — see the same note in `Combobox.js`.
+      row.appendChild(el('span', 'clist-label', item.label));
+      if (item.sub) row.appendChild(el('span', 'clist-sub', item.sub));
       if (item.note) row.appendChild(el('span', 'clist-note', item.note));
       box.appendChild(row);
     });
@@ -122,8 +135,11 @@ export function createCheckList(opts = {}) {
     const contains = [];
     for (const item of items) {
       const l = item.label.toLowerCase();
-      if (l.startsWith(needle)) starts.push(item);
-      else if (l.includes(needle)) contains.push(item);
+      // Searching the local spelling too, so a reader can find a city by the
+      // name it carries at home rather than the one the gazetteer chose.
+      const hay = (item.search || item.label).toLowerCase();
+      if (l.startsWith(needle) || hay.startsWith(needle)) starts.push(item);
+      else if (hay.includes(needle)) contains.push(item);
     }
     filtered = starts.concat(contains);
   }

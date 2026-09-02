@@ -1,0 +1,4841 @@
+{
+  "meta": {
+    "count": 194,
+    "description": "Countries with flag icons and city names in English and local language.",
+    "flag_icons": "Emoji plus CDN images from flagcdn.com (public domain flag images).",
+    "cities_local": "null when the local language rendering matches the English list.",
+    "notes": "Covers UN member states plus Vatican City and Palestine."
+  },
+  "countries": [
+    {
+      "name": "Afghanistan",
+      "name_local": "افغانستان",
+      "iso2": "AF",
+      "iso3": "AFG",
+      "region": "Asia",
+      "local_language": "ps",
+      "flag": {
+        "emoji": "🇦🇫",
+        "png": "https://flagcdn.com/w320/af.png",
+        "png_small": "https://flagcdn.com/w80/af.png",
+        "svg": "https://flagcdn.com/af.svg"
+      },
+      "cities_en": [
+        "Kabul",
+        "Kandahar",
+        "Herat",
+        "Mazar-i-Sharif",
+        "Jalalabad"
+      ],
+      "cities_local": [
+        "کابل",
+        "کندهار",
+        "هرات",
+        "مزار شریف",
+        "جلال‌آباد"
+      ]
+    },
+    {
+      "name": "Albania",
+      "name_local": "Shqipëria",
+      "iso2": "AL",
+      "iso3": "ALB",
+      "region": "Europe",
+      "local_language": "sq",
+      "flag": {
+        "emoji": "🇦🇱",
+        "png": "https://flagcdn.com/w320/al.png",
+        "png_small": "https://flagcdn.com/w80/al.png",
+        "svg": "https://flagcdn.com/al.svg"
+      },
+      "cities_en": [
+        "Tirana",
+        "Durrës",
+        "Vlorë",
+        "Shkodër",
+        "Elbasan"
+      ],
+      "cities_local": [
+        "Tiranë",
+        "Durrës",
+        "Vlorë",
+        "Shkodër",
+        "Elbasan"
+      ]
+    },
+    {
+      "name": "Algeria",
+      "name_local": "الجزائر",
+      "iso2": "DZ",
+      "iso3": "DZA",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇩🇿",
+        "png": "https://flagcdn.com/w320/dz.png",
+        "png_small": "https://flagcdn.com/w80/dz.png",
+        "svg": "https://flagcdn.com/dz.svg"
+      },
+      "cities_en": [
+        "Algiers",
+        "Oran",
+        "Constantine",
+        "Annaba",
+        "Blida"
+      ],
+      "cities_local": [
+        "الجزائر",
+        "وهران",
+        "قسنطينة",
+        "عنابة",
+        "البليدة"
+      ]
+    },
+    {
+      "name": "Andorra",
+      "name_local": null,
+      "iso2": "AD",
+      "iso3": "AND",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇦🇩",
+        "png": "https://flagcdn.com/w320/ad.png",
+        "png_small": "https://flagcdn.com/w80/ad.png",
+        "svg": "https://flagcdn.com/ad.svg"
+      },
+      "cities_en": [
+        "Andorra la Vella",
+        "Escaldes-Engordany",
+        "Encamp",
+        "Sant Julià de Lòria",
+        "La Massana"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Angola",
+      "name_local": null,
+      "iso2": "AO",
+      "iso3": "AGO",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇦🇴",
+        "png": "https://flagcdn.com/w320/ao.png",
+        "png_small": "https://flagcdn.com/w80/ao.png",
+        "svg": "https://flagcdn.com/ao.svg"
+      },
+      "cities_en": [
+        "Luanda",
+        "Huambo",
+        "Lobito",
+        "Benguela",
+        "Lubango"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Antigua and Barbuda",
+      "name_local": null,
+      "iso2": "AG",
+      "iso3": "ATG",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇦🇬",
+        "png": "https://flagcdn.com/w320/ag.png",
+        "png_small": "https://flagcdn.com/w80/ag.png",
+        "svg": "https://flagcdn.com/ag.svg"
+      },
+      "cities_en": [
+        "Saint John's",
+        "All Saints",
+        "Liberta",
+        "Potter's Village",
+        "Codrington"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Argentina",
+      "name_local": null,
+      "iso2": "AR",
+      "iso3": "ARG",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇦🇷",
+        "png": "https://flagcdn.com/w320/ar.png",
+        "png_small": "https://flagcdn.com/w80/ar.png",
+        "svg": "https://flagcdn.com/ar.svg"
+      },
+      "cities_en": [
+        "Buenos Aires",
+        "Córdoba",
+        "Rosario",
+        "Mendoza",
+        "La Plata"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Armenia",
+      "name_local": "Հայաստան",
+      "iso2": "AM",
+      "iso3": "ARM",
+      "region": "Asia",
+      "local_language": "hy",
+      "flag": {
+        "emoji": "🇦🇲",
+        "png": "https://flagcdn.com/w320/am.png",
+        "png_small": "https://flagcdn.com/w80/am.png",
+        "svg": "https://flagcdn.com/am.svg"
+      },
+      "cities_en": [
+        "Yerevan",
+        "Gyumri",
+        "Vanadzor",
+        "Vagharshapat",
+        "Hrazdan"
+      ],
+      "cities_local": [
+        "Երևան",
+        "Գյումրի",
+        "Վանաձոր",
+        "Վաղարշապատ",
+        "Հրազդան"
+      ]
+    },
+    {
+      "name": "Australia",
+      "name_local": null,
+      "iso2": "AU",
+      "iso3": "AUS",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇦🇺",
+        "png": "https://flagcdn.com/w320/au.png",
+        "png_small": "https://flagcdn.com/w80/au.png",
+        "svg": "https://flagcdn.com/au.svg"
+      },
+      "cities_en": [
+        "Canberra",
+        "Sydney",
+        "Melbourne",
+        "Brisbane",
+        "Perth"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Austria",
+      "name_local": "Österreich",
+      "iso2": "AT",
+      "iso3": "AUT",
+      "region": "Europe",
+      "local_language": "de",
+      "flag": {
+        "emoji": "🇦🇹",
+        "png": "https://flagcdn.com/w320/at.png",
+        "png_small": "https://flagcdn.com/w80/at.png",
+        "svg": "https://flagcdn.com/at.svg"
+      },
+      "cities_en": [
+        "Vienna",
+        "Graz",
+        "Linz",
+        "Salzburg",
+        "Innsbruck"
+      ],
+      "cities_local": [
+        "Wien",
+        "Graz",
+        "Linz",
+        "Salzburg",
+        "Innsbruck"
+      ]
+    },
+    {
+      "name": "Azerbaijan",
+      "name_local": "Azərbaycan",
+      "iso2": "AZ",
+      "iso3": "AZE",
+      "region": "Asia",
+      "local_language": "az",
+      "flag": {
+        "emoji": "🇦🇿",
+        "png": "https://flagcdn.com/w320/az.png",
+        "png_small": "https://flagcdn.com/w80/az.png",
+        "svg": "https://flagcdn.com/az.svg"
+      },
+      "cities_en": [
+        "Baku",
+        "Ganja",
+        "Sumqayit",
+        "Mingachevir",
+        "Lankaran"
+      ],
+      "cities_local": [
+        "Bakı",
+        "Gəncə",
+        "Sumqayıt",
+        "Mingəçevir",
+        "Lənkəran"
+      ]
+    },
+    {
+      "name": "Bahamas",
+      "name_local": "The Bahamas",
+      "iso2": "BS",
+      "iso3": "BHS",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇸",
+        "png": "https://flagcdn.com/w320/bs.png",
+        "png_small": "https://flagcdn.com/w80/bs.png",
+        "svg": "https://flagcdn.com/bs.svg"
+      },
+      "cities_en": [
+        "Nassau",
+        "Freeport",
+        "West End",
+        "Cooper's Town",
+        "Marsh Harbour"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Bahrain",
+      "name_local": "البحرين",
+      "iso2": "BH",
+      "iso3": "BHR",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇧🇭",
+        "png": "https://flagcdn.com/w320/bh.png",
+        "png_small": "https://flagcdn.com/w80/bh.png",
+        "svg": "https://flagcdn.com/bh.svg"
+      },
+      "cities_en": [
+        "Manama",
+        "Riffa",
+        "Muharraq",
+        "Hamad Town",
+        "Isa Town"
+      ],
+      "cities_local": [
+        "المنامة",
+        "الرفاع",
+        "المحرق",
+        "مدينة حمد",
+        "مدينة عيسى"
+      ]
+    },
+    {
+      "name": "Bangladesh",
+      "name_local": "বাংলাদেশ",
+      "iso2": "BD",
+      "iso3": "BGD",
+      "region": "Asia",
+      "local_language": "bn",
+      "flag": {
+        "emoji": "🇧🇩",
+        "png": "https://flagcdn.com/w320/bd.png",
+        "png_small": "https://flagcdn.com/w80/bd.png",
+        "svg": "https://flagcdn.com/bd.svg"
+      },
+      "cities_en": [
+        "Dhaka",
+        "Chattogram",
+        "Khulna",
+        "Rajshahi",
+        "Sylhet"
+      ],
+      "cities_local": [
+        "ঢাকা",
+        "চট্টগ্রাম",
+        "খুলনা",
+        "রাজশাহী",
+        "সিলেট"
+      ]
+    },
+    {
+      "name": "Barbados",
+      "name_local": null,
+      "iso2": "BB",
+      "iso3": "BRB",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇧",
+        "png": "https://flagcdn.com/w320/bb.png",
+        "png_small": "https://flagcdn.com/w80/bb.png",
+        "svg": "https://flagcdn.com/bb.svg"
+      },
+      "cities_en": [
+        "Bridgetown",
+        "Speightstown",
+        "Oistins",
+        "Holetown",
+        "Bathsheba"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Belarus",
+      "name_local": "Беларусь",
+      "iso2": "BY",
+      "iso3": "BLR",
+      "region": "Europe",
+      "local_language": "be",
+      "flag": {
+        "emoji": "🇧🇾",
+        "png": "https://flagcdn.com/w320/by.png",
+        "png_small": "https://flagcdn.com/w80/by.png",
+        "svg": "https://flagcdn.com/by.svg"
+      },
+      "cities_en": [
+        "Minsk",
+        "Gomel",
+        "Mogilev",
+        "Vitebsk",
+        "Brest"
+      ],
+      "cities_local": [
+        "Мінск",
+        "Гомель",
+        "Магілёў",
+        "Віцебск",
+        "Брэст"
+      ]
+    },
+    {
+      "name": "Belgium",
+      "name_local": "België / Belgique",
+      "iso2": "BE",
+      "iso3": "BEL",
+      "region": "Europe",
+      "local_language": "nl",
+      "flag": {
+        "emoji": "🇧🇪",
+        "png": "https://flagcdn.com/w320/be.png",
+        "png_small": "https://flagcdn.com/w80/be.png",
+        "svg": "https://flagcdn.com/be.svg"
+      },
+      "cities_en": [
+        "Brussels",
+        "Antwerp",
+        "Ghent",
+        "Bruges",
+        "Liège"
+      ],
+      "cities_local": [
+        "Brussel",
+        "Antwerpen",
+        "Gent",
+        "Brugge",
+        "Luik"
+      ]
+    },
+    {
+      "name": "Belize",
+      "name_local": null,
+      "iso2": "BZ",
+      "iso3": "BLZ",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇿",
+        "png": "https://flagcdn.com/w320/bz.png",
+        "png_small": "https://flagcdn.com/w80/bz.png",
+        "svg": "https://flagcdn.com/bz.svg"
+      },
+      "cities_en": [
+        "Belmopan",
+        "Belize City",
+        "San Ignacio",
+        "Orange Walk Town",
+        "Dangriga"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Benin",
+      "name_local": "Bénin",
+      "iso2": "BJ",
+      "iso3": "BEN",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇯",
+        "png": "https://flagcdn.com/w320/bj.png",
+        "png_small": "https://flagcdn.com/w80/bj.png",
+        "svg": "https://flagcdn.com/bj.svg"
+      },
+      "cities_en": [
+        "Porto-Novo",
+        "Cotonou",
+        "Parakou",
+        "Djougou",
+        "Bohicon"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Bhutan",
+      "name_local": "འབྲུག་ཡུལ་",
+      "iso2": "BT",
+      "iso3": "BTN",
+      "region": "Asia",
+      "local_language": "dz",
+      "flag": {
+        "emoji": "🇧🇹",
+        "png": "https://flagcdn.com/w320/bt.png",
+        "png_small": "https://flagcdn.com/w80/bt.png",
+        "svg": "https://flagcdn.com/bt.svg"
+      },
+      "cities_en": [
+        "Thimphu",
+        "Phuentsholing",
+        "Paro",
+        "Punakha",
+        "Gelephu"
+      ],
+      "cities_local": [
+        "ཐིམ་ཕུག",
+        "ཕུན་ཚོགས་གླིང་",
+        "སྤ་རོ་",
+        "སྤུ་ན་ཁ",
+        "དགེ་ལེགས་ཕུག"
+      ]
+    },
+    {
+      "name": "Bolivia",
+      "name_local": null,
+      "iso2": "BO",
+      "iso3": "BOL",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇴",
+        "png": "https://flagcdn.com/w320/bo.png",
+        "png_small": "https://flagcdn.com/w80/bo.png",
+        "svg": "https://flagcdn.com/bo.svg"
+      },
+      "cities_en": [
+        "Sucre",
+        "La Paz",
+        "Santa Cruz de la Sierra",
+        "Cochabamba",
+        "El Alto"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Bosnia and Herzegovina",
+      "name_local": "Bosna i Hercegovina",
+      "iso2": "BA",
+      "iso3": "BIH",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇦",
+        "png": "https://flagcdn.com/w320/ba.png",
+        "png_small": "https://flagcdn.com/w80/ba.png",
+        "svg": "https://flagcdn.com/ba.svg"
+      },
+      "cities_en": [
+        "Sarajevo",
+        "Banja Luka",
+        "Tuzla",
+        "Zenica",
+        "Mostar"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Botswana",
+      "name_local": null,
+      "iso2": "BW",
+      "iso3": "BWA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇼",
+        "png": "https://flagcdn.com/w320/bw.png",
+        "png_small": "https://flagcdn.com/w80/bw.png",
+        "svg": "https://flagcdn.com/bw.svg"
+      },
+      "cities_en": [
+        "Gaborone",
+        "Francistown",
+        "Molepolole",
+        "Maun",
+        "Serowe"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Brazil",
+      "name_local": "Brasil",
+      "iso2": "BR",
+      "iso3": "BRA",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇷",
+        "png": "https://flagcdn.com/w320/br.png",
+        "png_small": "https://flagcdn.com/w80/br.png",
+        "svg": "https://flagcdn.com/br.svg"
+      },
+      "cities_en": [
+        "Brasília",
+        "São Paulo",
+        "Rio de Janeiro",
+        "Salvador",
+        "Belo Horizonte"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Brunei",
+      "name_local": "Brunei Darussalam",
+      "iso2": "BN",
+      "iso3": "BRN",
+      "region": "Asia",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇳",
+        "png": "https://flagcdn.com/w320/bn.png",
+        "png_small": "https://flagcdn.com/w80/bn.png",
+        "svg": "https://flagcdn.com/bn.svg"
+      },
+      "cities_en": [
+        "Bandar Seri Begawan",
+        "Kuala Belait",
+        "Seria",
+        "Tutong",
+        "Bangar"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Bulgaria",
+      "name_local": "България",
+      "iso2": "BG",
+      "iso3": "BGR",
+      "region": "Europe",
+      "local_language": "bg",
+      "flag": {
+        "emoji": "🇧🇬",
+        "png": "https://flagcdn.com/w320/bg.png",
+        "png_small": "https://flagcdn.com/w80/bg.png",
+        "svg": "https://flagcdn.com/bg.svg"
+      },
+      "cities_en": [
+        "Sofia",
+        "Plovdiv",
+        "Varna",
+        "Burgas",
+        "Ruse"
+      ],
+      "cities_local": [
+        "София",
+        "Пловдив",
+        "Варна",
+        "Бургас",
+        "Русе"
+      ]
+    },
+    {
+      "name": "Burkina Faso",
+      "name_local": null,
+      "iso2": "BF",
+      "iso3": "BFA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇫",
+        "png": "https://flagcdn.com/w320/bf.png",
+        "png_small": "https://flagcdn.com/w80/bf.png",
+        "svg": "https://flagcdn.com/bf.svg"
+      },
+      "cities_en": [
+        "Ouagadougou",
+        "Bobo-Dioulasso",
+        "Koudougou",
+        "Banfora",
+        "Ouahigouya"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Burundi",
+      "name_local": "Uburundi",
+      "iso2": "BI",
+      "iso3": "BDI",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇧🇮",
+        "png": "https://flagcdn.com/w320/bi.png",
+        "png_small": "https://flagcdn.com/w80/bi.png",
+        "svg": "https://flagcdn.com/bi.svg"
+      },
+      "cities_en": [
+        "Gitega",
+        "Bujumbura",
+        "Ngozi",
+        "Ruyigi",
+        "Muyinga"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Cabo Verde",
+      "name_local": null,
+      "iso2": "CV",
+      "iso3": "CPV",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇻",
+        "png": "https://flagcdn.com/w320/cv.png",
+        "png_small": "https://flagcdn.com/w80/cv.png",
+        "svg": "https://flagcdn.com/cv.svg"
+      },
+      "cities_en": [
+        "Praia",
+        "Mindelo",
+        "Santa Maria",
+        "Assomada",
+        "Espargos"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Cambodia",
+      "name_local": "កម្ពុជា",
+      "iso2": "KH",
+      "iso3": "KHM",
+      "region": "Asia",
+      "local_language": "km",
+      "flag": {
+        "emoji": "🇰🇭",
+        "png": "https://flagcdn.com/w320/kh.png",
+        "png_small": "https://flagcdn.com/w80/kh.png",
+        "svg": "https://flagcdn.com/kh.svg"
+      },
+      "cities_en": [
+        "Phnom Penh",
+        "Siem Reap",
+        "Battambang",
+        "Sihanoukville",
+        "Kampong Cham"
+      ],
+      "cities_local": [
+        "ភ្នំពេញ",
+        "សៀមរាប",
+        "បាត់ដំបង",
+        "ក្រុងព្រះសីហនុ",
+        "កំពង់ចាម"
+      ]
+    },
+    {
+      "name": "Cameroon",
+      "name_local": "Cameroun",
+      "iso2": "CM",
+      "iso3": "CMR",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇲",
+        "png": "https://flagcdn.com/w320/cm.png",
+        "png_small": "https://flagcdn.com/w80/cm.png",
+        "svg": "https://flagcdn.com/cm.svg"
+      },
+      "cities_en": [
+        "Yaoundé",
+        "Douala",
+        "Garoua",
+        "Bamenda",
+        "Bafoussam"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Canada",
+      "name_local": null,
+      "iso2": "CA",
+      "iso3": "CAN",
+      "region": "Americas",
+      "local_language": "fr",
+      "flag": {
+        "emoji": "🇨🇦",
+        "png": "https://flagcdn.com/w320/ca.png",
+        "png_small": "https://flagcdn.com/w80/ca.png",
+        "svg": "https://flagcdn.com/ca.svg"
+      },
+      "cities_en": [
+        "Ottawa",
+        "Toronto",
+        "Montreal",
+        "Vancouver",
+        "Quebec City"
+      ],
+      "cities_local": [
+        "Ottawa",
+        "Toronto",
+        "Montréal",
+        "Vancouver",
+        "Ville de Québec"
+      ]
+    },
+    {
+      "name": "Central African Republic",
+      "name_local": "République centrafricaine",
+      "iso2": "CF",
+      "iso3": "CAF",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇫",
+        "png": "https://flagcdn.com/w320/cf.png",
+        "png_small": "https://flagcdn.com/w80/cf.png",
+        "svg": "https://flagcdn.com/cf.svg"
+      },
+      "cities_en": [
+        "Bangui",
+        "Bimbo",
+        "Berbérati",
+        "Carnot",
+        "Bambari"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Chad",
+      "name_local": "تشاد / Tchad",
+      "iso2": "TD",
+      "iso3": "TCD",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇹🇩",
+        "png": "https://flagcdn.com/w320/td.png",
+        "png_small": "https://flagcdn.com/w80/td.png",
+        "svg": "https://flagcdn.com/td.svg"
+      },
+      "cities_en": [
+        "N'Djamena",
+        "Moundou",
+        "Sarh",
+        "Abéché",
+        "Kelo"
+      ],
+      "cities_local": [
+        "نجامينا",
+        "موندو",
+        "سرح",
+        "أبشة",
+        "كيلو"
+      ]
+    },
+    {
+      "name": "Chile",
+      "name_local": null,
+      "iso2": "CL",
+      "iso3": "CHL",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇱",
+        "png": "https://flagcdn.com/w320/cl.png",
+        "png_small": "https://flagcdn.com/w80/cl.png",
+        "svg": "https://flagcdn.com/cl.svg"
+      },
+      "cities_en": [
+        "Santiago",
+        "Valparaíso",
+        "Concepción",
+        "Antofagasta",
+        "Viña del Mar"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "China",
+      "name_local": "中国",
+      "iso2": "CN",
+      "iso3": "CHN",
+      "region": "Asia",
+      "local_language": "zh",
+      "flag": {
+        "emoji": "🇨🇳",
+        "png": "https://flagcdn.com/w320/cn.png",
+        "png_small": "https://flagcdn.com/w80/cn.png",
+        "svg": "https://flagcdn.com/cn.svg"
+      },
+      "cities_en": [
+        "Beijing",
+        "Shanghai",
+        "Guangzhou",
+        "Shenzhen",
+        "Chengdu"
+      ],
+      "cities_local": [
+        "北京",
+        "上海",
+        "广州",
+        "深圳",
+        "成都"
+      ]
+    },
+    {
+      "name": "Colombia",
+      "name_local": null,
+      "iso2": "CO",
+      "iso3": "COL",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇴",
+        "png": "https://flagcdn.com/w320/co.png",
+        "png_small": "https://flagcdn.com/w80/co.png",
+        "svg": "https://flagcdn.com/co.svg"
+      },
+      "cities_en": [
+        "Bogotá",
+        "Medellín",
+        "Cali",
+        "Barranquilla",
+        "Cartagena"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Comoros",
+      "name_local": "Komori",
+      "iso2": "KM",
+      "iso3": "COM",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇰🇲",
+        "png": "https://flagcdn.com/w320/km.png",
+        "png_small": "https://flagcdn.com/w80/km.png",
+        "svg": "https://flagcdn.com/km.svg"
+      },
+      "cities_en": [
+        "Moroni",
+        "Mutsamudu",
+        "Fomboni",
+        "Domoni",
+        "Tsimbeo"
+      ],
+      "cities_local": [
+        "موروني",
+        "متسامودو",
+        "فومبوني",
+        "دوموني",
+        "تسيمبيو"
+      ]
+    },
+    {
+      "name": "Congo",
+      "name_local": null,
+      "iso2": "CG",
+      "iso3": "COG",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇬",
+        "png": "https://flagcdn.com/w320/cg.png",
+        "png_small": "https://flagcdn.com/w80/cg.png",
+        "svg": "https://flagcdn.com/cg.svg"
+      },
+      "cities_en": [
+        "Brazzaville",
+        "Pointe-Noire",
+        "Dolisie",
+        "Nkayi",
+        "Ouesso"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Costa Rica",
+      "name_local": null,
+      "iso2": "CR",
+      "iso3": "CRI",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇷",
+        "png": "https://flagcdn.com/w320/cr.png",
+        "png_small": "https://flagcdn.com/w80/cr.png",
+        "svg": "https://flagcdn.com/cr.svg"
+      },
+      "cities_en": [
+        "San José",
+        "Alajuela",
+        "Cartago",
+        "Heredia",
+        "Liberia"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Croatia",
+      "name_local": "Hrvatska",
+      "iso2": "HR",
+      "iso3": "HRV",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇭🇷",
+        "png": "https://flagcdn.com/w320/hr.png",
+        "png_small": "https://flagcdn.com/w80/hr.png",
+        "svg": "https://flagcdn.com/hr.svg"
+      },
+      "cities_en": [
+        "Zagreb",
+        "Split",
+        "Rijeka",
+        "Osijek",
+        "Dubrovnik"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Cuba",
+      "name_local": null,
+      "iso2": "CU",
+      "iso3": "CUB",
+      "region": "Americas",
+      "local_language": "es",
+      "flag": {
+        "emoji": "🇨🇺",
+        "png": "https://flagcdn.com/w320/cu.png",
+        "png_small": "https://flagcdn.com/w80/cu.png",
+        "svg": "https://flagcdn.com/cu.svg"
+      },
+      "cities_en": [
+        "Havana",
+        "Santiago de Cuba",
+        "Camagüey",
+        "Holguín",
+        "Santa Clara"
+      ],
+      "cities_local": [
+        "La Habana",
+        "Santiago de Cuba",
+        "Camagüey",
+        "Holguín",
+        "Santa Clara"
+      ]
+    },
+    {
+      "name": "Cyprus",
+      "name_local": "Κύπρος",
+      "iso2": "CY",
+      "iso3": "CYP",
+      "region": "Asia",
+      "local_language": "el",
+      "flag": {
+        "emoji": "🇨🇾",
+        "png": "https://flagcdn.com/w320/cy.png",
+        "png_small": "https://flagcdn.com/w80/cy.png",
+        "svg": "https://flagcdn.com/cy.svg"
+      },
+      "cities_en": [
+        "Nicosia",
+        "Limassol",
+        "Larnaca",
+        "Paphos",
+        "Famagusta"
+      ],
+      "cities_local": [
+        "Λευκωσία",
+        "Λεμεσός",
+        "Λάρνακα",
+        "Πάφος",
+        "Αμμόχωστος"
+      ]
+    },
+    {
+      "name": "Czechia",
+      "name_local": "Česko",
+      "iso2": "CZ",
+      "iso3": "CZE",
+      "region": "Europe",
+      "local_language": "cs",
+      "flag": {
+        "emoji": "🇨🇿",
+        "png": "https://flagcdn.com/w320/cz.png",
+        "png_small": "https://flagcdn.com/w80/cz.png",
+        "svg": "https://flagcdn.com/cz.svg"
+      },
+      "cities_en": [
+        "Prague",
+        "Brno",
+        "Ostrava",
+        "Pilsen",
+        "Olomouc"
+      ],
+      "cities_local": [
+        "Praha",
+        "Brno",
+        "Ostrava",
+        "Plzeň",
+        "Olomouc"
+      ]
+    },
+    {
+      "name": "Côte d'Ivoire",
+      "name_local": null,
+      "iso2": "CI",
+      "iso3": "CIV",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇮",
+        "png": "https://flagcdn.com/w320/ci.png",
+        "png_small": "https://flagcdn.com/w80/ci.png",
+        "svg": "https://flagcdn.com/ci.svg"
+      },
+      "cities_en": [
+        "Yamoussoukro",
+        "Abidjan",
+        "Bouaké",
+        "Daloa",
+        "Korhogo"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Democratic Republic of the Congo",
+      "name_local": "République démocratique du Congo",
+      "iso2": "CD",
+      "iso3": "COD",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇨🇩",
+        "png": "https://flagcdn.com/w320/cd.png",
+        "png_small": "https://flagcdn.com/w80/cd.png",
+        "svg": "https://flagcdn.com/cd.svg"
+      },
+      "cities_en": [
+        "Kinshasa",
+        "Lubumbashi",
+        "Mbuji-Mayi",
+        "Kananga",
+        "Kisangani"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Denmark",
+      "name_local": "Danmark",
+      "iso2": "DK",
+      "iso3": "DNK",
+      "region": "Europe",
+      "local_language": "da",
+      "flag": {
+        "emoji": "🇩🇰",
+        "png": "https://flagcdn.com/w320/dk.png",
+        "png_small": "https://flagcdn.com/w80/dk.png",
+        "svg": "https://flagcdn.com/dk.svg"
+      },
+      "cities_en": [
+        "Copenhagen",
+        "Aarhus",
+        "Odense",
+        "Aalborg",
+        "Esbjerg"
+      ],
+      "cities_local": [
+        "København",
+        "Aarhus",
+        "Odense",
+        "Aalborg",
+        "Esbjerg"
+      ]
+    },
+    {
+      "name": "Djibouti",
+      "name_local": "جيبوتي",
+      "iso2": "DJ",
+      "iso3": "DJI",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇩🇯",
+        "png": "https://flagcdn.com/w320/dj.png",
+        "png_small": "https://flagcdn.com/w80/dj.png",
+        "svg": "https://flagcdn.com/dj.svg"
+      },
+      "cities_en": [
+        "Djibouti City",
+        "Ali Sabieh",
+        "Tadjoura",
+        "Obock",
+        "Dikhil"
+      ],
+      "cities_local": [
+        "مدينة جيبوتي",
+        "علي صبيح",
+        "تاجورة",
+        "أوبوك",
+        "دخيل"
+      ]
+    },
+    {
+      "name": "Dominica",
+      "name_local": null,
+      "iso2": "DM",
+      "iso3": "DMA",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇩🇲",
+        "png": "https://flagcdn.com/w320/dm.png",
+        "png_small": "https://flagcdn.com/w80/dm.png",
+        "svg": "https://flagcdn.com/dm.svg"
+      },
+      "cities_en": [
+        "Roseau",
+        "Portsmouth",
+        "Marigot",
+        "Berekua",
+        "Mahaut"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Dominican Republic",
+      "name_local": "República Dominicana",
+      "iso2": "DO",
+      "iso3": "DOM",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇩🇴",
+        "png": "https://flagcdn.com/w320/do.png",
+        "png_small": "https://flagcdn.com/w80/do.png",
+        "svg": "https://flagcdn.com/do.svg"
+      },
+      "cities_en": [
+        "Santo Domingo",
+        "Santiago de los Caballeros",
+        "La Romana",
+        "San Pedro de Macorís",
+        "Puerto Plata"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Ecuador",
+      "name_local": null,
+      "iso2": "EC",
+      "iso3": "ECU",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇪🇨",
+        "png": "https://flagcdn.com/w320/ec.png",
+        "png_small": "https://flagcdn.com/w80/ec.png",
+        "svg": "https://flagcdn.com/ec.svg"
+      },
+      "cities_en": [
+        "Quito",
+        "Guayaquil",
+        "Cuenca",
+        "Santo Domingo",
+        "Ambato"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Egypt",
+      "name_local": "مصر",
+      "iso2": "EG",
+      "iso3": "EGY",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇪🇬",
+        "png": "https://flagcdn.com/w320/eg.png",
+        "png_small": "https://flagcdn.com/w80/eg.png",
+        "svg": "https://flagcdn.com/eg.svg"
+      },
+      "cities_en": [
+        "Cairo",
+        "Alexandria",
+        "Giza",
+        "Luxor",
+        "Aswan"
+      ],
+      "cities_local": [
+        "القاهرة",
+        "الإسكندرية",
+        "الجيزة",
+        "الأقصر",
+        "أسوان"
+      ]
+    },
+    {
+      "name": "El Salvador",
+      "name_local": null,
+      "iso2": "SV",
+      "iso3": "SLV",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇻",
+        "png": "https://flagcdn.com/w320/sv.png",
+        "png_small": "https://flagcdn.com/w80/sv.png",
+        "svg": "https://flagcdn.com/sv.svg"
+      },
+      "cities_en": [
+        "San Salvador",
+        "Santa Ana",
+        "San Miguel",
+        "Soyapango",
+        "Mejicanos"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Equatorial Guinea",
+      "name_local": "Guinea Ecuatorial",
+      "iso2": "GQ",
+      "iso3": "GNQ",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇶",
+        "png": "https://flagcdn.com/w320/gq.png",
+        "png_small": "https://flagcdn.com/w80/gq.png",
+        "svg": "https://flagcdn.com/gq.svg"
+      },
+      "cities_en": [
+        "Malabo",
+        "Bata",
+        "Ebebiyín",
+        "Aconibe",
+        "Mongomo"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Eritrea",
+      "name_local": "ኤርትራ",
+      "iso2": "ER",
+      "iso3": "ERI",
+      "region": "Africa",
+      "local_language": "ti",
+      "flag": {
+        "emoji": "🇪🇷",
+        "png": "https://flagcdn.com/w320/er.png",
+        "png_small": "https://flagcdn.com/w80/er.png",
+        "svg": "https://flagcdn.com/er.svg"
+      },
+      "cities_en": [
+        "Asmara",
+        "Keren",
+        "Massawa",
+        "Assab",
+        "Mendefera"
+      ],
+      "cities_local": [
+        "አስመራ",
+        "ከረን",
+        "ምጽዋዕ",
+        "ዓሰብ",
+        "መንደፈራ"
+      ]
+    },
+    {
+      "name": "Estonia",
+      "name_local": "Eesti",
+      "iso2": "EE",
+      "iso3": "EST",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇪🇪",
+        "png": "https://flagcdn.com/w320/ee.png",
+        "png_small": "https://flagcdn.com/w80/ee.png",
+        "svg": "https://flagcdn.com/ee.svg"
+      },
+      "cities_en": [
+        "Tallinn",
+        "Tartu",
+        "Narva",
+        "Pärnu",
+        "Kohtla-Järve"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Eswatini",
+      "name_local": "eSwatini",
+      "iso2": "SZ",
+      "iso3": "SWZ",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇿",
+        "png": "https://flagcdn.com/w320/sz.png",
+        "png_small": "https://flagcdn.com/w80/sz.png",
+        "svg": "https://flagcdn.com/sz.svg"
+      },
+      "cities_en": [
+        "Mbabane",
+        "Manzini",
+        "Lobamba",
+        "Siteki",
+        "Nhlangano"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Ethiopia",
+      "name_local": "ኢትዮጵያ",
+      "iso2": "ET",
+      "iso3": "ETH",
+      "region": "Africa",
+      "local_language": "am",
+      "flag": {
+        "emoji": "🇪🇹",
+        "png": "https://flagcdn.com/w320/et.png",
+        "png_small": "https://flagcdn.com/w80/et.png",
+        "svg": "https://flagcdn.com/et.svg"
+      },
+      "cities_en": [
+        "Addis Ababa",
+        "Dire Dawa",
+        "Mekelle",
+        "Gondar",
+        "Bahir Dar"
+      ],
+      "cities_local": [
+        "አዲስ አበባ",
+        "ድሬዳዋ",
+        "መቀሌ",
+        "ጎንደር",
+        "ባሕር ዳር"
+      ]
+    },
+    {
+      "name": "Fiji",
+      "name_local": "Viti",
+      "iso2": "FJ",
+      "iso3": "FJI",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇫🇯",
+        "png": "https://flagcdn.com/w320/fj.png",
+        "png_small": "https://flagcdn.com/w80/fj.png",
+        "svg": "https://flagcdn.com/fj.svg"
+      },
+      "cities_en": [
+        "Suva",
+        "Nadi",
+        "Lautoka",
+        "Labasa",
+        "Ba"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Finland",
+      "name_local": "Suomi",
+      "iso2": "FI",
+      "iso3": "FIN",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇫🇮",
+        "png": "https://flagcdn.com/w320/fi.png",
+        "png_small": "https://flagcdn.com/w80/fi.png",
+        "svg": "https://flagcdn.com/fi.svg"
+      },
+      "cities_en": [
+        "Helsinki",
+        "Espoo",
+        "Tampere",
+        "Vantaa",
+        "Turku"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "France",
+      "name_local": null,
+      "iso2": "FR",
+      "iso3": "FRA",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇫🇷",
+        "png": "https://flagcdn.com/w320/fr.png",
+        "png_small": "https://flagcdn.com/w80/fr.png",
+        "svg": "https://flagcdn.com/fr.svg"
+      },
+      "cities_en": [
+        "Paris",
+        "Marseille",
+        "Lyon",
+        "Toulouse",
+        "Nice"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Gabon",
+      "name_local": null,
+      "iso2": "GA",
+      "iso3": "GAB",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇦",
+        "png": "https://flagcdn.com/w320/ga.png",
+        "png_small": "https://flagcdn.com/w80/ga.png",
+        "svg": "https://flagcdn.com/ga.svg"
+      },
+      "cities_en": [
+        "Libreville",
+        "Port-Gentil",
+        "Franceville",
+        "Oyem",
+        "Moanda"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Gambia",
+      "name_local": "The Gambia",
+      "iso2": "GM",
+      "iso3": "GMB",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇲",
+        "png": "https://flagcdn.com/w320/gm.png",
+        "png_small": "https://flagcdn.com/w80/gm.png",
+        "svg": "https://flagcdn.com/gm.svg"
+      },
+      "cities_en": [
+        "Banjul",
+        "Serekunda",
+        "Brikama",
+        "Bakau",
+        "Farafenni"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Georgia",
+      "name_local": "საქართველო",
+      "iso2": "GE",
+      "iso3": "GEO",
+      "region": "Asia",
+      "local_language": "ka",
+      "flag": {
+        "emoji": "🇬🇪",
+        "png": "https://flagcdn.com/w320/ge.png",
+        "png_small": "https://flagcdn.com/w80/ge.png",
+        "svg": "https://flagcdn.com/ge.svg"
+      },
+      "cities_en": [
+        "Tbilisi",
+        "Batumi",
+        "Kutaisi",
+        "Rustavi",
+        "Zugdidi"
+      ],
+      "cities_local": [
+        "თბილისი",
+        "ბათუმი",
+        "ქუთაისი",
+        "რუსთავი",
+        "ზუგდიდი"
+      ]
+    },
+    {
+      "name": "Germany",
+      "name_local": "Deutschland",
+      "iso2": "DE",
+      "iso3": "DEU",
+      "region": "Europe",
+      "local_language": "de",
+      "flag": {
+        "emoji": "🇩🇪",
+        "png": "https://flagcdn.com/w320/de.png",
+        "png_small": "https://flagcdn.com/w80/de.png",
+        "svg": "https://flagcdn.com/de.svg"
+      },
+      "cities_en": [
+        "Berlin",
+        "Hamburg",
+        "Munich",
+        "Cologne",
+        "Frankfurt"
+      ],
+      "cities_local": [
+        "Berlin",
+        "Hamburg",
+        "München",
+        "Köln",
+        "Frankfurt am Main"
+      ]
+    },
+    {
+      "name": "Ghana",
+      "name_local": null,
+      "iso2": "GH",
+      "iso3": "GHA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇭",
+        "png": "https://flagcdn.com/w320/gh.png",
+        "png_small": "https://flagcdn.com/w80/gh.png",
+        "svg": "https://flagcdn.com/gh.svg"
+      },
+      "cities_en": [
+        "Accra",
+        "Kumasi",
+        "Tamale",
+        "Sekondi-Takoradi",
+        "Cape Coast"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Greece",
+      "name_local": "Ελλάδα",
+      "iso2": "GR",
+      "iso3": "GRC",
+      "region": "Europe",
+      "local_language": "el",
+      "flag": {
+        "emoji": "🇬🇷",
+        "png": "https://flagcdn.com/w320/gr.png",
+        "png_small": "https://flagcdn.com/w80/gr.png",
+        "svg": "https://flagcdn.com/gr.svg"
+      },
+      "cities_en": [
+        "Athens",
+        "Thessaloniki",
+        "Patras",
+        "Heraklion",
+        "Larissa"
+      ],
+      "cities_local": [
+        "Αθήνα",
+        "Θεσσαλονίκη",
+        "Πάτρα",
+        "Ηράκλειο",
+        "Λάρισα"
+      ]
+    },
+    {
+      "name": "Grenada",
+      "name_local": null,
+      "iso2": "GD",
+      "iso3": "GRD",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇩",
+        "png": "https://flagcdn.com/w320/gd.png",
+        "png_small": "https://flagcdn.com/w80/gd.png",
+        "svg": "https://flagcdn.com/gd.svg"
+      },
+      "cities_en": [
+        "St. George's",
+        "Gouyave",
+        "Grenville",
+        "Victoria",
+        "Sauteurs"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Guatemala",
+      "name_local": null,
+      "iso2": "GT",
+      "iso3": "GTM",
+      "region": "Americas",
+      "local_language": "es",
+      "flag": {
+        "emoji": "🇬🇹",
+        "png": "https://flagcdn.com/w320/gt.png",
+        "png_small": "https://flagcdn.com/w80/gt.png",
+        "svg": "https://flagcdn.com/gt.svg"
+      },
+      "cities_en": [
+        "Guatemala City",
+        "Quetzaltenango",
+        "Escuintla",
+        "Mixco",
+        "Villa Nueva"
+      ],
+      "cities_local": [
+        "Ciudad de Guatemala",
+        "Quetzaltenango",
+        "Escuintla",
+        "Mixco",
+        "Villa Nueva"
+      ]
+    },
+    {
+      "name": "Guinea",
+      "name_local": "Guinée",
+      "iso2": "GN",
+      "iso3": "GIN",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇳",
+        "png": "https://flagcdn.com/w320/gn.png",
+        "png_small": "https://flagcdn.com/w80/gn.png",
+        "svg": "https://flagcdn.com/gn.svg"
+      },
+      "cities_en": [
+        "Conakry",
+        "Nzérékoré",
+        "Kankan",
+        "Kindia",
+        "Labé"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Guinea-Bissau",
+      "name_local": "Guiné-Bissau",
+      "iso2": "GW",
+      "iso3": "GNB",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇼",
+        "png": "https://flagcdn.com/w320/gw.png",
+        "png_small": "https://flagcdn.com/w80/gw.png",
+        "svg": "https://flagcdn.com/gw.svg"
+      },
+      "cities_en": [
+        "Bissau",
+        "Bafatá",
+        "Gabú",
+        "Canchungo",
+        "Farim"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Guyana",
+      "name_local": null,
+      "iso2": "GY",
+      "iso3": "GUY",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇾",
+        "png": "https://flagcdn.com/w320/gy.png",
+        "png_small": "https://flagcdn.com/w80/gy.png",
+        "svg": "https://flagcdn.com/gy.svg"
+      },
+      "cities_en": [
+        "Georgetown",
+        "Linden",
+        "New Amsterdam",
+        "Anna Regina",
+        "Bartica"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Haiti",
+      "name_local": "Haïti",
+      "iso2": "HT",
+      "iso3": "HTI",
+      "region": "Americas",
+      "local_language": "ht",
+      "flag": {
+        "emoji": "🇭🇹",
+        "png": "https://flagcdn.com/w320/ht.png",
+        "png_small": "https://flagcdn.com/w80/ht.png",
+        "svg": "https://flagcdn.com/ht.svg"
+      },
+      "cities_en": [
+        "Port-au-Prince",
+        "Cap-Haïtien",
+        "Gonaïves",
+        "Les Cayes",
+        "Jacmel"
+      ],
+      "cities_local": [
+        "Pòtoprens",
+        "Okap",
+        "Gonayiv",
+        "Okay",
+        "Jakmèl"
+      ]
+    },
+    {
+      "name": "Honduras",
+      "name_local": null,
+      "iso2": "HN",
+      "iso3": "HND",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇭🇳",
+        "png": "https://flagcdn.com/w320/hn.png",
+        "png_small": "https://flagcdn.com/w80/hn.png",
+        "svg": "https://flagcdn.com/hn.svg"
+      },
+      "cities_en": [
+        "Tegucigalpa",
+        "San Pedro Sula",
+        "Choloma",
+        "La Ceiba",
+        "El Progreso"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Hungary",
+      "name_local": "Magyarország",
+      "iso2": "HU",
+      "iso3": "HUN",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇭🇺",
+        "png": "https://flagcdn.com/w320/hu.png",
+        "png_small": "https://flagcdn.com/w80/hu.png",
+        "svg": "https://flagcdn.com/hu.svg"
+      },
+      "cities_en": [
+        "Budapest",
+        "Debrecen",
+        "Szeged",
+        "Miskolc",
+        "Pécs"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Iceland",
+      "name_local": "Ísland",
+      "iso2": "IS",
+      "iso3": "ISL",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇮🇸",
+        "png": "https://flagcdn.com/w320/is.png",
+        "png_small": "https://flagcdn.com/w80/is.png",
+        "svg": "https://flagcdn.com/is.svg"
+      },
+      "cities_en": [
+        "Reykjavík",
+        "Kópavogur",
+        "Hafnarfjörður",
+        "Akureyri",
+        "Reykjanesbær"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "India",
+      "name_local": "भारत",
+      "iso2": "IN",
+      "iso3": "IND",
+      "region": "Asia",
+      "local_language": "hi",
+      "flag": {
+        "emoji": "🇮🇳",
+        "png": "https://flagcdn.com/w320/in.png",
+        "png_small": "https://flagcdn.com/w80/in.png",
+        "svg": "https://flagcdn.com/in.svg"
+      },
+      "cities_en": [
+        "New Delhi",
+        "Mumbai",
+        "Bengaluru",
+        "Kolkata",
+        "Chennai"
+      ],
+      "cities_local": [
+        "नई दिल्ली",
+        "मुंबई",
+        "बेंगलुरु",
+        "कोलकाता",
+        "चेन्नई"
+      ]
+    },
+    {
+      "name": "Indonesia",
+      "name_local": null,
+      "iso2": "ID",
+      "iso3": "IDN",
+      "region": "Asia",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇮🇩",
+        "png": "https://flagcdn.com/w320/id.png",
+        "png_small": "https://flagcdn.com/w80/id.png",
+        "svg": "https://flagcdn.com/id.svg"
+      },
+      "cities_en": [
+        "Jakarta",
+        "Surabaya",
+        "Bandung",
+        "Medan",
+        "Semarang"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Iran",
+      "name_local": "ایران",
+      "iso2": "IR",
+      "iso3": "IRN",
+      "region": "Asia",
+      "local_language": "fa",
+      "flag": {
+        "emoji": "🇮🇷",
+        "png": "https://flagcdn.com/w320/ir.png",
+        "png_small": "https://flagcdn.com/w80/ir.png",
+        "svg": "https://flagcdn.com/ir.svg"
+      },
+      "cities_en": [
+        "Tehran",
+        "Mashhad",
+        "Isfahan",
+        "Shiraz",
+        "Tabriz"
+      ],
+      "cities_local": [
+        "تهران",
+        "مشهد",
+        "اصفهان",
+        "شیراز",
+        "تبریز"
+      ]
+    },
+    {
+      "name": "Iraq",
+      "name_local": "العراق",
+      "iso2": "IQ",
+      "iso3": "IRQ",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇮🇶",
+        "png": "https://flagcdn.com/w320/iq.png",
+        "png_small": "https://flagcdn.com/w80/iq.png",
+        "svg": "https://flagcdn.com/iq.svg"
+      },
+      "cities_en": [
+        "Baghdad",
+        "Basra",
+        "Mosul",
+        "Erbil",
+        "Najaf"
+      ],
+      "cities_local": [
+        "بغداد",
+        "البصرة",
+        "الموصل",
+        "أربيل",
+        "النجف"
+      ]
+    },
+    {
+      "name": "Ireland",
+      "name_local": "Éire",
+      "iso2": "IE",
+      "iso3": "IRL",
+      "region": "Europe",
+      "local_language": "ga",
+      "flag": {
+        "emoji": "🇮🇪",
+        "png": "https://flagcdn.com/w320/ie.png",
+        "png_small": "https://flagcdn.com/w80/ie.png",
+        "svg": "https://flagcdn.com/ie.svg"
+      },
+      "cities_en": [
+        "Dublin",
+        "Cork",
+        "Limerick",
+        "Galway",
+        "Waterford"
+      ],
+      "cities_local": [
+        "Baile Átha Cliath",
+        "Corcaigh",
+        "Luimneach",
+        "Gaillimh",
+        "Port Láirge"
+      ]
+    },
+    {
+      "name": "Italy",
+      "name_local": "Italia",
+      "iso2": "IT",
+      "iso3": "ITA",
+      "region": "Europe",
+      "local_language": "it",
+      "flag": {
+        "emoji": "🇮🇹",
+        "png": "https://flagcdn.com/w320/it.png",
+        "png_small": "https://flagcdn.com/w80/it.png",
+        "svg": "https://flagcdn.com/it.svg"
+      },
+      "cities_en": [
+        "Rome",
+        "Milan",
+        "Naples",
+        "Turin",
+        "Florence"
+      ],
+      "cities_local": [
+        "Roma",
+        "Milano",
+        "Napoli",
+        "Torino",
+        "Firenze"
+      ]
+    },
+    {
+      "name": "Jamaica",
+      "name_local": null,
+      "iso2": "JM",
+      "iso3": "JAM",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇯🇲",
+        "png": "https://flagcdn.com/w320/jm.png",
+        "png_small": "https://flagcdn.com/w80/jm.png",
+        "svg": "https://flagcdn.com/jm.svg"
+      },
+      "cities_en": [
+        "Kingston",
+        "Montego Bay",
+        "Spanish Town",
+        "Portmore",
+        "Ocho Rios"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Japan",
+      "name_local": "日本",
+      "iso2": "JP",
+      "iso3": "JPN",
+      "region": "Asia",
+      "local_language": "ja",
+      "flag": {
+        "emoji": "🇯🇵",
+        "png": "https://flagcdn.com/w320/jp.png",
+        "png_small": "https://flagcdn.com/w80/jp.png",
+        "svg": "https://flagcdn.com/jp.svg"
+      },
+      "cities_en": [
+        "Tokyo",
+        "Osaka",
+        "Kyoto",
+        "Yokohama",
+        "Nagoya"
+      ],
+      "cities_local": [
+        "東京",
+        "大阪",
+        "京都",
+        "横浜",
+        "名古屋"
+      ]
+    },
+    {
+      "name": "Jordan",
+      "name_local": "الأردن",
+      "iso2": "JO",
+      "iso3": "JOR",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇯🇴",
+        "png": "https://flagcdn.com/w320/jo.png",
+        "png_small": "https://flagcdn.com/w80/jo.png",
+        "svg": "https://flagcdn.com/jo.svg"
+      },
+      "cities_en": [
+        "Amman",
+        "Zarqa",
+        "Irbid",
+        "Aqaba",
+        "Madaba"
+      ],
+      "cities_local": [
+        "عمّان",
+        "الزرقاء",
+        "إربد",
+        "العقبة",
+        "مادبا"
+      ]
+    },
+    {
+      "name": "Kazakhstan",
+      "name_local": "Қазақстан",
+      "iso2": "KZ",
+      "iso3": "KAZ",
+      "region": "Asia",
+      "local_language": "kk",
+      "flag": {
+        "emoji": "🇰🇿",
+        "png": "https://flagcdn.com/w320/kz.png",
+        "png_small": "https://flagcdn.com/w80/kz.png",
+        "svg": "https://flagcdn.com/kz.svg"
+      },
+      "cities_en": [
+        "Astana",
+        "Almaty",
+        "Shymkent",
+        "Karaganda",
+        "Aktobe"
+      ],
+      "cities_local": [
+        "Астана",
+        "Алматы",
+        "Шымкент",
+        "Қарағанды",
+        "Ақтөбе"
+      ]
+    },
+    {
+      "name": "Kenya",
+      "name_local": null,
+      "iso2": "KE",
+      "iso3": "KEN",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇰🇪",
+        "png": "https://flagcdn.com/w320/ke.png",
+        "png_small": "https://flagcdn.com/w80/ke.png",
+        "svg": "https://flagcdn.com/ke.svg"
+      },
+      "cities_en": [
+        "Nairobi",
+        "Mombasa",
+        "Kisumu",
+        "Nakuru",
+        "Eldoret"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Kiribati",
+      "name_local": null,
+      "iso2": "KI",
+      "iso3": "KIR",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇰🇮",
+        "png": "https://flagcdn.com/w320/ki.png",
+        "png_small": "https://flagcdn.com/w80/ki.png",
+        "svg": "https://flagcdn.com/ki.svg"
+      },
+      "cities_en": [
+        "South Tarawa",
+        "Betio",
+        "Bikenibeu",
+        "Bairiki",
+        "Bonriki"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Kuwait",
+      "name_local": "الكويت",
+      "iso2": "KW",
+      "iso3": "KWT",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇰🇼",
+        "png": "https://flagcdn.com/w320/kw.png",
+        "png_small": "https://flagcdn.com/w80/kw.png",
+        "svg": "https://flagcdn.com/kw.svg"
+      },
+      "cities_en": [
+        "Kuwait City",
+        "Al Ahmadi",
+        "Hawalli",
+        "Salmiya",
+        "Al Jahra"
+      ],
+      "cities_local": [
+        "مدينة الكويت",
+        "الأحمدي",
+        "حولي",
+        "السالمية",
+        "الجهراء"
+      ]
+    },
+    {
+      "name": "Kyrgyzstan",
+      "name_local": "Кыргызстан",
+      "iso2": "KG",
+      "iso3": "KGZ",
+      "region": "Asia",
+      "local_language": "ky",
+      "flag": {
+        "emoji": "🇰🇬",
+        "png": "https://flagcdn.com/w320/kg.png",
+        "png_small": "https://flagcdn.com/w80/kg.png",
+        "svg": "https://flagcdn.com/kg.svg"
+      },
+      "cities_en": [
+        "Bishkek",
+        "Osh",
+        "Jalal-Abad",
+        "Karakol",
+        "Tokmok"
+      ],
+      "cities_local": [
+        "Бишкек",
+        "Ош",
+        "Жалал-Абад",
+        "Каракол",
+        "Токмок"
+      ]
+    },
+    {
+      "name": "Laos",
+      "name_local": "ລາວ",
+      "iso2": "LA",
+      "iso3": "LAO",
+      "region": "Asia",
+      "local_language": "lo",
+      "flag": {
+        "emoji": "🇱🇦",
+        "png": "https://flagcdn.com/w320/la.png",
+        "png_small": "https://flagcdn.com/w80/la.png",
+        "svg": "https://flagcdn.com/la.svg"
+      },
+      "cities_en": [
+        "Vientiane",
+        "Luang Prabang",
+        "Savannakhet",
+        "Pakse",
+        "Thakhek"
+      ],
+      "cities_local": [
+        "ວຽງຈັນ",
+        "ຫຼວງພະບາງ",
+        "ສະຫວັນນະເຂດ",
+        "ປາກເຊ",
+        "ທ່າແຂກ"
+      ]
+    },
+    {
+      "name": "Latvia",
+      "name_local": "Latvija",
+      "iso2": "LV",
+      "iso3": "LVA",
+      "region": "Europe",
+      "local_language": "lv",
+      "flag": {
+        "emoji": "🇱🇻",
+        "png": "https://flagcdn.com/w320/lv.png",
+        "png_small": "https://flagcdn.com/w80/lv.png",
+        "svg": "https://flagcdn.com/lv.svg"
+      },
+      "cities_en": [
+        "Riga",
+        "Daugavpils",
+        "Liepāja",
+        "Jelgava",
+        "Jūrmala"
+      ],
+      "cities_local": [
+        "Rīga",
+        "Daugavpils",
+        "Liepāja",
+        "Jelgava",
+        "Jūrmala"
+      ]
+    },
+    {
+      "name": "Lebanon",
+      "name_local": "لبنان",
+      "iso2": "LB",
+      "iso3": "LBN",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇱🇧",
+        "png": "https://flagcdn.com/w320/lb.png",
+        "png_small": "https://flagcdn.com/w80/lb.png",
+        "svg": "https://flagcdn.com/lb.svg"
+      },
+      "cities_en": [
+        "Beirut",
+        "Tripoli",
+        "Sidon",
+        "Tyre",
+        "Byblos"
+      ],
+      "cities_local": [
+        "بيروت",
+        "طرابلس",
+        "صيدا",
+        "صور",
+        "جبيل"
+      ]
+    },
+    {
+      "name": "Lesotho",
+      "name_local": null,
+      "iso2": "LS",
+      "iso3": "LSO",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇱🇸",
+        "png": "https://flagcdn.com/w320/ls.png",
+        "png_small": "https://flagcdn.com/w80/ls.png",
+        "svg": "https://flagcdn.com/ls.svg"
+      },
+      "cities_en": [
+        "Maseru",
+        "Teyateyaneng",
+        "Mafeteng",
+        "Hlotse",
+        "Mohale's Hoek"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Liberia",
+      "name_local": null,
+      "iso2": "LR",
+      "iso3": "LBR",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇱🇷",
+        "png": "https://flagcdn.com/w320/lr.png",
+        "png_small": "https://flagcdn.com/w80/lr.png",
+        "svg": "https://flagcdn.com/lr.svg"
+      },
+      "cities_en": [
+        "Monrovia",
+        "Gbarnga",
+        "Kakata",
+        "Buchanan",
+        "Harper"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Libya",
+      "name_local": "ليبيا",
+      "iso2": "LY",
+      "iso3": "LBY",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇱🇾",
+        "png": "https://flagcdn.com/w320/ly.png",
+        "png_small": "https://flagcdn.com/w80/ly.png",
+        "svg": "https://flagcdn.com/ly.svg"
+      },
+      "cities_en": [
+        "Tripoli",
+        "Benghazi",
+        "Misrata",
+        "Sabha",
+        "Tobruk"
+      ],
+      "cities_local": [
+        "طرابلس",
+        "بنغازي",
+        "مصراتة",
+        "سبها",
+        "طبرق"
+      ]
+    },
+    {
+      "name": "Liechtenstein",
+      "name_local": null,
+      "iso2": "LI",
+      "iso3": "LIE",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇱🇮",
+        "png": "https://flagcdn.com/w320/li.png",
+        "png_small": "https://flagcdn.com/w80/li.png",
+        "svg": "https://flagcdn.com/li.svg"
+      },
+      "cities_en": [
+        "Vaduz",
+        "Schaan",
+        "Triesen",
+        "Balzers",
+        "Eschen"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Lithuania",
+      "name_local": "Lietuva",
+      "iso2": "LT",
+      "iso3": "LTU",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇱🇹",
+        "png": "https://flagcdn.com/w320/lt.png",
+        "png_small": "https://flagcdn.com/w80/lt.png",
+        "svg": "https://flagcdn.com/lt.svg"
+      },
+      "cities_en": [
+        "Vilnius",
+        "Kaunas",
+        "Klaipėda",
+        "Šiauliai",
+        "Panevėžys"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Luxembourg",
+      "name_local": "Lëtzebuerg",
+      "iso2": "LU",
+      "iso3": "LUX",
+      "region": "Europe",
+      "local_language": "lb",
+      "flag": {
+        "emoji": "🇱🇺",
+        "png": "https://flagcdn.com/w320/lu.png",
+        "png_small": "https://flagcdn.com/w80/lu.png",
+        "svg": "https://flagcdn.com/lu.svg"
+      },
+      "cities_en": [
+        "Luxembourg City",
+        "Esch-sur-Alzette",
+        "Differdange",
+        "Dudelange",
+        "Ettelbruck"
+      ],
+      "cities_local": [
+        "Lëtzebuerg",
+        "Esch-Uelzecht",
+        "Déifferdeng",
+        "Diddeleng",
+        "Ettelbréck"
+      ]
+    },
+    {
+      "name": "Madagascar",
+      "name_local": "Madagasikara",
+      "iso2": "MG",
+      "iso3": "MDG",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇬",
+        "png": "https://flagcdn.com/w320/mg.png",
+        "png_small": "https://flagcdn.com/w80/mg.png",
+        "svg": "https://flagcdn.com/mg.svg"
+      },
+      "cities_en": [
+        "Antananarivo",
+        "Toamasina",
+        "Antsirabe",
+        "Fianarantsoa",
+        "Mahajanga"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Malawi",
+      "name_local": "Malaŵi",
+      "iso2": "MW",
+      "iso3": "MWI",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇼",
+        "png": "https://flagcdn.com/w320/mw.png",
+        "png_small": "https://flagcdn.com/w80/mw.png",
+        "svg": "https://flagcdn.com/mw.svg"
+      },
+      "cities_en": [
+        "Lilongwe",
+        "Blantyre",
+        "Mzuzu",
+        "Zomba",
+        "Kasungu"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Malaysia",
+      "name_local": null,
+      "iso2": "MY",
+      "iso3": "MYS",
+      "region": "Asia",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇾",
+        "png": "https://flagcdn.com/w320/my.png",
+        "png_small": "https://flagcdn.com/w80/my.png",
+        "svg": "https://flagcdn.com/my.svg"
+      },
+      "cities_en": [
+        "Kuala Lumpur",
+        "George Town",
+        "Johor Bahru",
+        "Ipoh",
+        "Kuching"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Maldives",
+      "name_local": "ދިވެހިރާއްޖެ",
+      "iso2": "MV",
+      "iso3": "MDV",
+      "region": "Asia",
+      "local_language": "dv",
+      "flag": {
+        "emoji": "🇲🇻",
+        "png": "https://flagcdn.com/w320/mv.png",
+        "png_small": "https://flagcdn.com/w80/mv.png",
+        "svg": "https://flagcdn.com/mv.svg"
+      },
+      "cities_en": [
+        "Malé",
+        "Addu City",
+        "Fuvahmulah",
+        "Kulhudhuffushi",
+        "Thinadhoo"
+      ],
+      "cities_local": [
+        "މާލެ",
+        "އައްޑޫ ސިޓީ",
+        "ފުވައްމުލައް",
+        "ކުޅުދުއްފުށި",
+        "ތިނަދޫ"
+      ]
+    },
+    {
+      "name": "Mali",
+      "name_local": null,
+      "iso2": "ML",
+      "iso3": "MLI",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇱",
+        "png": "https://flagcdn.com/w320/ml.png",
+        "png_small": "https://flagcdn.com/w80/ml.png",
+        "svg": "https://flagcdn.com/ml.svg"
+      },
+      "cities_en": [
+        "Bamako",
+        "Sikasso",
+        "Mopti",
+        "Ségou",
+        "Gao"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Malta",
+      "name_local": null,
+      "iso2": "MT",
+      "iso3": "MLT",
+      "region": "Europe",
+      "local_language": "mt",
+      "flag": {
+        "emoji": "🇲🇹",
+        "png": "https://flagcdn.com/w320/mt.png",
+        "png_small": "https://flagcdn.com/w80/mt.png",
+        "svg": "https://flagcdn.com/mt.svg"
+      },
+      "cities_en": [
+        "Valletta",
+        "Birkirkara",
+        "Sliema",
+        "Mosta",
+        "Qormi"
+      ],
+      "cities_local": [
+        "Il-Belt Valletta",
+        "Birkirkara",
+        "Tas-Sliema",
+        "Il-Mosta",
+        "Ħal Qormi"
+      ]
+    },
+    {
+      "name": "Marshall Islands",
+      "name_local": "Aolepān Aorōkin M̧ajeļ",
+      "iso2": "MH",
+      "iso3": "MHL",
+      "region": "Oceania",
+      "local_language": "mh",
+      "flag": {
+        "emoji": "🇲🇭",
+        "png": "https://flagcdn.com/w320/mh.png",
+        "png_small": "https://flagcdn.com/w80/mh.png",
+        "svg": "https://flagcdn.com/mh.svg"
+      },
+      "cities_en": [
+        "Majuro",
+        "Ebeye",
+        "Laura",
+        "Jabor",
+        "Wotje"
+      ],
+      "cities_local": [
+        "Mājro",
+        "Epjā",
+        "Laura",
+        "Jebwad",
+        "Wōjjā"
+      ]
+    },
+    {
+      "name": "Mauritania",
+      "name_local": "موريتانيا",
+      "iso2": "MR",
+      "iso3": "MRT",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇲🇷",
+        "png": "https://flagcdn.com/w320/mr.png",
+        "png_small": "https://flagcdn.com/w80/mr.png",
+        "svg": "https://flagcdn.com/mr.svg"
+      },
+      "cities_en": [
+        "Nouakchott",
+        "Nouadhibou",
+        "Rosso",
+        "Kaédi",
+        "Zouérat"
+      ],
+      "cities_local": [
+        "نواكشوط",
+        "نواذيبو",
+        "روصو",
+        "كيهيدي",
+        "ازويرات"
+      ]
+    },
+    {
+      "name": "Mauritius",
+      "name_local": "Maurice",
+      "iso2": "MU",
+      "iso3": "MUS",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇺",
+        "png": "https://flagcdn.com/w320/mu.png",
+        "png_small": "https://flagcdn.com/w80/mu.png",
+        "svg": "https://flagcdn.com/mu.svg"
+      },
+      "cities_en": [
+        "Port Louis",
+        "Beau Bassin-Rose Hill",
+        "Vacoas-Phoenix",
+        "Curepipe",
+        "Quatre Bornes"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Mexico",
+      "name_local": "México",
+      "iso2": "MX",
+      "iso3": "MEX",
+      "region": "Americas",
+      "local_language": "es",
+      "flag": {
+        "emoji": "🇲🇽",
+        "png": "https://flagcdn.com/w320/mx.png",
+        "png_small": "https://flagcdn.com/w80/mx.png",
+        "svg": "https://flagcdn.com/mx.svg"
+      },
+      "cities_en": [
+        "Mexico City",
+        "Guadalajara",
+        "Monterrey",
+        "Puebla",
+        "Tijuana"
+      ],
+      "cities_local": [
+        "Ciudad de México",
+        "Guadalajara",
+        "Monterrey",
+        "Puebla",
+        "Tijuana"
+      ]
+    },
+    {
+      "name": "Micronesia",
+      "name_local": null,
+      "iso2": "FM",
+      "iso3": "FSM",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇫🇲",
+        "png": "https://flagcdn.com/w320/fm.png",
+        "png_small": "https://flagcdn.com/w80/fm.png",
+        "svg": "https://flagcdn.com/fm.svg"
+      },
+      "cities_en": [
+        "Palikir",
+        "Weno",
+        "Kolonia",
+        "Tofol",
+        "Colonia"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Moldova",
+      "name_local": null,
+      "iso2": "MD",
+      "iso3": "MDA",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇩",
+        "png": "https://flagcdn.com/w320/md.png",
+        "png_small": "https://flagcdn.com/w80/md.png",
+        "svg": "https://flagcdn.com/md.svg"
+      },
+      "cities_en": [
+        "Chișinău",
+        "Bălți",
+        "Tiraspol",
+        "Cahul",
+        "Orhei"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Monaco",
+      "name_local": null,
+      "iso2": "MC",
+      "iso3": "MCO",
+      "region": "Europe",
+      "local_language": "fr",
+      "flag": {
+        "emoji": "🇲🇨",
+        "png": "https://flagcdn.com/w320/mc.png",
+        "png_small": "https://flagcdn.com/w80/mc.png",
+        "svg": "https://flagcdn.com/mc.svg"
+      },
+      "cities_en": [
+        "Monaco",
+        "Monte Carlo",
+        "La Condamine",
+        "Fontvieille",
+        "Moneghetti"
+      ],
+      "cities_local": [
+        "Monaco",
+        "Monte-Carlo",
+        "La Condamine",
+        "Fontvieille",
+        "Moneghetti"
+      ]
+    },
+    {
+      "name": "Mongolia",
+      "name_local": "Монгол улс",
+      "iso2": "MN",
+      "iso3": "MNG",
+      "region": "Asia",
+      "local_language": "mn",
+      "flag": {
+        "emoji": "🇲🇳",
+        "png": "https://flagcdn.com/w320/mn.png",
+        "png_small": "https://flagcdn.com/w80/mn.png",
+        "svg": "https://flagcdn.com/mn.svg"
+      },
+      "cities_en": [
+        "Ulaanbaatar",
+        "Erdenet",
+        "Darkhan",
+        "Choibalsan",
+        "Mörön"
+      ],
+      "cities_local": [
+        "Улаанбаатар",
+        "Эрдэнэт",
+        "Дархан",
+        "Чойбалсан",
+        "Мөрөн"
+      ]
+    },
+    {
+      "name": "Montenegro",
+      "name_local": "Crna Gora",
+      "iso2": "ME",
+      "iso3": "MNE",
+      "region": "Europe",
+      "local_language": "sr",
+      "flag": {
+        "emoji": "🇲🇪",
+        "png": "https://flagcdn.com/w320/me.png",
+        "png_small": "https://flagcdn.com/w80/me.png",
+        "svg": "https://flagcdn.com/me.svg"
+      },
+      "cities_en": [
+        "Podgorica",
+        "Nikšić",
+        "Herceg Novi",
+        "Bar",
+        "Budva"
+      ],
+      "cities_local": [
+        "Подгорица",
+        "Никшић",
+        "Херцег Нови",
+        "Бар",
+        "Будва"
+      ]
+    },
+    {
+      "name": "Morocco",
+      "name_local": "المغرب",
+      "iso2": "MA",
+      "iso3": "MAR",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇲🇦",
+        "png": "https://flagcdn.com/w320/ma.png",
+        "png_small": "https://flagcdn.com/w80/ma.png",
+        "svg": "https://flagcdn.com/ma.svg"
+      },
+      "cities_en": [
+        "Rabat",
+        "Casablanca",
+        "Marrakesh",
+        "Fez",
+        "Tangier"
+      ],
+      "cities_local": [
+        "الرباط",
+        "الدار البيضاء",
+        "مراكش",
+        "فاس",
+        "طنجة"
+      ]
+    },
+    {
+      "name": "Mozambique",
+      "name_local": "Moçambique",
+      "iso2": "MZ",
+      "iso3": "MOZ",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇲🇿",
+        "png": "https://flagcdn.com/w320/mz.png",
+        "png_small": "https://flagcdn.com/w80/mz.png",
+        "svg": "https://flagcdn.com/mz.svg"
+      },
+      "cities_en": [
+        "Maputo",
+        "Matola",
+        "Beira",
+        "Nampula",
+        "Quelimane"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Myanmar",
+      "name_local": "မြန်မာ",
+      "iso2": "MM",
+      "iso3": "MMR",
+      "region": "Asia",
+      "local_language": "my",
+      "flag": {
+        "emoji": "🇲🇲",
+        "png": "https://flagcdn.com/w320/mm.png",
+        "png_small": "https://flagcdn.com/w80/mm.png",
+        "svg": "https://flagcdn.com/mm.svg"
+      },
+      "cities_en": [
+        "Naypyidaw",
+        "Yangon",
+        "Mandalay",
+        "Bago",
+        "Mawlamyine"
+      ],
+      "cities_local": [
+        "နေပြည်တော်",
+        "ရန်ကုန်",
+        "မန္တလေး",
+        "ပဲခူး",
+        "မော်လမြိုင်"
+      ]
+    },
+    {
+      "name": "Namibia",
+      "name_local": null,
+      "iso2": "NA",
+      "iso3": "NAM",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇦",
+        "png": "https://flagcdn.com/w320/na.png",
+        "png_small": "https://flagcdn.com/w80/na.png",
+        "svg": "https://flagcdn.com/na.svg"
+      },
+      "cities_en": [
+        "Windhoek",
+        "Walvis Bay",
+        "Swakopmund",
+        "Oshakati",
+        "Rundu"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Nauru",
+      "name_local": "Naoero",
+      "iso2": "NR",
+      "iso3": "NRU",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇷",
+        "png": "https://flagcdn.com/w320/nr.png",
+        "png_small": "https://flagcdn.com/w80/nr.png",
+        "svg": "https://flagcdn.com/nr.svg"
+      },
+      "cities_en": [
+        "Yaren",
+        "Denigomodu",
+        "Aiwo",
+        "Baiti",
+        "Meneng"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Nepal",
+      "name_local": "नेपाल",
+      "iso2": "NP",
+      "iso3": "NPL",
+      "region": "Asia",
+      "local_language": "ne",
+      "flag": {
+        "emoji": "🇳🇵",
+        "png": "https://flagcdn.com/w320/np.png",
+        "png_small": "https://flagcdn.com/w80/np.png",
+        "svg": "https://flagcdn.com/np.svg"
+      },
+      "cities_en": [
+        "Kathmandu",
+        "Pokhara",
+        "Lalitpur",
+        "Biratnagar",
+        "Bhaktapur"
+      ],
+      "cities_local": [
+        "काठमाडौँ",
+        "पोखरा",
+        "ललितपुर",
+        "विराटनगर",
+        "भक्तपुर"
+      ]
+    },
+    {
+      "name": "Netherlands",
+      "name_local": "Nederland",
+      "iso2": "NL",
+      "iso3": "NLD",
+      "region": "Europe",
+      "local_language": "nl",
+      "flag": {
+        "emoji": "🇳🇱",
+        "png": "https://flagcdn.com/w320/nl.png",
+        "png_small": "https://flagcdn.com/w80/nl.png",
+        "svg": "https://flagcdn.com/nl.svg"
+      },
+      "cities_en": [
+        "Amsterdam",
+        "The Hague",
+        "Rotterdam",
+        "Utrecht",
+        "Eindhoven"
+      ],
+      "cities_local": [
+        "Amsterdam",
+        "Den Haag",
+        "Rotterdam",
+        "Utrecht",
+        "Eindhoven"
+      ]
+    },
+    {
+      "name": "New Zealand",
+      "name_local": "Aotearoa",
+      "iso2": "NZ",
+      "iso3": "NZL",
+      "region": "Oceania",
+      "local_language": "mi",
+      "flag": {
+        "emoji": "🇳🇿",
+        "png": "https://flagcdn.com/w320/nz.png",
+        "png_small": "https://flagcdn.com/w80/nz.png",
+        "svg": "https://flagcdn.com/nz.svg"
+      },
+      "cities_en": [
+        "Wellington",
+        "Auckland",
+        "Christchurch",
+        "Hamilton",
+        "Dunedin"
+      ],
+      "cities_local": [
+        "Te Whanganui-a-Tara",
+        "Tāmaki Makaurau",
+        "Ōtautahi",
+        "Kirikiriroa",
+        "Ōtepoti"
+      ]
+    },
+    {
+      "name": "Nicaragua",
+      "name_local": null,
+      "iso2": "NI",
+      "iso3": "NIC",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇮",
+        "png": "https://flagcdn.com/w320/ni.png",
+        "png_small": "https://flagcdn.com/w80/ni.png",
+        "svg": "https://flagcdn.com/ni.svg"
+      },
+      "cities_en": [
+        "Managua",
+        "León",
+        "Masaya",
+        "Matagalpa",
+        "Granada"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Niger",
+      "name_local": null,
+      "iso2": "NE",
+      "iso3": "NER",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇪",
+        "png": "https://flagcdn.com/w320/ne.png",
+        "png_small": "https://flagcdn.com/w80/ne.png",
+        "svg": "https://flagcdn.com/ne.svg"
+      },
+      "cities_en": [
+        "Niamey",
+        "Zinder",
+        "Maradi",
+        "Agadez",
+        "Tahoua"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Nigeria",
+      "name_local": null,
+      "iso2": "NG",
+      "iso3": "NGA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇬",
+        "png": "https://flagcdn.com/w320/ng.png",
+        "png_small": "https://flagcdn.com/w80/ng.png",
+        "svg": "https://flagcdn.com/ng.svg"
+      },
+      "cities_en": [
+        "Abuja",
+        "Lagos",
+        "Kano",
+        "Ibadan",
+        "Port Harcourt"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "North Korea",
+      "name_local": "조선민주주의인민공화국",
+      "iso2": "KP",
+      "iso3": "PRK",
+      "region": "Asia",
+      "local_language": "ko",
+      "flag": {
+        "emoji": "🇰🇵",
+        "png": "https://flagcdn.com/w320/kp.png",
+        "png_small": "https://flagcdn.com/w80/kp.png",
+        "svg": "https://flagcdn.com/kp.svg"
+      },
+      "cities_en": [
+        "Pyongyang",
+        "Hamhung",
+        "Chongjin",
+        "Nampo",
+        "Wonsan"
+      ],
+      "cities_local": [
+        "평양",
+        "함흥",
+        "청진",
+        "남포",
+        "원산"
+      ]
+    },
+    {
+      "name": "North Macedonia",
+      "name_local": "Северна Македонија",
+      "iso2": "MK",
+      "iso3": "MKD",
+      "region": "Europe",
+      "local_language": "mk",
+      "flag": {
+        "emoji": "🇲🇰",
+        "png": "https://flagcdn.com/w320/mk.png",
+        "png_small": "https://flagcdn.com/w80/mk.png",
+        "svg": "https://flagcdn.com/mk.svg"
+      },
+      "cities_en": [
+        "Skopje",
+        "Bitola",
+        "Kumanovo",
+        "Prilep",
+        "Tetovo"
+      ],
+      "cities_local": [
+        "Скопје",
+        "Битола",
+        "Куманово",
+        "Прилеп",
+        "Тетово"
+      ]
+    },
+    {
+      "name": "Norway",
+      "name_local": "Norge",
+      "iso2": "NO",
+      "iso3": "NOR",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇳🇴",
+        "png": "https://flagcdn.com/w320/no.png",
+        "png_small": "https://flagcdn.com/w80/no.png",
+        "svg": "https://flagcdn.com/no.svg"
+      },
+      "cities_en": [
+        "Oslo",
+        "Bergen",
+        "Trondheim",
+        "Stavanger",
+        "Tromsø"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Oman",
+      "name_local": "عُمان",
+      "iso2": "OM",
+      "iso3": "OMN",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇴🇲",
+        "png": "https://flagcdn.com/w320/om.png",
+        "png_small": "https://flagcdn.com/w80/om.png",
+        "svg": "https://flagcdn.com/om.svg"
+      },
+      "cities_en": [
+        "Muscat",
+        "Salalah",
+        "Sohar",
+        "Nizwa",
+        "Sur"
+      ],
+      "cities_local": [
+        "مسقط",
+        "صلالة",
+        "صحار",
+        "نزوى",
+        "صور"
+      ]
+    },
+    {
+      "name": "Pakistan",
+      "name_local": "پاکستان",
+      "iso2": "PK",
+      "iso3": "PAK",
+      "region": "Asia",
+      "local_language": "ur",
+      "flag": {
+        "emoji": "🇵🇰",
+        "png": "https://flagcdn.com/w320/pk.png",
+        "png_small": "https://flagcdn.com/w80/pk.png",
+        "svg": "https://flagcdn.com/pk.svg"
+      },
+      "cities_en": [
+        "Islamabad",
+        "Karachi",
+        "Lahore",
+        "Faisalabad",
+        "Peshawar"
+      ],
+      "cities_local": [
+        "اسلام آباد",
+        "کراچی",
+        "لاہور",
+        "فیصل آباد",
+        "پشاور"
+      ]
+    },
+    {
+      "name": "Palau",
+      "name_local": "Belau",
+      "iso2": "PW",
+      "iso3": "PLW",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇵🇼",
+        "png": "https://flagcdn.com/w320/pw.png",
+        "png_small": "https://flagcdn.com/w80/pw.png",
+        "svg": "https://flagcdn.com/pw.svg"
+      },
+      "cities_en": [
+        "Ngerulmud",
+        "Koror",
+        "Airai",
+        "Melekeok",
+        "Kloulklubed"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Palestine",
+      "name_local": "فلسطين",
+      "iso2": "PS",
+      "iso3": "PSE",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇵🇸",
+        "png": "https://flagcdn.com/w320/ps.png",
+        "png_small": "https://flagcdn.com/w80/ps.png",
+        "svg": "https://flagcdn.com/ps.svg"
+      },
+      "cities_en": [
+        "Ramallah",
+        "Gaza",
+        "Hebron",
+        "Nablus",
+        "Bethlehem"
+      ],
+      "cities_local": [
+        "رام الله",
+        "غزة",
+        "الخليل",
+        "نابلس",
+        "بيت لحم"
+      ]
+    },
+    {
+      "name": "Panama",
+      "name_local": "Panamá",
+      "iso2": "PA",
+      "iso3": "PAN",
+      "region": "Americas",
+      "local_language": "es",
+      "flag": {
+        "emoji": "🇵🇦",
+        "png": "https://flagcdn.com/w320/pa.png",
+        "png_small": "https://flagcdn.com/w80/pa.png",
+        "svg": "https://flagcdn.com/pa.svg"
+      },
+      "cities_en": [
+        "Panama City",
+        "Colón",
+        "David",
+        "Santiago",
+        "Chitré"
+      ],
+      "cities_local": [
+        "Ciudad de Panamá",
+        "Colón",
+        "David",
+        "Santiago",
+        "Chitré"
+      ]
+    },
+    {
+      "name": "Papua New Guinea",
+      "name_local": "Papua Niugini",
+      "iso2": "PG",
+      "iso3": "PNG",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇵🇬",
+        "png": "https://flagcdn.com/w320/pg.png",
+        "png_small": "https://flagcdn.com/w80/pg.png",
+        "svg": "https://flagcdn.com/pg.svg"
+      },
+      "cities_en": [
+        "Port Moresby",
+        "Lae",
+        "Mount Hagen",
+        "Madang",
+        "Rabaul"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Paraguay",
+      "name_local": null,
+      "iso2": "PY",
+      "iso3": "PRY",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇵🇾",
+        "png": "https://flagcdn.com/w320/py.png",
+        "png_small": "https://flagcdn.com/w80/py.png",
+        "svg": "https://flagcdn.com/py.svg"
+      },
+      "cities_en": [
+        "Asunción",
+        "Ciudad del Este",
+        "San Lorenzo",
+        "Luque",
+        "Encarnación"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Peru",
+      "name_local": "Perú",
+      "iso2": "PE",
+      "iso3": "PER",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇵🇪",
+        "png": "https://flagcdn.com/w320/pe.png",
+        "png_small": "https://flagcdn.com/w80/pe.png",
+        "svg": "https://flagcdn.com/pe.svg"
+      },
+      "cities_en": [
+        "Lima",
+        "Arequipa",
+        "Trujillo",
+        "Chiclayo",
+        "Cusco"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Philippines",
+      "name_local": "Pilipinas",
+      "iso2": "PH",
+      "iso3": "PHL",
+      "region": "Asia",
+      "local_language": "fil",
+      "flag": {
+        "emoji": "🇵🇭",
+        "png": "https://flagcdn.com/w320/ph.png",
+        "png_small": "https://flagcdn.com/w80/ph.png",
+        "svg": "https://flagcdn.com/ph.svg"
+      },
+      "cities_en": [
+        "Manila",
+        "Quezon City",
+        "Davao City",
+        "Cebu City",
+        "Makati"
+      ],
+      "cities_local": [
+        "Maynila",
+        "Lungsod Quezon",
+        "Lungsod Davao",
+        "Dakbayan sa Sugbo",
+        "Makati"
+      ]
+    },
+    {
+      "name": "Poland",
+      "name_local": "Polska",
+      "iso2": "PL",
+      "iso3": "POL",
+      "region": "Europe",
+      "local_language": "pl",
+      "flag": {
+        "emoji": "🇵🇱",
+        "png": "https://flagcdn.com/w320/pl.png",
+        "png_small": "https://flagcdn.com/w80/pl.png",
+        "svg": "https://flagcdn.com/pl.svg"
+      },
+      "cities_en": [
+        "Warsaw",
+        "Kraków",
+        "Łódź",
+        "Wrocław",
+        "Poznań"
+      ],
+      "cities_local": [
+        "Warszawa",
+        "Kraków",
+        "Łódź",
+        "Wrocław",
+        "Poznań"
+      ]
+    },
+    {
+      "name": "Portugal",
+      "name_local": null,
+      "iso2": "PT",
+      "iso3": "PRT",
+      "region": "Europe",
+      "local_language": "pt",
+      "flag": {
+        "emoji": "🇵🇹",
+        "png": "https://flagcdn.com/w320/pt.png",
+        "png_small": "https://flagcdn.com/w80/pt.png",
+        "svg": "https://flagcdn.com/pt.svg"
+      },
+      "cities_en": [
+        "Lisbon",
+        "Porto",
+        "Braga",
+        "Coimbra",
+        "Faro"
+      ],
+      "cities_local": [
+        "Lisboa",
+        "Porto",
+        "Braga",
+        "Coimbra",
+        "Faro"
+      ]
+    },
+    {
+      "name": "Qatar",
+      "name_local": "قطر",
+      "iso2": "QA",
+      "iso3": "QAT",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇶🇦",
+        "png": "https://flagcdn.com/w320/qa.png",
+        "png_small": "https://flagcdn.com/w80/qa.png",
+        "svg": "https://flagcdn.com/qa.svg"
+      },
+      "cities_en": [
+        "Doha",
+        "Al Rayyan",
+        "Al Wakrah",
+        "Al Khor",
+        "Umm Salal"
+      ],
+      "cities_local": [
+        "الدوحة",
+        "الريان",
+        "الوكرة",
+        "الخور",
+        "أم صلال"
+      ]
+    },
+    {
+      "name": "Romania",
+      "name_local": "România",
+      "iso2": "RO",
+      "iso3": "ROU",
+      "region": "Europe",
+      "local_language": "ro",
+      "flag": {
+        "emoji": "🇷🇴",
+        "png": "https://flagcdn.com/w320/ro.png",
+        "png_small": "https://flagcdn.com/w80/ro.png",
+        "svg": "https://flagcdn.com/ro.svg"
+      },
+      "cities_en": [
+        "Bucharest",
+        "Cluj-Napoca",
+        "Timișoara",
+        "Iași",
+        "Constanța"
+      ],
+      "cities_local": [
+        "București",
+        "Cluj-Napoca",
+        "Timișoara",
+        "Iași",
+        "Constanța"
+      ]
+    },
+    {
+      "name": "Russia",
+      "name_local": "Россия",
+      "iso2": "RU",
+      "iso3": "RUS",
+      "region": "Europe",
+      "local_language": "ru",
+      "flag": {
+        "emoji": "🇷🇺",
+        "png": "https://flagcdn.com/w320/ru.png",
+        "png_small": "https://flagcdn.com/w80/ru.png",
+        "svg": "https://flagcdn.com/ru.svg"
+      },
+      "cities_en": [
+        "Moscow",
+        "Saint Petersburg",
+        "Novosibirsk",
+        "Yekaterinburg",
+        "Kazan"
+      ],
+      "cities_local": [
+        "Москва",
+        "Санкт-Петербург",
+        "Новосибирск",
+        "Екатеринбург",
+        "Казань"
+      ]
+    },
+    {
+      "name": "Rwanda",
+      "name_local": "U Rwanda",
+      "iso2": "RW",
+      "iso3": "RWA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇷🇼",
+        "png": "https://flagcdn.com/w320/rw.png",
+        "png_small": "https://flagcdn.com/w80/rw.png",
+        "svg": "https://flagcdn.com/rw.svg"
+      },
+      "cities_en": [
+        "Kigali",
+        "Huye",
+        "Rubavu",
+        "Musanze",
+        "Muhanga"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Saint Kitts and Nevis",
+      "name_local": null,
+      "iso2": "KN",
+      "iso3": "KNA",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇰🇳",
+        "png": "https://flagcdn.com/w320/kn.png",
+        "png_small": "https://flagcdn.com/w80/kn.png",
+        "svg": "https://flagcdn.com/kn.svg"
+      },
+      "cities_en": [
+        "Basseterre",
+        "Charlestown",
+        "Sandy Point Town",
+        "Cayon",
+        "Dieppe Bay Town"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Saint Lucia",
+      "name_local": null,
+      "iso2": "LC",
+      "iso3": "LCA",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇱🇨",
+        "png": "https://flagcdn.com/w320/lc.png",
+        "png_small": "https://flagcdn.com/w80/lc.png",
+        "svg": "https://flagcdn.com/lc.svg"
+      },
+      "cities_en": [
+        "Castries",
+        "Vieux Fort",
+        "Soufrière",
+        "Gros Islet",
+        "Micoud"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Saint Vincent and the Grenadines",
+      "name_local": null,
+      "iso2": "VC",
+      "iso3": "VCT",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇻🇨",
+        "png": "https://flagcdn.com/w320/vc.png",
+        "png_small": "https://flagcdn.com/w80/vc.png",
+        "svg": "https://flagcdn.com/vc.svg"
+      },
+      "cities_en": [
+        "Kingstown",
+        "Georgetown",
+        "Barrouallie",
+        "Port Elizabeth",
+        "Chateaubelair"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Samoa",
+      "name_local": null,
+      "iso2": "WS",
+      "iso3": "WSM",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇼🇸",
+        "png": "https://flagcdn.com/w320/ws.png",
+        "png_small": "https://flagcdn.com/w80/ws.png",
+        "svg": "https://flagcdn.com/ws.svg"
+      },
+      "cities_en": [
+        "Apia",
+        "Vaitele",
+        "Faleula",
+        "Siusega",
+        "Salelologa"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "San Marino",
+      "name_local": null,
+      "iso2": "SM",
+      "iso3": "SMR",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇲",
+        "png": "https://flagcdn.com/w320/sm.png",
+        "png_small": "https://flagcdn.com/w80/sm.png",
+        "svg": "https://flagcdn.com/sm.svg"
+      },
+      "cities_en": [
+        "San Marino",
+        "Serravalle",
+        "Borgo Maggiore",
+        "Domagnano",
+        "Fiorentino"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Saudi Arabia",
+      "name_local": "المملكة العربية السعودية",
+      "iso2": "SA",
+      "iso3": "SAU",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇸🇦",
+        "png": "https://flagcdn.com/w320/sa.png",
+        "png_small": "https://flagcdn.com/w80/sa.png",
+        "svg": "https://flagcdn.com/sa.svg"
+      },
+      "cities_en": [
+        "Riyadh",
+        "Jeddah",
+        "Mecca",
+        "Medina",
+        "Dammam"
+      ],
+      "cities_local": [
+        "الرياض",
+        "جدة",
+        "مكة المكرمة",
+        "المدينة المنورة",
+        "الدمام"
+      ]
+    },
+    {
+      "name": "Senegal",
+      "name_local": "Sénégal",
+      "iso2": "SN",
+      "iso3": "SEN",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇳",
+        "png": "https://flagcdn.com/w320/sn.png",
+        "png_small": "https://flagcdn.com/w80/sn.png",
+        "svg": "https://flagcdn.com/sn.svg"
+      },
+      "cities_en": [
+        "Dakar",
+        "Touba",
+        "Thiès",
+        "Saint-Louis",
+        "Ziguinchor"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Serbia",
+      "name_local": "Србија",
+      "iso2": "RS",
+      "iso3": "SRB",
+      "region": "Europe",
+      "local_language": "sr",
+      "flag": {
+        "emoji": "🇷🇸",
+        "png": "https://flagcdn.com/w320/rs.png",
+        "png_small": "https://flagcdn.com/w80/rs.png",
+        "svg": "https://flagcdn.com/rs.svg"
+      },
+      "cities_en": [
+        "Belgrade",
+        "Novi Sad",
+        "Niš",
+        "Kragujevac",
+        "Subotica"
+      ],
+      "cities_local": [
+        "Београд",
+        "Нови Сад",
+        "Ниш",
+        "Крагујевац",
+        "Суботица"
+      ]
+    },
+    {
+      "name": "Seychelles",
+      "name_local": "Sesel",
+      "iso2": "SC",
+      "iso3": "SYC",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇨",
+        "png": "https://flagcdn.com/w320/sc.png",
+        "png_small": "https://flagcdn.com/w80/sc.png",
+        "svg": "https://flagcdn.com/sc.svg"
+      },
+      "cities_en": [
+        "Victoria",
+        "Anse Boileau",
+        "Beau Vallon",
+        "Takamaka",
+        "Bel Ombre"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Sierra Leone",
+      "name_local": null,
+      "iso2": "SL",
+      "iso3": "SLE",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇱",
+        "png": "https://flagcdn.com/w320/sl.png",
+        "png_small": "https://flagcdn.com/w80/sl.png",
+        "svg": "https://flagcdn.com/sl.svg"
+      },
+      "cities_en": [
+        "Freetown",
+        "Bo",
+        "Kenema",
+        "Makeni",
+        "Koidu"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Singapore",
+      "name_local": null,
+      "iso2": "SG",
+      "iso3": "SGP",
+      "region": "Asia",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇬",
+        "png": "https://flagcdn.com/w320/sg.png",
+        "png_small": "https://flagcdn.com/w80/sg.png",
+        "svg": "https://flagcdn.com/sg.svg"
+      },
+      "cities_en": [
+        "Singapore",
+        "Jurong",
+        "Woodlands",
+        "Tampines",
+        "Bedok"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Slovakia",
+      "name_local": "Slovensko",
+      "iso2": "SK",
+      "iso3": "SVK",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇰",
+        "png": "https://flagcdn.com/w320/sk.png",
+        "png_small": "https://flagcdn.com/w80/sk.png",
+        "svg": "https://flagcdn.com/sk.svg"
+      },
+      "cities_en": [
+        "Bratislava",
+        "Košice",
+        "Prešov",
+        "Žilina",
+        "Nitra"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Slovenia",
+      "name_local": "Slovenija",
+      "iso2": "SI",
+      "iso3": "SVN",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇮",
+        "png": "https://flagcdn.com/w320/si.png",
+        "png_small": "https://flagcdn.com/w80/si.png",
+        "svg": "https://flagcdn.com/si.svg"
+      },
+      "cities_en": [
+        "Ljubljana",
+        "Maribor",
+        "Celje",
+        "Kranj",
+        "Koper"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Solomon Islands",
+      "name_local": null,
+      "iso2": "SB",
+      "iso3": "SLB",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇧",
+        "png": "https://flagcdn.com/w320/sb.png",
+        "png_small": "https://flagcdn.com/w80/sb.png",
+        "svg": "https://flagcdn.com/sb.svg"
+      },
+      "cities_en": [
+        "Honiara",
+        "Gizo",
+        "Auki",
+        "Munda",
+        "Tulagi"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Somalia",
+      "name_local": "Soomaaliya",
+      "iso2": "SO",
+      "iso3": "SOM",
+      "region": "Africa",
+      "local_language": "so",
+      "flag": {
+        "emoji": "🇸🇴",
+        "png": "https://flagcdn.com/w320/so.png",
+        "png_small": "https://flagcdn.com/w80/so.png",
+        "svg": "https://flagcdn.com/so.svg"
+      },
+      "cities_en": [
+        "Mogadishu",
+        "Hargeisa",
+        "Bosaso",
+        "Kismayo",
+        "Galkayo"
+      ],
+      "cities_local": [
+        "Muqdisho",
+        "Hargeysa",
+        "Boosaaso",
+        "Kismaayo",
+        "Gaalkacyo"
+      ]
+    },
+    {
+      "name": "South Africa",
+      "name_local": null,
+      "iso2": "ZA",
+      "iso3": "ZAF",
+      "region": "Africa",
+      "local_language": "af",
+      "flag": {
+        "emoji": "🇿🇦",
+        "png": "https://flagcdn.com/w320/za.png",
+        "png_small": "https://flagcdn.com/w80/za.png",
+        "svg": "https://flagcdn.com/za.svg"
+      },
+      "cities_en": [
+        "Pretoria",
+        "Cape Town",
+        "Johannesburg",
+        "Durban",
+        "Bloemfontein"
+      ],
+      "cities_local": [
+        "Pretoria",
+        "Kaapstad",
+        "Johannesburg",
+        "Durban",
+        "Bloemfontein"
+      ]
+    },
+    {
+      "name": "South Korea",
+      "name_local": "대한민국",
+      "iso2": "KR",
+      "iso3": "KOR",
+      "region": "Asia",
+      "local_language": "ko",
+      "flag": {
+        "emoji": "🇰🇷",
+        "png": "https://flagcdn.com/w320/kr.png",
+        "png_small": "https://flagcdn.com/w80/kr.png",
+        "svg": "https://flagcdn.com/kr.svg"
+      },
+      "cities_en": [
+        "Seoul",
+        "Busan",
+        "Incheon",
+        "Daegu",
+        "Daejeon"
+      ],
+      "cities_local": [
+        "서울",
+        "부산",
+        "인천",
+        "대구",
+        "대전"
+      ]
+    },
+    {
+      "name": "South Sudan",
+      "name_local": null,
+      "iso2": "SS",
+      "iso3": "SSD",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇸",
+        "png": "https://flagcdn.com/w320/ss.png",
+        "png_small": "https://flagcdn.com/w80/ss.png",
+        "svg": "https://flagcdn.com/ss.svg"
+      },
+      "cities_en": [
+        "Juba",
+        "Wau",
+        "Malakal",
+        "Yei",
+        "Bor"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Spain",
+      "name_local": "España",
+      "iso2": "ES",
+      "iso3": "ESP",
+      "region": "Europe",
+      "local_language": "es",
+      "flag": {
+        "emoji": "🇪🇸",
+        "png": "https://flagcdn.com/w320/es.png",
+        "png_small": "https://flagcdn.com/w80/es.png",
+        "svg": "https://flagcdn.com/es.svg"
+      },
+      "cities_en": [
+        "Madrid",
+        "Barcelona",
+        "Valencia",
+        "Seville",
+        "Bilbao"
+      ],
+      "cities_local": [
+        "Madrid",
+        "Barcelona",
+        "València",
+        "Sevilla",
+        "Bilbao"
+      ]
+    },
+    {
+      "name": "Sri Lanka",
+      "name_local": "ශ්‍රී ලංකාව",
+      "iso2": "LK",
+      "iso3": "LKA",
+      "region": "Asia",
+      "local_language": "si",
+      "flag": {
+        "emoji": "🇱🇰",
+        "png": "https://flagcdn.com/w320/lk.png",
+        "png_small": "https://flagcdn.com/w80/lk.png",
+        "svg": "https://flagcdn.com/lk.svg"
+      },
+      "cities_en": [
+        "Sri Jayawardenepura Kotte",
+        "Colombo",
+        "Kandy",
+        "Galle",
+        "Jaffna"
+      ],
+      "cities_local": [
+        "ශ්‍රී ජයවර්ධනපුර කෝට්ටේ",
+        "කොළඹ",
+        "මහනුවර",
+        "ගාල්ල",
+        "යාපනය"
+      ]
+    },
+    {
+      "name": "Sudan",
+      "name_local": "السودان",
+      "iso2": "SD",
+      "iso3": "SDN",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇸🇩",
+        "png": "https://flagcdn.com/w320/sd.png",
+        "png_small": "https://flagcdn.com/w80/sd.png",
+        "svg": "https://flagcdn.com/sd.svg"
+      },
+      "cities_en": [
+        "Khartoum",
+        "Omdurman",
+        "Port Sudan",
+        "Kassala",
+        "Nyala"
+      ],
+      "cities_local": [
+        "الخرطوم",
+        "أم درمان",
+        "بورتسودان",
+        "كسلا",
+        "نيالا"
+      ]
+    },
+    {
+      "name": "Suriname",
+      "name_local": null,
+      "iso2": "SR",
+      "iso3": "SUR",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇷",
+        "png": "https://flagcdn.com/w320/sr.png",
+        "png_small": "https://flagcdn.com/w80/sr.png",
+        "svg": "https://flagcdn.com/sr.svg"
+      },
+      "cities_en": [
+        "Paramaribo",
+        "Lelydorp",
+        "Nieuw Nickerie",
+        "Moengo",
+        "Albina"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Sweden",
+      "name_local": "Sverige",
+      "iso2": "SE",
+      "iso3": "SWE",
+      "region": "Europe",
+      "local_language": "sv",
+      "flag": {
+        "emoji": "🇸🇪",
+        "png": "https://flagcdn.com/w320/se.png",
+        "png_small": "https://flagcdn.com/w80/se.png",
+        "svg": "https://flagcdn.com/se.svg"
+      },
+      "cities_en": [
+        "Stockholm",
+        "Gothenburg",
+        "Malmö",
+        "Uppsala",
+        "Västerås"
+      ],
+      "cities_local": [
+        "Stockholm",
+        "Göteborg",
+        "Malmö",
+        "Uppsala",
+        "Västerås"
+      ]
+    },
+    {
+      "name": "Switzerland",
+      "name_local": "Schweiz / Suisse",
+      "iso2": "CH",
+      "iso3": "CHE",
+      "region": "Europe",
+      "local_language": "de",
+      "flag": {
+        "emoji": "🇨🇭",
+        "png": "https://flagcdn.com/w320/ch.png",
+        "png_small": "https://flagcdn.com/w80/ch.png",
+        "svg": "https://flagcdn.com/ch.svg"
+      },
+      "cities_en": [
+        "Bern",
+        "Zurich",
+        "Geneva",
+        "Basel",
+        "Lausanne"
+      ],
+      "cities_local": [
+        "Bern",
+        "Zürich",
+        "Genf",
+        "Basel",
+        "Lausanne"
+      ]
+    },
+    {
+      "name": "Syria",
+      "name_local": "سوريا",
+      "iso2": "SY",
+      "iso3": "SYR",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇸🇾",
+        "png": "https://flagcdn.com/w320/sy.png",
+        "png_small": "https://flagcdn.com/w80/sy.png",
+        "svg": "https://flagcdn.com/sy.svg"
+      },
+      "cities_en": [
+        "Damascus",
+        "Aleppo",
+        "Homs",
+        "Latakia",
+        "Hama"
+      ],
+      "cities_local": [
+        "دمشق",
+        "حلب",
+        "حمص",
+        "اللاذقية",
+        "حماة"
+      ]
+    },
+    {
+      "name": "São Tomé and Príncipe",
+      "name_local": "São Tomé e Príncipe",
+      "iso2": "ST",
+      "iso3": "STP",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇸🇹",
+        "png": "https://flagcdn.com/w320/st.png",
+        "png_small": "https://flagcdn.com/w80/st.png",
+        "svg": "https://flagcdn.com/st.svg"
+      },
+      "cities_en": [
+        "São Tomé",
+        "Trindade",
+        "Neves",
+        "Santana",
+        "Guadalupe"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Tajikistan",
+      "name_local": "Тоҷикистон",
+      "iso2": "TJ",
+      "iso3": "TJK",
+      "region": "Asia",
+      "local_language": "tg",
+      "flag": {
+        "emoji": "🇹🇯",
+        "png": "https://flagcdn.com/w320/tj.png",
+        "png_small": "https://flagcdn.com/w80/tj.png",
+        "svg": "https://flagcdn.com/tj.svg"
+      },
+      "cities_en": [
+        "Dushanbe",
+        "Khujand",
+        "Kulob",
+        "Bokhtar",
+        "Istaravshan"
+      ],
+      "cities_local": [
+        "Душанбе",
+        "Хуҷанд",
+        "Кӯлоб",
+        "Бохтар",
+        "Истаравшан"
+      ]
+    },
+    {
+      "name": "Tanzania",
+      "name_local": null,
+      "iso2": "TZ",
+      "iso3": "TZA",
+      "region": "Africa",
+      "local_language": "sw",
+      "flag": {
+        "emoji": "🇹🇿",
+        "png": "https://flagcdn.com/w320/tz.png",
+        "png_small": "https://flagcdn.com/w80/tz.png",
+        "svg": "https://flagcdn.com/tz.svg"
+      },
+      "cities_en": [
+        "Dodoma",
+        "Dar es Salaam",
+        "Mwanza",
+        "Arusha",
+        "Zanzibar City"
+      ],
+      "cities_local": [
+        "Dodoma",
+        "Dar es Salaam",
+        "Mwanza",
+        "Arusha",
+        "Mji wa Zanzibar"
+      ]
+    },
+    {
+      "name": "Thailand",
+      "name_local": "ประเทศไทย",
+      "iso2": "TH",
+      "iso3": "THA",
+      "region": "Asia",
+      "local_language": "th",
+      "flag": {
+        "emoji": "🇹🇭",
+        "png": "https://flagcdn.com/w320/th.png",
+        "png_small": "https://flagcdn.com/w80/th.png",
+        "svg": "https://flagcdn.com/th.svg"
+      },
+      "cities_en": [
+        "Bangkok",
+        "Chiang Mai",
+        "Phuket",
+        "Pattaya",
+        "Khon Kaen"
+      ],
+      "cities_local": [
+        "กรุงเทพมหานคร",
+        "เชียงใหม่",
+        "ภูเก็ต",
+        "พัทยา",
+        "ขอนแก่น"
+      ]
+    },
+    {
+      "name": "Timor-Leste",
+      "name_local": "Timór-Leste",
+      "iso2": "TL",
+      "iso3": "TLS",
+      "region": "Asia",
+      "local_language": "pt",
+      "flag": {
+        "emoji": "🇹🇱",
+        "png": "https://flagcdn.com/w320/tl.png",
+        "png_small": "https://flagcdn.com/w80/tl.png",
+        "svg": "https://flagcdn.com/tl.svg"
+      },
+      "cities_en": [
+        "Dili",
+        "Baucau",
+        "Maliana",
+        "Suai",
+        "Lospalos"
+      ],
+      "cities_local": [
+        "Díli",
+        "Baucau",
+        "Maliana",
+        "Suai",
+        "Lospalos"
+      ]
+    },
+    {
+      "name": "Togo",
+      "name_local": null,
+      "iso2": "TG",
+      "iso3": "TGO",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇹🇬",
+        "png": "https://flagcdn.com/w320/tg.png",
+        "png_small": "https://flagcdn.com/w80/tg.png",
+        "svg": "https://flagcdn.com/tg.svg"
+      },
+      "cities_en": [
+        "Lomé",
+        "Sokodé",
+        "Kara",
+        "Kpalimé",
+        "Atakpamé"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Tonga",
+      "name_local": null,
+      "iso2": "TO",
+      "iso3": "TON",
+      "region": "Oceania",
+      "local_language": "to",
+      "flag": {
+        "emoji": "🇹🇴",
+        "png": "https://flagcdn.com/w320/to.png",
+        "png_small": "https://flagcdn.com/w80/to.png",
+        "svg": "https://flagcdn.com/to.svg"
+      },
+      "cities_en": [
+        "Nuku'alofa",
+        "Neiafu",
+        "Haveluloto",
+        "Vaini",
+        "Pangai"
+      ],
+      "cities_local": [
+        "Nukuʻalofa",
+        "Neiafu",
+        "Haveluloto",
+        "Vaini",
+        "Pangai"
+      ]
+    },
+    {
+      "name": "Trinidad and Tobago",
+      "name_local": null,
+      "iso2": "TT",
+      "iso3": "TTO",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇹🇹",
+        "png": "https://flagcdn.com/w320/tt.png",
+        "png_small": "https://flagcdn.com/w80/tt.png",
+        "svg": "https://flagcdn.com/tt.svg"
+      },
+      "cities_en": [
+        "Port of Spain",
+        "San Fernando",
+        "Chaguanas",
+        "Arima",
+        "Scarborough"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Tunisia",
+      "name_local": "تونس",
+      "iso2": "TN",
+      "iso3": "TUN",
+      "region": "Africa",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇹🇳",
+        "png": "https://flagcdn.com/w320/tn.png",
+        "png_small": "https://flagcdn.com/w80/tn.png",
+        "svg": "https://flagcdn.com/tn.svg"
+      },
+      "cities_en": [
+        "Tunis",
+        "Sfax",
+        "Sousse",
+        "Kairouan",
+        "Bizerte"
+      ],
+      "cities_local": [
+        "تونس",
+        "صفاقس",
+        "سوسة",
+        "القيروان",
+        "بنزرت"
+      ]
+    },
+    {
+      "name": "Turkey",
+      "name_local": "Türkiye",
+      "iso2": "TR",
+      "iso3": "TUR",
+      "region": "Asia",
+      "local_language": "tr",
+      "flag": {
+        "emoji": "🇹🇷",
+        "png": "https://flagcdn.com/w320/tr.png",
+        "png_small": "https://flagcdn.com/w80/tr.png",
+        "svg": "https://flagcdn.com/tr.svg"
+      },
+      "cities_en": [
+        "Ankara",
+        "Istanbul",
+        "Izmir",
+        "Bursa",
+        "Antalya"
+      ],
+      "cities_local": [
+        "Ankara",
+        "İstanbul",
+        "İzmir",
+        "Bursa",
+        "Antalya"
+      ]
+    },
+    {
+      "name": "Turkmenistan",
+      "name_local": "Türkmenistan",
+      "iso2": "TM",
+      "iso3": "TKM",
+      "region": "Asia",
+      "local_language": "tk",
+      "flag": {
+        "emoji": "🇹🇲",
+        "png": "https://flagcdn.com/w320/tm.png",
+        "png_small": "https://flagcdn.com/w80/tm.png",
+        "svg": "https://flagcdn.com/tm.svg"
+      },
+      "cities_en": [
+        "Ashgabat",
+        "Turkmenabat",
+        "Dashoguz",
+        "Mary",
+        "Balkanabat"
+      ],
+      "cities_local": [
+        "Aşgabat",
+        "Türkmenabat",
+        "Daşoguz",
+        "Mary",
+        "Balkanabat"
+      ]
+    },
+    {
+      "name": "Tuvalu",
+      "name_local": null,
+      "iso2": "TV",
+      "iso3": "TUV",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇹🇻",
+        "png": "https://flagcdn.com/w320/tv.png",
+        "png_small": "https://flagcdn.com/w80/tv.png",
+        "svg": "https://flagcdn.com/tv.svg"
+      },
+      "cities_en": [
+        "Funafuti",
+        "Vaiaku",
+        "Asau",
+        "Tanrake",
+        "Toga"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Uganda",
+      "name_local": null,
+      "iso2": "UG",
+      "iso3": "UGA",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇺🇬",
+        "png": "https://flagcdn.com/w320/ug.png",
+        "png_small": "https://flagcdn.com/w80/ug.png",
+        "svg": "https://flagcdn.com/ug.svg"
+      },
+      "cities_en": [
+        "Kampala",
+        "Gulu",
+        "Lira",
+        "Mbarara",
+        "Jinja"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Ukraine",
+      "name_local": "Україна",
+      "iso2": "UA",
+      "iso3": "UKR",
+      "region": "Europe",
+      "local_language": "uk",
+      "flag": {
+        "emoji": "🇺🇦",
+        "png": "https://flagcdn.com/w320/ua.png",
+        "png_small": "https://flagcdn.com/w80/ua.png",
+        "svg": "https://flagcdn.com/ua.svg"
+      },
+      "cities_en": [
+        "Kyiv",
+        "Kharkiv",
+        "Odesa",
+        "Dnipro",
+        "Lviv"
+      ],
+      "cities_local": [
+        "Київ",
+        "Харків",
+        "Одеса",
+        "Дніпро",
+        "Львів"
+      ]
+    },
+    {
+      "name": "United Arab Emirates",
+      "name_local": "الإمارات العربية المتحدة",
+      "iso2": "AE",
+      "iso3": "ARE",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇦🇪",
+        "png": "https://flagcdn.com/w320/ae.png",
+        "png_small": "https://flagcdn.com/w80/ae.png",
+        "svg": "https://flagcdn.com/ae.svg"
+      },
+      "cities_en": [
+        "Abu Dhabi",
+        "Dubai",
+        "Sharjah",
+        "Al Ain",
+        "Ajman"
+      ],
+      "cities_local": [
+        "أبوظبي",
+        "دبي",
+        "الشارقة",
+        "العين",
+        "عجمان"
+      ]
+    },
+    {
+      "name": "United Kingdom",
+      "name_local": null,
+      "iso2": "GB",
+      "iso3": "GBR",
+      "region": "Europe",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇬🇧",
+        "png": "https://flagcdn.com/w320/gb.png",
+        "png_small": "https://flagcdn.com/w80/gb.png",
+        "svg": "https://flagcdn.com/gb.svg"
+      },
+      "cities_en": [
+        "London",
+        "Birmingham",
+        "Manchester",
+        "Glasgow",
+        "Edinburgh"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "United States",
+      "name_local": null,
+      "iso2": "US",
+      "iso3": "USA",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇺🇸",
+        "png": "https://flagcdn.com/w320/us.png",
+        "png_small": "https://flagcdn.com/w80/us.png",
+        "svg": "https://flagcdn.com/us.svg"
+      },
+      "cities_en": [
+        "Washington, D.C.",
+        "New York City",
+        "Los Angeles",
+        "Chicago",
+        "Houston"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Uruguay",
+      "name_local": null,
+      "iso2": "UY",
+      "iso3": "URY",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇺🇾",
+        "png": "https://flagcdn.com/w320/uy.png",
+        "png_small": "https://flagcdn.com/w80/uy.png",
+        "svg": "https://flagcdn.com/uy.svg"
+      },
+      "cities_en": [
+        "Montevideo",
+        "Salto",
+        "Paysandú",
+        "Las Piedras",
+        "Rivera"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Uzbekistan",
+      "name_local": "Oʻzbekiston",
+      "iso2": "UZ",
+      "iso3": "UZB",
+      "region": "Asia",
+      "local_language": "uz",
+      "flag": {
+        "emoji": "🇺🇿",
+        "png": "https://flagcdn.com/w320/uz.png",
+        "png_small": "https://flagcdn.com/w80/uz.png",
+        "svg": "https://flagcdn.com/uz.svg"
+      },
+      "cities_en": [
+        "Tashkent",
+        "Samarkand",
+        "Bukhara",
+        "Namangan",
+        "Andijan"
+      ],
+      "cities_local": [
+        "Toshkent",
+        "Samarqand",
+        "Buxoro",
+        "Namangan",
+        "Andijon"
+      ]
+    },
+    {
+      "name": "Vanuatu",
+      "name_local": null,
+      "iso2": "VU",
+      "iso3": "VUT",
+      "region": "Oceania",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇻🇺",
+        "png": "https://flagcdn.com/w320/vu.png",
+        "png_small": "https://flagcdn.com/w80/vu.png",
+        "svg": "https://flagcdn.com/vu.svg"
+      },
+      "cities_en": [
+        "Port Vila",
+        "Luganville",
+        "Norsup",
+        "Isangel",
+        "Lakatoro"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Vatican City",
+      "name_local": "Città del Vaticano",
+      "iso2": "VA",
+      "iso3": "VAT",
+      "region": "Europe",
+      "local_language": "it",
+      "flag": {
+        "emoji": "🇻🇦",
+        "png": "https://flagcdn.com/w320/va.png",
+        "png_small": "https://flagcdn.com/w80/va.png",
+        "svg": "https://flagcdn.com/va.svg"
+      },
+      "cities_en": [
+        "Vatican City"
+      ],
+      "cities_local": [
+        "Città del Vaticano"
+      ]
+    },
+    {
+      "name": "Venezuela",
+      "name_local": null,
+      "iso2": "VE",
+      "iso3": "VEN",
+      "region": "Americas",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇻🇪",
+        "png": "https://flagcdn.com/w320/ve.png",
+        "png_small": "https://flagcdn.com/w80/ve.png",
+        "svg": "https://flagcdn.com/ve.svg"
+      },
+      "cities_en": [
+        "Caracas",
+        "Maracaibo",
+        "Valencia",
+        "Barquisimeto",
+        "Maracay"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Vietnam",
+      "name_local": "Việt Nam",
+      "iso2": "VN",
+      "iso3": "VNM",
+      "region": "Asia",
+      "local_language": "vi",
+      "flag": {
+        "emoji": "🇻🇳",
+        "png": "https://flagcdn.com/w320/vn.png",
+        "png_small": "https://flagcdn.com/w80/vn.png",
+        "svg": "https://flagcdn.com/vn.svg"
+      },
+      "cities_en": [
+        "Hanoi",
+        "Ho Chi Minh City",
+        "Da Nang",
+        "Hai Phong",
+        "Hue"
+      ],
+      "cities_local": [
+        "Hà Nội",
+        "Thành phố Hồ Chí Minh",
+        "Đà Nẵng",
+        "Hải Phòng",
+        "Huế"
+      ]
+    },
+    {
+      "name": "Yemen",
+      "name_local": "اليمن",
+      "iso2": "YE",
+      "iso3": "YEM",
+      "region": "Asia",
+      "local_language": "ar",
+      "flag": {
+        "emoji": "🇾🇪",
+        "png": "https://flagcdn.com/w320/ye.png",
+        "png_small": "https://flagcdn.com/w80/ye.png",
+        "svg": "https://flagcdn.com/ye.svg"
+      },
+      "cities_en": [
+        "Sanaa",
+        "Aden",
+        "Taiz",
+        "Hodeidah",
+        "Mukalla"
+      ],
+      "cities_local": [
+        "صنعاء",
+        "عدن",
+        "تعز",
+        "الحديدة",
+        "المكلا"
+      ]
+    },
+    {
+      "name": "Zambia",
+      "name_local": null,
+      "iso2": "ZM",
+      "iso3": "ZMB",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇿🇲",
+        "png": "https://flagcdn.com/w320/zm.png",
+        "png_small": "https://flagcdn.com/w80/zm.png",
+        "svg": "https://flagcdn.com/zm.svg"
+      },
+      "cities_en": [
+        "Lusaka",
+        "Kitwe",
+        "Ndola",
+        "Kabwe",
+        "Livingstone"
+      ],
+      "cities_local": null
+    },
+    {
+      "name": "Zimbabwe",
+      "name_local": null,
+      "iso2": "ZW",
+      "iso3": "ZWE",
+      "region": "Africa",
+      "local_language": null,
+      "flag": {
+        "emoji": "🇿🇼",
+        "png": "https://flagcdn.com/w320/zw.png",
+        "png_small": "https://flagcdn.com/w80/zw.png",
+        "svg": "https://flagcdn.com/zw.svg"
+      },
+      "cities_en": [
+        "Harare",
+        "Bulawayo",
+        "Chitungwiza",
+        "Mutare",
+        "Gweru"
+      ],
+      "cities_local": null
+    }
+  ]
+}

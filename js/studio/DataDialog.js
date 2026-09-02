@@ -17,9 +17,16 @@ import {
 import { createDataGrid } from './DataGrid.js';
 import { createCombobox } from './Combobox.js';
 import { createCheckList } from './CheckList.js';
-import { loadCountries, loadCities, countryItems, findCountryEntry } from './geodata.js';
+import {
+  loadCountries, loadCities, countryItems, findCountryEntry, localCityName,
+} from './geodata.js';
+import { flagIcon } from './flags.js';
+import { applyOrigin } from './motion.js';
 import { ask } from './confirm.js';
-import { readDataFile, ACCEPTED } from './fileimport.js';
+import { readDataFile, readDataUrl, ACCEPTED } from './fileimport.js';
+import {
+  OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns,
+} from './transform.js';
 import { toast } from './toast.js';
 
 const el = (tag, cls, text) => {
@@ -85,6 +92,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
   dlg.append(head, tabs, panels, foot);
   scrim.appendChild(dlg);
   document.body.appendChild(scrim);
+  // After it is in the document, because the origin is a share of the
+  // dialog's own box and an unmounted element has no box to measure.
+  applyOrigin(dlg);
 
   /* ── initial table ──────────────────────────────────────────────────── */
 
@@ -192,6 +202,12 @@ export function openDataDialog(def, spec, onApply, seedText) {
 
   /* Tab 4 — a file straight off disk */
   addTab('file', 'Open a file', buildFileTab());
+  addTab('link', 'From a link', buildLinkTab());
+  // Last, because it works on what the other tabs brought in rather than
+  // being another way in. `refresh` re-runs it on entry: the grid may have
+  // changed since it was last looked at.
+  const shape = buildShapeTab();
+  addTab('shape', 'Shape', shape.node, shape.refresh);
 
   /* ── the paste tab ──────────────────────────────────────────────────── */
 
@@ -261,6 +277,372 @@ export function openDataDialog(def, spec, onApply, seedText) {
   useBtn.addEventListener('click', () => { commitPaste(); select('grid'); toast('Read into the table', 'ok'); });
 
   /* ── opening a file ─────────────────────────────────────────────────── */
+
+  /**
+   * Fetch a published CSV once, into the grid.
+   *
+   * A separate tab from "Open a file" on purpose. That one promises nothing is
+   * uploaded and no request is made, and it keeps that promise; this one makes
+   * exactly one request, and the reader has to type an address and press a
+   * button to cause it. Putting them in one panel would have made the first
+   * promise quietly untrue.
+   *
+   * What arrives becomes literal values in the grid, like a paste. The chart
+   * does not keep the address, so an export cannot break later because
+   * somebody else's server moved.
+   */
+  /**
+   * Reshape the table before it becomes a chart.
+   *
+   * The panel is a pipeline: each step sees the table the one above it made,
+   * which is why the column pickers are rebuilt on every change — grouping
+   * renames and drops columns, so a sort added after it must be choosing from
+   * the headings that exist by then, not the ones the file arrived with.
+   *
+   * Nothing here touches the chart until "Use this shape" is pressed. What it
+   * writes is literal values in the grid, the same thing a paste produces, so
+   * the numbers on the chart are numbers the reader looked at first.
+   */
+  function buildShapeTab() {
+    const wrap = el('div', 'pick shape');
+    let steps = [];
+
+    wrap.appendChild(el('p', 'dlg-note',
+      'Group, filter, sort or bucket the rows before they reach the chart. '
+      + 'Useful when the file is five hundred transactions and the chart is seven bars.'));
+
+    const stepList = el('div', 'shape-steps');
+    wrap.appendChild(stepList);
+
+    const addRow = el('div', 'shape-add');
+    const addSel = el('select', 'shape-select');
+    addSel.setAttribute('aria-label', 'Kind of step to add');
+    addSel.appendChild(new Option('Add a step…', ''));
+    OPS.forEach((o) => addSel.appendChild(new Option(o.label, o.id)));
+    addRow.appendChild(addSel);
+    wrap.appendChild(addRow);
+
+    const result = el('div', 'shape-result');
+    wrap.appendChild(result);
+
+    const actions = el('div', 'pick-actions');
+    const useBtn = el('button', 'btn btn-primary', 'Use this shape');
+    useBtn.type = 'button';
+    const clearBtn = el('button', 'btn', 'Clear steps');
+    clearBtn.type = 'button';
+    actions.append(useBtn, clearBtn);
+    wrap.appendChild(actions);
+
+    const source = () => grid.getData();
+
+    /** A <select> of the columns a step can see at its point in the pipeline. */
+    const colSelect = (headers, value, onChange, label) => {
+      const s = el('select', 'shape-select');
+      s.setAttribute('aria-label', label || 'Column');
+      headers.forEach((h, i) => {
+        const o = new Option(h || `Column ${i + 1}`, String(i));
+        s.appendChild(o);
+      });
+      s.value = String(Math.min(value | 0, Math.max(0, headers.length - 1)));
+      s.addEventListener('change', () => onChange(Number(s.value)));
+      return s;
+    };
+
+    const pickSelect = (options, value, onChange, label) => {
+      const s = el('select', 'shape-select');
+      s.setAttribute('aria-label', label || 'Option');
+      options.forEach((o) => s.appendChild(new Option(o.label, o.id)));
+      s.value = value;
+      s.addEventListener('change', () => onChange(s.value));
+      return s;
+    };
+
+    const numberBox = (value, onChange, label) => {
+      const i = el('input', 'shape-number');
+      i.type = 'number';
+      i.min = '1';
+      i.value = String(value);
+      i.setAttribute('aria-label', label || 'Number');
+      i.addEventListener('input', () => onChange(Number(i.value)));
+      return i;
+    };
+
+    const textBox = (value, onChange, label) => {
+      const i = el('input', 'shape-text');
+      i.type = 'text';
+      i.value = value == null ? '' : String(value);
+      i.setAttribute('aria-label', label || 'Value');
+      i.addEventListener('input', () => onChange(i.value));
+      return i;
+    };
+
+    /* ── one step's controls ──────────────────────────────────────────── */
+
+    function stepControls(step, at, headers) {
+      const row = el('div', 'shape-step');
+      row.appendChild(el('span', 'shape-n', String(at + 1)));
+
+      const body = el('div', 'shape-body');
+      const change = () => paint();
+
+      if (step.op === 'filter') {
+        body.appendChild(el('span', 'shape-word', 'Keep rows where'));
+        body.appendChild(colSelect(headers, step.col, (v) => { step.col = v; change(); }, 'Column to test'));
+        body.appendChild(pickSelect(TESTS, step.test, (v) => { step.test = v; change(); }, 'Comparison'));
+        const test = TESTS.find((t) => t.id === step.test) || TESTS[0];
+        if (test.needs >= 1) body.appendChild(textBox(step.a, (v) => { step.a = v; change(); }, 'Value'));
+        if (test.needs === 2) {
+          body.appendChild(el('span', 'shape-word', 'and'));
+          body.appendChild(textBox(step.b, (v) => { step.b = v; change(); }, 'Second value'));
+        }
+      } else if (step.op === 'group') {
+        body.appendChild(el('span', 'shape-word', 'Group by'));
+        body.appendChild(colSelect(headers, step.col, (v) => {
+          step.col = v;
+          // The key column changing can invalidate the chosen value columns,
+          // so they are recomputed rather than left pointing at the key.
+          step.vals = defaultValueCols({ headers, rows: [] }, v);
+          change();
+        }, 'Column to group by'));
+        body.appendChild(pickSelect(AGGREGATES, step.agg, (v) => { step.agg = v; change(); }, 'How to combine'));
+
+        if (step.agg !== 'count') {
+          const stage = { headers, rows: stagesFor(at).rows };
+          const numeric = numericColumns(stage).filter((c) => c !== step.col);
+          if (numeric.length) {
+            body.appendChild(el('span', 'shape-word', 'of'));
+            const box = el('div', 'shape-cols');
+            const chosen = Array.isArray(step.vals) ? step.vals : defaultValueCols(stage, step.col);
+            numeric.forEach((c) => {
+              const lab = el('label', 'shape-col');
+              const cb = el('input');
+              cb.type = 'checkbox';
+              cb.checked = chosen.includes(c);
+              cb.addEventListener('change', () => {
+                const set = new Set(Array.isArray(step.vals) ? step.vals : chosen);
+                if (cb.checked) set.add(c); else set.delete(c);
+                step.vals = [...set].sort((x, y) => x - y);
+                change();
+              });
+              lab.append(cb, el('span', null, headers[c] || `Column ${c + 1}`));
+              box.appendChild(lab);
+            });
+            body.appendChild(box);
+          }
+        }
+      } else if (step.op === 'bin') {
+        body.appendChild(el('span', 'shape-word', 'Bucket'));
+        body.appendChild(colSelect(headers, step.col, (v) => { step.col = v; change(); }, 'Column to bucket'));
+        body.appendChild(el('span', 'shape-word', 'into'));
+        body.appendChild(numberBox(step.bins || 10, (v) => { step.bins = v; change(); }, 'Number of buckets'));
+        body.appendChild(el('span', 'shape-word', 'ranges'));
+      } else if (step.op === 'sort') {
+        body.appendChild(el('span', 'shape-word', 'Sort by'));
+        body.appendChild(colSelect(headers, step.col, (v) => { step.col = v; change(); }, 'Column to sort by'));
+        body.appendChild(pickSelect(
+          [{ id: 'desc', label: 'largest first' }, { id: 'asc', label: 'smallest first' }],
+          step.dir, (v) => { step.dir = v; change(); }, 'Direction'));
+      } else if (step.op === 'limit') {
+        body.appendChild(el('span', 'shape-word', 'Keep the first'));
+        body.appendChild(numberBox(step.n || 10, (v) => { step.n = v; change(); }, 'How many rows'));
+        body.appendChild(el('span', 'shape-word', 'rows'));
+      }
+
+      row.appendChild(body);
+
+      const tools = el('div', 'shape-tools');
+      const up = el('button', 'shape-move', '↑');
+      up.type = 'button';
+      up.title = 'Move this step earlier';
+      up.disabled = at === 0;
+      up.addEventListener('click', () => {
+        [steps[at - 1], steps[at]] = [steps[at], steps[at - 1]];
+        paint();
+      });
+      const down = el('button', 'shape-move', '↓');
+      down.type = 'button';
+      down.title = 'Move this step later';
+      down.disabled = at === steps.length - 1;
+      down.addEventListener('click', () => {
+        [steps[at + 1], steps[at]] = [steps[at], steps[at + 1]];
+        paint();
+      });
+      const del = el('button', 'shape-move shape-del', '✕');
+      del.type = 'button';
+      del.title = 'Remove this step';
+      del.addEventListener('click', () => { steps.splice(at, 1); paint(); });
+      tools.append(up, down, del);
+      row.appendChild(tools);
+
+      return row;
+    }
+
+    /* ── painting ─────────────────────────────────────────────────────── */
+
+    let lastRun = null;
+    const stagesFor = (at) => (lastRun && lastRun.stages[at]) || source();
+
+    function paint() {
+      const src = source();
+      lastRun = runSteps(src, steps);
+
+      stepList.innerHTML = '';
+      steps.forEach((step, i) => {
+        // The headings this step actually sees: the table the previous one made.
+        const headers = (lastRun.stages[i] || src).headers;
+        stepList.appendChild(stepControls(step, i, headers));
+      });
+
+      if (!steps.length) {
+        stepList.appendChild(el('p', 'shape-empty',
+          'No steps yet. The table goes to the chart exactly as it is.'));
+      }
+
+      const out = lastRun.table;
+      result.innerHTML = '';
+
+      const summary = el('p', 'shape-summary');
+      summary.textContent =
+        `${src.rows.length} row${src.rows.length === 1 ? '' : 's'} × ${src.headers.length} columns`
+        + `  →  ${out.rows.length} row${out.rows.length === 1 ? '' : 's'} × ${out.headers.length} columns`;
+      result.appendChild(summary);
+
+      lastRun.errors.forEach((e) => {
+        const p = el('p', 'shape-error', e);
+        result.appendChild(p);
+      });
+
+      if (steps.length) {
+        // The first handful is enough to see whether the shape is right, and
+        // rendering five hundred rows into a preview nobody scrolls is waste.
+        const preview = el('div', 'shape-preview');
+        const table = el('table');
+        const thead = el('thead');
+        const hr = el('tr');
+        out.headers.forEach((h) => hr.appendChild(el('th', null, h)));
+        thead.appendChild(hr);
+        const tbody = el('tbody');
+        out.rows.slice(0, 8).forEach((r) => {
+          const tr = el('tr');
+          r.forEach((c) => tr.appendChild(el('td', null, c)));
+          tbody.appendChild(tr);
+        });
+        table.append(thead, tbody);
+        preview.appendChild(table);
+        result.appendChild(preview);
+        if (out.rows.length > 8) {
+          result.appendChild(el('p', 'shape-more', `…and ${out.rows.length - 8} more rows`));
+        }
+      }
+
+      useBtn.disabled = !steps.length || !out.rows.length;
+      clearBtn.disabled = !steps.length;
+    }
+
+    addSel.addEventListener('change', () => {
+      const op = addSel.value;
+      addSel.value = '';
+      if (!op) return;
+      // Built against the table as it stands after the steps already there, so
+      // a new step's defaults point at columns that will exist when it runs.
+      const base = lastRun ? lastRun.table : source();
+      steps.push(defaultStep(op, base));
+      paint();
+    });
+
+    clearBtn.addEventListener('click', () => { steps = []; paint(); });
+
+    useBtn.addEventListener('click', () => {
+      const out = lastRun ? lastRun.table : null;
+      if (!out || !out.rows.length) return;
+      // Undoable, because `setData` banks a history entry — reshaping five
+      // hundred rows into seven is exactly the edit somebody wants back.
+      grid.setData({ headers: out.headers, rows: out.rows });
+      const done = steps.length;
+      steps = [];
+      paint();
+      toast(`Reshaped to ${out.rows.length} rows in ${done} step${done === 1 ? '' : 's'}`, 'ok');
+      select('grid');
+    });
+
+    return { node: wrap, refresh: paint };
+  }
+
+  function buildLinkTab() {
+    const wrap = el('div', 'pick');
+
+    wrap.appendChild(el('p', 'dlg-note',
+      'Read a published CSV or spreadsheet from a web address. This is the one '
+      + 'place the studio fetches your data — it happens when you press Fetch, '
+      + 'and the numbers are copied into the table below, not linked to.'));
+
+    const row = el('div', 'link-row');
+    const field = el('input', 'link-input');
+    field.type = 'url';
+    field.placeholder = 'https://example.com/data.csv';
+    field.setAttribute('aria-label', 'Address of a CSV or spreadsheet');
+    field.spellcheck = false;
+    const go = el('button', 'btn btn-primary', 'Fetch');
+    go.type = 'button';
+    row.append(field, go);
+    wrap.appendChild(row);
+
+    const status = el('p', 'dlg-note file-status');
+    wrap.appendChild(status);
+
+    const note = el('p', 'dlg-note');
+    note.innerHTML =
+      'The address must allow other sites to read it, which most published '
+      + 'CSV links do and most ordinary web pages do not. For a Google Sheet use '
+      + '<b>File → Share → Publish to web</b> and choose CSV. Cookies are never '
+      + 'sent, so a private page will not open here even if you are signed in.';
+    wrap.appendChild(note);
+
+    const fetchIt = async () => {
+      const url = field.value.trim();
+      if (!url) { field.focus(); return; }
+      go.disabled = true;
+      status.className = 'dlg-note file-status';
+      status.textContent = 'Fetching…';
+
+      const res = await readDataUrl(url);
+      go.disabled = false;
+
+      if (!res.ok) {
+        status.textContent = '';
+        await ask({ title: 'That link could not be read', text: res.message, tone: 'stop', confirm: 'OK' });
+        return;
+      }
+
+      const table = parseTable(res.text, expectedCols);
+      if (!table.rows.length) {
+        status.textContent = '';
+        await ask({
+          title: 'Nothing to read at that link',
+          text: 'It answered, but no rows came out of it.',
+          tone: 'stop', confirm: 'OK',
+        });
+        return;
+      }
+
+      // Into the grid, where it can be checked and corrected before it reaches
+      // the chart — the same place a paste and a file both land.
+      grid.setData({ headers: table.headers, rows: table.rows });
+      status.className = 'dlg-note file-status ok';
+      status.textContent = `Read ${table.rows.length} row${table.rows.length === 1 ? '' : 's'} `
+        + `and ${table.headers.length} column${table.headers.length === 1 ? '' : 's'}. `
+        + 'Check it in the Table tab.';
+      toast('Fetched ' + table.rows.length + ' rows', 'ok');
+      select('grid');
+    };
+
+    go.addEventListener('click', fetchIt);
+    field.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); fetchIt(); }
+    });
+
+    return wrap;
+  }
 
   function buildFileTab() {
     const wrap = el('div', 'pick');
@@ -390,6 +772,7 @@ export function openDataDialog(def, spec, onApply, seedText) {
         items: [],
         placeholder: 'Loading countries…',
         emptyText: 'No country by that name',
+        renderIcon: (iso2) => flagIcon(iso2),
         onSelect: (name, item) => chooseCountry(item),
       });
       field.appendChild(countryBox.el);
@@ -406,6 +789,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
     const list = createCheckList({
       placeholder: isCities ? 'Search cities…' : 'Search countries…',
       emptyText: isCities ? 'Choose a country first.' : 'Loading…',
+      // Only the country list sets an `icon`; the city rows leave it empty,
+      // since one country's flag repeated down every row says nothing.
+      renderIcon: (iso2) => flagIcon(iso2),
       onChange: () => { addBtn.disabled = !list.count(); refreshAddLabel(); },
     });
     wrap.appendChild(list.el);
@@ -492,7 +878,11 @@ export function openDataDialog(def, spec, onApply, seedText) {
           chooseCountry({ value: hit.name, iso2: hit.iso2 });
         }
       } else {
-        list.setItems(items.map((c) => ({ value: c.value, label: c.label })));
+        // The note is dropped — a city count is the combobox's business, not
+        // this list's — but the flag and the local name are kept.
+        list.setItems(items.map((c) => ({
+          value: c.value, label: c.label, icon: c.icon, sub: c.sub, search: c.search,
+        })));
         // Countries already in the table start ticked, so the list reads as
         // the state of the chart rather than a blank form.
         const have = new Set(grid.getData().rows.map((r) => String(r[0]).trim()));
@@ -511,7 +901,15 @@ export function openDataDialog(def, spec, onApply, seedText) {
       listLabel.textContent = `Cities in ${item.value}`;
       loadCities(chosenIso).then((all) => {
         cities = all;
-        list.setItems(all.map((c) => ({ value: c.name, label: c.name })));
+        list.setItems(all.map((c) => {
+          const local = localCityName(chosenIso, c.name);
+          return {
+            value: c.name,
+            label: c.name,
+            sub: local,
+            search: local ? `${c.name} ${local}` : c.name,
+          };
+        }));
         // Cities already in the table start ticked, for the same reason.
         const have = new Set(grid.getData().rows.map((r) => String(r[0]).trim()));
         list.setSelected(all.filter((c) => have.has(c.name)).map((c) => c.name));

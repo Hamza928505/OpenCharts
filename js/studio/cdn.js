@@ -213,3 +213,39 @@ export function describe(lib) {
 
 /** Every library the project ships, for the gallery credits. */
 export const ALL_LIBRARIES = Object.values(LIBRARIES);
+
+/**
+ * Vendored third-party *data*, as opposed to third-party code.
+ *
+ * Deliberately a separate table from `LIBRARIES`, for three reasons that all
+ * come down to the same thing — an asset is not a dependency:
+ *
+ * - `dependenciesFor()` must never return one. No chart loads the flag set;
+ *   it decorates the studio's own pickers, so listing it against a chart
+ *   would put a line in that chart's exported header naming something its
+ *   code does not use.
+ * - The footer's tally counts libraries. A flag set is not a library, and
+ *   `114 charts · 9 libraries` becoming `10` would be a quiet lie.
+ * - There is no URL to print. These files are committed, which is the whole
+ *   point of them, so the credit names the path in this repository instead.
+ *
+ * Attribution is still owed and still generated from here rather than typed
+ * into the footer by hand.
+ */
+export const ASSETS = {
+  flags: {
+    key: 'flags',
+    kind: 'asset',
+    name: 'flagcdn (country flags)',
+    version: '80px PNG',
+    license: 'Public domain',
+    provider: 'flagcdn.com',
+    homepage: 'https://flagcdn.com/',
+    url: null,
+    local: 'data/flags.json',
+    role: 'Flag icons for the country and city pickers, vendored by tools/build-flags.mjs',
+  },
+};
+
+/** Every vendored asset, for the gallery credits. */
+export const ALL_ASSETS = Object.values(ASSETS);

@@ -38,6 +38,13 @@ which is released into the public domain.
 |---|---|---|
 | `data/cities/*.json` | [cities.json](https://github.com/lutangar/cities.json) 1.1.61, derived from [GeoNames](https://www.geonames.org/) | MIT (GeoNames data: CC BY 4.0) |
 | `data/countries.json` | the above, paired with Natural Earth country names via `world-atlas` | as above |
+| `data/flags.json` | [flagcdn](https://flagcdn.com/), 80px PNG, vendored by `tools/build-flags.mjs` | Public domain |
+| `data/country-meta.json` | curated country metadata — ISO3, region, local-language names | Public domain (names and codes are facts) |
+
+The flag images are in the public domain and carry no attribution requirement.
+They are credited here, in the gallery footer and in `js/studio/cdn.js` anyway,
+because a reader should be able to find out where a picture in the interface
+came from without reading the build scripts.
 
 Unlike the libraries, these files **are** committed, so that picking a country
 or a city needs no network call to a third party and no build step. They hold
