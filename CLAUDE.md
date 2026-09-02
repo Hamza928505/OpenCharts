@@ -769,6 +769,128 @@ The difference is that a transform produces numbers, which the library's one
 hard rule says a renderer must be handed rather than derive; an annotation
 produces no numbers at all.
 
+### Small multiples
+
+Vega-Lite's `facet`, and the reason the file most people have is still not a
+chart. `Region, Month, Sales` with five hundred rows is one table and twelve
+pictures, and until this landed the library's only answer was "aggregate it
+down to one".
+
+**A facet splits the spec, not the renderer.** `panelSpecs(def, spec)` turns one
+spec into N complete specs — each holding literal values, each read by the same
+unmodified `draw` / `mount` / `build` the chart already had — and returns them.
+That is the whole design, and it is what made a cross-cutting feature
+affordable: **not one of the 114 renderers was touched, and none of them knows
+the feature exists.** `panelSpecs` may use imports freely because only its
+*return value* is serialised, which is the same bargain Chart.js `build()`
+makes.
+
+It is also what keeps the library's one hard rule intact. *A renderer reads its
+data from the spec and nothing else* — so a panel is handed a spec, not a
+filter, a predicate or a slice of some parent's data. Every sub-table goes
+through `applyData`, the same door a paste comes in by, so a chart's own
+`onData` hook runs per panel and the shapes that rebuild a matrix or split a
+butterfly get their chance on each one.
+
+**Two kinds, because one of them would have been unreachable.** Faceting only
+by a spare column would make the feature invisible: every chart opens on an
+example with no spare column, so nobody would ever see it work.
+
+- **`series`** — one panel per series. A series *is* a column in
+  `Month, North, South`, so this needs no new data and works on any chart's own
+  example, immediately. Available on the four shapes that have a notion of a
+  series: `labelSeries`, `rowSeries`, `observations`, `xyGroups`.
+- **`value`** — one panel per distinct value down a column. The wide-file case,
+  and the one the feature is for. The facet column is dropped from each
+  sub-table before it is read, because a chart's shape counts columns from the
+  left and a spare one on the front would be read as its labels.
+
+**The shared-scale problem is answered honestly rather than badly.** Panels that
+are not on one axis are not a comparison, but the domains are computed
+*privately, inside the very functions that get serialised* — there is no
+contract by which a facet could force a scale on 114 renderers, and inventing
+one would be a change to every one of them. So:
+
+- Where a chart exposes a real axis bound, the union extent is written into
+  every panel. `boundKeys` finds it **by control label, not by key**, and that
+  is not fussiness: `opts.max` is an axis maximum on fourteen charts, and
+  `opts.maxRadius`, `opts.maxSize` and `opts.maxWidth` are the largest circle,
+  the largest word and the widest route on four others. A key-shaped rule
+  writes a data extent into a radius and quietly ruins three maps.
+- Everywhere else, `scaleSharing(def)` returns a **sentence**, not a boolean —
+  "This chart works its own axis out from the data, so each panel is scaled to
+  itself. Compare shapes between panels, not heights." — and it is shown under
+  the control *and* said in the accessible description. A grid of small
+  multiples that looks comparable and is not would be a worse thing to ship
+  than one that admits it.
+
+`panelExtent` reads the numbers back out of `def.toText(spec)` rather than
+walking the spec looking for arrays. That writer is the one the suite already
+holds to a round trip, so it is the only description of a chart's data
+guaranteed to be complete; a spec walk finds a colour that happens to be a
+number, or misses a nested one, per chart, silently.
+
+Rules the implementation follows, each of them checked:
+
+- **A chart nobody faceted pays nothing.** The grid markup, `FACET_CSS` and the
+  panel loop are emitted only when the spec carries a facet, so the other
+  exports are byte-for-byte what they were — the rule `ANNOTATION_CSS` follows.
+- **One markup function, two outputs.** `facetMarkup` builds the grid for the
+  live preview and for the export, so the two cannot hold different ideas of
+  how many columns there are. **The plate and the mark inside it must not share
+  an id**: they did, and `getElementById('chart-0')` handed back the wrapper, so
+  three of the five renderers called `getContext` on a `<div>` and every faceted
+  export was blank. The plate is `panel-<i>`; the mark keeps `chart-<i>`, which
+  is the id the generated JS looks up.
+- **`destroyInstance` recurses.** A grid holds one instance per panel, so the
+  leak a single chart risked once per rebuild, a grid risks twelve times.
+- **Never more than four across.** Past that a panel is narrower than its own
+  axis labels, which is where a grid stops being a comparison and becomes a
+  texture. `MAX_PANELS` is 24, and `facetNote` says out loud when the cap bit —
+  only then, because a caveat that appears every time is one nobody reads.
+- **A note belongs to the grid, not to every panel.** `baseSpec` strips
+  `annotations` before splitting and `plateOf` returns `.oc-facets` first, so
+  one remark is laid over the whole grid rather than multiplied by twelve.
+- **Turning it off is a no-op, not an edit.** `facetByColumn` reads the whole
+  table minus the facet column into the base spec as well as setting
+  `spec.facet`, so the legend, the metrics row and `def.toText` describe the
+  chart you get when the split is switched off.
+- **A panel the chart cannot read is dropped, not drawn blank.** A spec half
+  written before the read failed draws worse than nothing, and a blank plate in
+  a grid of twelve says nothing about which one went wrong.
+
+Three surfaces had to learn about it, and each for a reason the split column
+creates:
+
+- **The grid validates the table the chart will actually be given.**
+  `createDataGrid` takes a `skipColumn`, because a column being split on is not
+  the chart's data — without it every cell of `Region` is flagged as a bad
+  number, which is exactly the complaint `columnRules` exists to stop the grid
+  making about `Berlin` one column over.
+- **The editor opens on the source, not on the spec.** A faceted spec no longer
+  holds the column it was split by, so `def.toText` would write a table the
+  reader cannot find their split in. `facetSource` hands back the whole thing.
+  The same substitution is made in `a11y.chartTable` and in the AI prompt: a
+  data table with the panel column missing describes a grid with no way to tell
+  its panels apart.
+- **PNG export composites the grid.** `querySelector('canvas')` would find panel
+  one and hand over a picture of a twelfth of the screen with nothing saying
+  so — the quietest possible way for an export to lie. Both branches lay the
+  panels out from the boxes the browser has already computed, and a grid that
+  can be neither rasterised nor nested as SVG says so rather than falling
+  through.
+
+**`grid.setData` does not fire `onChange`**, and it is how the paste tab, the
+place pickers and the Shape tab all write — so the split strip is rebuilt on
+every route back to the table rather than trusting an edit event that three of
+the four ways in never send.
+
+The family is now three, and the distinctions are the point: a **transform** is
+an edit that produces numbers, applied once and written into the grid; an
+**annotation** is state on the spec that produces no numbers at all; a **facet**
+is state on the spec that produces *more specs*. Only the first is allowed to
+put numbers on a chart, and it does it in front of the reader.
+
 ### Text colour
 
 Every canvas chart draws its labels through `ink(alpha)`, which resolves
@@ -1292,7 +1414,7 @@ is `d3.geoOrthographic`. Two rules for it:
 `js/studio/ControlPanel.js` renders widgets from `controls: []`. Each entry has
 a `group` (heading), a `type`, and a dot-path `key` into the spec. Types:
 `series`, `colors`, `values`, `labels`, `toggle`, `seg`, `slider`, `select`,
-`text`, `countries`, `cities`, `color`, `annotations`. Consecutive entries
+`text`, `countries`, `cities`, `color`, `annotations`, `facet`. Consecutive entries
 sharing a `group`
 are drawn under one numbered heading.
 
@@ -1333,6 +1455,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `tooltip.js` | Hover readouts for the canvas, SVG and DOM charts |
 | `motion.js` | Pointer-driven motion — the sheen, the ripple, the dialog's origin |
 | `annotate.js` | Notes, rules and bands laid over the plate, and the drag that places them |
+| `facet.js` | Small multiples — one spec split into a grid of complete specs |
 | `a11y.js` | The chart as text — its description and its data as a table |
 | `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
@@ -1369,7 +1492,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-Twenty-seven suites cover the registry, every chart (render + non-blank canvas +
+Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -1379,7 +1502,8 @@ exports, AI prompts, responsive breakpoints (including the editor on a 390px
 phone), flags and country metadata, the colour-vision check, the spec view
 and undo, the collapsible rail and focus mode, interaction motion, accessible chart
 output, reading a table from a link, reshaping a table, annotating a chart,
-queued previews and forgiving hover, and console cleanliness.
+queued previews and forgiving hover, splitting one table into small
+multiples, and console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
@@ -1535,6 +1659,13 @@ the plate rather than drawn by the renderer, so `registry.js` attaches the
 control and a new chart can be annotated before anyone has thought about it.
 The suite asserts that of every chart in the library, which is the check that
 keeps it true.
+
+Small multiples need no step for the same reason and one more: a facet hands
+each panel a complete spec, so a new chart's own `draw` or `mount` draws a grid
+of itself without having heard of the feature. `registry.js` attaches the
+control to every chart that takes a table. The one thing a new chart *does*
+owe it is a working `toText` — which step 3 already requires — because that is
+what `panelExtent` reads to put every panel on one axis.
 
 Respect the serialisation constraints in "One build function, two outputs" —
 they are the only non-obvious rule in this codebase, and breaking them produces

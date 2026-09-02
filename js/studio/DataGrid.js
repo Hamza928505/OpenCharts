@@ -38,6 +38,22 @@ export function createDataGrid(opts) {
   // for on every render rather than fixed when the grid is built.
   const rules = columnRules(opts.shape);
   const labelCount = () => Math.max(0, Math.min(headers.length, countOf(rules.text, headers)));
+
+  /* One column may not be the chart's data at all.
+   *
+   * A table split into small multiples carries a column that names the panel,
+   * and that column is dropped before the chart ever reads the table. Without
+   * this the grid flags every cell of it as a bad number — which is the exact
+   * complaint `columnRules` exists to avoid making about `Berlin`, one column
+   * over. Every other column is counted as if the facet were not there, so a
+   * shape's own rules go on applying to the table it will actually be given.
+   */
+  const skipAt = () => {
+    const i = opts.skipColumn ? opts.skipColumn(headers) : -1;
+    return (Number.isInteger(i) && i >= 0 && i < headers.length) ? i : -1;
+  };
+  const dataCol = (c) => { const s = skipAt(); return (s >= 0 && c > s) ? c - 1 : c; };
+  const isValueCol = (c) => c !== skipAt() && dataCol(c) >= labelCount();
   const requiredCount = () => Math.min(labelCount(), countOf(rules.filled, headers));
   const addSpec = rules.add;
 
@@ -149,11 +165,11 @@ export function createDataGrid(opts) {
 
   function countInvalid() {
     let n = 0;
-    const labelCols = labelCount();
     rows.forEach((r) => {
       // A wholly empty row is a placeholder, not an error.
       if (!r.some((c) => String(c ?? '').trim() !== '')) return;
-      for (let c = labelCols; c < headers.length; c++) {
+      for (let c = 0; c < headers.length; c++) {
+        if (!isValueCol(c)) continue;
         const v = String(r[c] ?? '').trim();
         if (v !== '' && !looksNumeric(v)) n++;
       }
@@ -241,12 +257,12 @@ export function createDataGrid(opts) {
         inp.dataset.row = r;
         inp.dataset.col = c;
         // Numeric columns get a numeric keypad on phones.
-        if (c >= labelCols) inp.setAttribute('inputmode', 'decimal');
+        if (isValueCol(c)) inp.setAttribute('inputmode', 'decimal');
         inp.setAttribute('aria-label', `${headers[c]}, row ${r + 1}`);
 
         const mark = () => {
           const v = String(inp.value).trim();
-          const bad = c >= labelCols && v !== '' && !looksNumeric(v);
+          const bad = isValueCol(c) && v !== '' && !looksNumeric(v);
           inp.classList.toggle('bad', bad);
           inp.title = bad ? 'This is not a number — it will be read as 0' : '';
         };
@@ -336,6 +352,9 @@ export function createDataGrid(opts) {
   return {
     el: root,
     getData,
+    /** Redraw from the state already held — for when what the cells *mean*
+     *  has changed without the table changing. Not undoable: nothing moved. */
+    refresh() { render(); updateSummary(); },
     setData(next, opts = {}) {
       // Undoable by default: this is how the place pickers and the paste tab
       // write into the grid, and a bulk add is exactly what a reader wants

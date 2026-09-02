@@ -32,6 +32,7 @@ import { engineCharts } from './charts/engine.js';
 import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
 import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
 import { ANNOTATION_CONTROL } from './annotate.js';
+import { FACET_CONTROL } from './facet.js';
 
 /** Category display order in the gallery and the rail. */
 export const CATEGORY_ORDER = [
@@ -95,6 +96,16 @@ ALL.forEach((def) => {
     const controls = def.controls || (def.controls = []);
     const already = controls.some((c) => c.type === 'data');
     if (!already) controls.unshift({ ...DATA_CONTROL });
+  }
+
+  // Small multiples are a split of the spec, not a kind of chart: a facet
+  // hands each panel a complete spec and the chart's own renderer draws it
+  // unchanged. So the control goes on every chart that takes a table, and no
+  // renderer was told the feature exists. It sits above the annotation
+  // control because a note is laid over whatever the grid turned out to be.
+  if (def.data && !def.html) {
+    const controls = def.controls || (def.controls = []);
+    if (!controls.some((c) => c.type === 'facet')) controls.push({ ...FACET_CONTROL });
   }
 
   // A note, a rule and a shaded band are positioned as a fraction of the

@@ -23,6 +23,10 @@ import {
 import { flagIcon } from './flags.js';
 import { confusablePairs, describePairs, simulate, CVD_KINDS } from './cvd.js';
 import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
+import {
+  isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
+  seriesKeyOf, scaleSharing, panelCount, panelColumns, facetNote,
+} from './facet.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
 
@@ -1005,8 +1009,145 @@ function widgetCities(ctrl, spec, notify) {
   return wrap;
 }
 
+/* ── small multiples ─────────────────────────────────────────────────────── */
+
+/**
+ * The facet control.
+ *
+ * One dropdown decides what a panel *is* — a series, or a value of a column —
+ * and everything under it is layout. Deliberately one choice rather than a
+ * row-and-column matrix: nesting two facets multiplies the panel count by
+ * itself, and a grid nobody can read is not a comparison.
+ *
+ * The column options come from the table the facet is already holding, so a
+ * reader can move the split from Region to Quarter without reopening the data
+ * editor. Getting the first column in there is the editor's job — a chart
+ * opening on its example has no spare column to offer.
+ */
+function widgetFacet(ctrl, spec, notify, def) {
+  const wrap = el('div', 'facet-ctrl');
+  const share = scaleSharing(def);
+  const source = facetSource(spec);
+  const columns = source ? facetableColumns(source) : [];
+  const on = isFaceted(spec);
+
+  const rebuild = () => { notify(); if (wrap._rebuildAll) wrap._rebuildAll(); };
+
+  /* what a panel is */
+  const pick = field(ctrl.label || 'Split into panels');
+  const sel = el('select', 'select');
+  const options = [{ value: '', label: 'Off — one chart' }];
+  if (seriesKeyOf(def)) options.push({ value: 'series', label: 'One panel per series' });
+  columns.forEach((c) => options.push({
+    value: `col:${c.col}`,
+    label: `One panel per ${c.name} (${c.values})`,
+  }));
+  options.forEach((opt) => {
+    const o = document.createElement('option');
+    o.value = opt.value;
+    o.textContent = opt.label;
+    sel.appendChild(o);
+  });
+
+  const currentValue = () => {
+    if (!on) return '';
+    if (spec.facet.kind === 'series') return 'series';
+    const i = source ? (source.headers || []).indexOf(spec.facet.by) : -1;
+    return i >= 0 ? `col:${i}` : '';
+  };
+  sel.value = currentValue();
+  if (sel.value !== currentValue()) sel.value = '';
+
+  sel.addEventListener('change', () => {
+    const chosen = sel.value;
+    const previous = spec.facet;
+    delete spec.facet;
+    if (!chosen) { rebuild(); return; }
+
+    const res = chosen === 'series'
+      ? facetBySeries(def, spec)
+      : facetByColumn(def, spec, source, Number(chosen.slice(4)));
+    if (!res.ok) {
+      // Put back what was on screen rather than silently dropping to one
+      // chart: the reader asked for a different split, not for none.
+      if (previous) spec.facet = previous;
+      toast(res.message);
+    }
+    rebuild();
+  });
+  pick.appendChild(sel);
+  wrap.appendChild(pick);
+
+  if (!on) {
+    if (!columns.length) {
+      wrap.appendChild(el('p', 'facet-note', seriesKeyOf(def)
+        ? 'Or open the data editor and split by a column of your own table.'
+        : 'Open the data editor and split by a column of your own table.'));
+    }
+    return wrap;
+  }
+
+  /* layout */
+  const count = panelCount(def, spec);
+  const across = field('Panels across', String(panelColumns(count, spec.facet.cols)));
+  const acrossSel = el('select', 'select');
+  [{ value: 0, label: 'Fit to the panel count' }, ...[1, 2, 3, 4].map((n) => ({
+    value: n, label: `${n} across`,
+  }))].forEach((opt) => {
+    const o = document.createElement('option');
+    o.value = String(opt.value);
+    o.textContent = opt.label;
+    acrossSel.appendChild(o);
+  });
+  acrossSel.value = String(spec.facet.cols || 0);
+  acrossSel.addEventListener('change', () => {
+    spec.facet.cols = Number(acrossSel.value) || 0;
+    across._value.textContent = String(panelColumns(count, spec.facet.cols));
+    notify();
+  });
+  across.appendChild(acrossSel);
+  wrap.appendChild(across);
+
+  /* scales — and what the answer actually means for this chart */
+  const scales = field('Scales');
+  const seg = el('div', 'seg');
+  const modes = [
+    { value: 'shared', label: 'Matched' },
+    { value: 'free', label: 'Independent' },
+  ];
+  const buttons = modes.map((m) => {
+    const b = el('button', 'seg-btn', m.label);
+    b.type = 'button';
+    // A chart that computes its own domain inside a serialised `draw` cannot
+    // be told what axis to use, so the switch is disabled rather than offered
+    // and ignored. The sentence under it says why.
+    b.disabled = !share.can && m.value === 'shared';
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      spec.facet.scales = m.value;
+      buttons.forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      notify();
+    });
+    seg.appendChild(b);
+    return b;
+  });
+  const active = share.can && spec.facet.scales !== 'free' ? 0 : 1;
+  buttons[active].classList.add('active');
+  scales.appendChild(seg);
+  wrap.appendChild(scales);
+
+  wrap.appendChild(el('p', 'facet-note', share.why));
+
+  const capped = facetNote(def, spec);
+  if (capped) wrap.appendChild(el('p', 'facet-warn', capped));
+
+  return wrap;
+}
+
 const WIDGETS = {
   data:    widgetData,
+  facet:   widgetFacet,
   toggle:  widgetToggle,
   seg:     widgetSeg,
   slider:  widgetSlider,

@@ -38,10 +38,11 @@
  * assistant reconstructs from memory. That is the part worth sending.
  */
 
-import { expectedFormat, columnRules, countOf, looksNumeric } from './dataio.js';
+import { expectedFormat, columnRules, countOf, looksNumeric, toCSV } from './dataio.js';
 import { helpFor } from './chart-help.js';
 import { engineOf, ENGINE_LABEL } from './engines.js';
 import { CHARTS, CATEGORIES } from './registry.js';
+import { isFaceted, panelCount, facetSource, scaleSharing } from './facet.js';
 
 /**
  * Where the source lives.
@@ -259,7 +260,16 @@ export function buildPrompt(def, spec, code, mode = 'full') {
   // it, which is the part an assistant most often gets wrong.
   let current = '';
   try {
-    if (typeof def.toText === 'function') current = String(def.toText(spec) || '').trim();
+    // A chart split by a column holds the split in the facet, not in the spec,
+    // so `toText` writes the table with that column already spent. The brief
+    // has to show the file the reader actually has — the one with the column
+    // that decides which panel a row lands in.
+    const source = facetSource(spec);
+    if (source) {
+      current = toCSV(source.headers, source.rows).trim();
+    } else if (typeof def.toText === 'function') {
+      current = String(def.toText(spec) || '').trim();
+    }
   } catch { /* a spec the writer cannot serialise still gets the rest of the brief */ }
 
   const named = /chart|map|plot|diagram|graph/i.test(def.title);
@@ -293,6 +303,17 @@ export function buildPrompt(def, spec, code, mode = 'full') {
   L.push(...wrap(`**${def.title}** (${def.category}) — ${def.blurb}`));
   L.push('');
   L.push(`Drawn with ${ENGINE_LABEL[engineOf(def)]}.`);
+  if (isFaceted(spec)) {
+    const n = panelCount(def, spec);
+    const by = spec.facet.kind === 'series' ? 'series' : spec.facet.by;
+    const share = scaleSharing(def);
+    L.push('');
+    L.push(...wrap(`Shown as **small multiples**: ${n} copies of this chart side by side, `
+      + `one per ${by}. `
+      + (share.can && spec.facet.scales !== 'free'
+        ? 'They are drawn to one shared axis, so panel heights can be compared directly.'
+        : 'Each panel is scaled to its own data, so their shapes compare and their heights do not.')));
+  }
   if (help) {
     L.push('');
     L.push(...wrap(`- **How it is read:** ${help.read}`, '  '));
@@ -309,6 +330,16 @@ export function buildPrompt(def, spec, code, mode = 'full') {
       L.push(`Columns (${columnCount(expected, roles.length)}):`);
       L.push('');
       roles.forEach((c, i) => L.push(`${i + 1}. \`${c.name}\` — ${c.role === 'text' ? 'text' : 'a number'}`));
+      L.push('');
+    }
+    // The example below is one panel's worth of columns, and a split table has
+    // one more than that. Saying so here is the difference between a brief an
+    // assistant can follow and one whose column count contradicts its own
+    // sample table further down.
+    if (isFaceted(spec) && spec.facet.kind === 'value') {
+      L.push(...wrap(`Plus one more column, \`${spec.facet.by}\`, which is not drawn: it says `
+        + `which panel each row belongs to. The example below shows one panel's columns; `
+        + `your table carries \`${spec.facet.by}\` alongside them.`));
       L.push('');
     }
     // `expected.grows` is deliberately not printed: it restates the shape guide
@@ -380,6 +411,18 @@ export function buildPrompt(def, spec, code, mode = 'full') {
     L.push('');
     L.push(...wrap(WHERE_DATA_LIVES[engineOf(def)] || WHERE_DATA_LIVES.canvas));
     L.push('');
+    // `WHERE_DATA_LIVES` names the one identifier a single chart's data sits
+    // in. A faceted template has that identifier per panel inside `panels`,
+    // so an instruction to edit "the spec" would send the assistant looking
+    // for something the file does not contain.
+    if (isFaceted(spec)) {
+      L.push(...wrap(`This template draws a grid: \`panels\` holds one entry per panel, and `
+        + `each entry is a complete, independent chart with its own copy of that data. `
+        + `Give every entry its own slice of my file, and add or remove entries so there `
+        + `is exactly one panel per ${spec.facet.kind === 'series' ? 'series' : `value of ${spec.facet.by}`}. `
+        + `Keep the panel names in step with the data you put in them.`));
+      L.push('');
+    }
     L.push('Every value the chart draws is written into the file as a literal — nothing is');
     L.push('fetched, generated or randomised at runtime, so there is no data source to');
     L.push('repoint. If my file is a different size from the example, change how many');
