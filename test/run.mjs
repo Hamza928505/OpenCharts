@@ -2751,7 +2751,8 @@ check(!cvdMath.paletteFirstThree, 'the palette a three-series chart opens with i
 check(/Revenue and Cost/.test(cvdMath.sentence), 'the warning uses the series names', cvdMath.sentence);
 
 /* And it reaches the control panel. `area-band` carries a `colors` widget;
- * the 56 charts on `series` colour themselves through a different one. */
+ * the 48 charts on `series` colour themselves through a different one, and
+ * are checked just below. */
 await page.goto(`${base}/studio.html?chart=area-band`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2200);
 const cvdUi = await page.evaluate(async () => {
@@ -2790,6 +2791,99 @@ check(cvdUi.cleanHidden === true, 'a safe palette says nothing');
 check(cvdUi.warnShown, 'a palette that merges warns', cvdUi.warnText);
 check(cvdUi.dotsChanged, 'and can be previewed as the colour-blind reader sees it');
 check(cvdUi.specUntouched, 'previewing never rewrites the chart colours');
+
+/* Every chart the check can say something about, and only those.
+ *
+ * It first shipped reading the `colors` control, which 58 charts carry — so
+ * more than half the library was exempt from a check the product presents as
+ * universal, and the silence read as a pass. `paletteOf` answers the question
+ * wherever the colours live. */
+const cvdReach = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const { paletteOf, confusablePairs } = await import('/js/studio/cvd.js');
+  const from = { colors: 0, series: 0, none: 0 };
+  const unreachable = [];
+  const singles = [];
+  let comparable = 0;
+  let oneColour = 0;
+  for (const def of reg.CHARTS) {
+    const p = paletteOf(def, reg.newSpec(def));
+    from[p.from || 'none']++;
+    // Fewer than two colours is not a gap in the check; it is the check having
+    // nothing to say. A single-series chart has no pair that can merge.
+    if (p.colors.length < 2) { oneColour++; singles.push(def.id); continue; }
+    comparable++;
+    // Names must be filtered in step with colours, or the sentence blames the
+    // wrong two series.
+    if (p.names.length !== p.colors.length) unreachable.push(def.id + ':names');
+    // Whatever it hands back has to be something the checker accepts.
+    try { confusablePairs(p.colors); } catch { unreachable.push(def.id + ':threw'); }
+  }
+  return {
+    total: reg.CHARTS.length, from, unreachable, singles,
+    comparable, oneColour,
+  };
+});
+check(cvdReach.from.series === 48,
+  'the check now reads the charts that keep a colour per series',
+  `${cvdReach.from.series} via series, ${cvdReach.from.colors} via colors`);
+check(cvdReach.comparable === 93,
+  'and 93 charts have two colours to compare — up from the 58 with a colors control',
+  `${cvdReach.comparable} comparable, ${cvdReach.oneColour} with fewer than two`);
+check(cvdReach.comparable + cvdReach.oneColour === cvdReach.total,
+  'every chart is either checked or has nothing to compare',
+  `${cvdReach.comparable} + ${cvdReach.oneColour} of ${cvdReach.total}`);
+check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette each time',
+  cvdReach.unreachable.slice(0, 4).join(', '));
+
+/* And it reaches the panel for a chart that keeps its colours per series. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const cvdSeries = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const { paletteOf } = await import('/js/studio/cvd.js');
+  const app = window.openCharts;
+  const where = paletteOf(app.def, app.spec).from;
+
+  // Purple and teal are two swatches that stay apart under every deficiency,
+  // so this is the quiet case. Set explicitly rather than trusting whatever
+  // the chart ships with — the wider reach turned some shipped pairs into
+  // true positives, which is the finding, not the fixture.
+  app.spec.series[0].color = '#6C63D8';
+  app.spec.series[1].color = '#16916A';
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+  const cleanHidden = (document.querySelector('.palette-warn') || {}).hidden;
+
+  app.spec.series[0].color = '#d40000';
+  app.spec.series[1].color = '#00a000';
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+  await sleep(400);
+
+  const warn = document.querySelector('.palette-warn');
+  const sim = document.querySelector('.palette-sim');
+  const before = [...document.querySelectorAll('.swatch')].map((d) => d.style.background);
+  if (sim) sim.click();
+  await sleep(250);
+  const after = [...document.querySelectorAll('.swatch')].map((d) => d.style.background);
+
+  return {
+    where,
+    cleanHidden,
+    warnShown: warn ? !warn.hidden : false,
+    warnText: warn ? warn.textContent : '',
+    swatchesChanged: JSON.stringify(before) !== JSON.stringify(after),
+    specUntouched: app.spec.series[0].color === '#d40000',
+  };
+});
+check(cvdSeries.where === 'series', 'a per-series chart is read through its series control',
+  String(cvdSeries.where));
+check(cvdSeries.cleanHidden === true, 'a safe per-series palette says nothing either');
+check(cvdSeries.warnShown && /2024|2023/.test(cvdSeries.warnText),
+  'a merging pair warns, naming the series', cvdSeries.warnText);
+check(cvdSeries.swatchesChanged, 'and previews as the colour-blind reader sees it');
+check(cvdSeries.specUntouched, 'previewing never rewrites the chart colours here either');
 
 /* The chart as data: a spec you can read, copy and paste back. */
 await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
@@ -4203,8 +4297,14 @@ const facet = await page.evaluate(async () => {
   const seriesPanels = f.panelSpecs(bar, barSpec);
   out.seriesCount = seriesPanels ? seriesPanels.length : 0;
   out.seriesEachOne = !!seriesPanels && seriesPanels.every((p) => p.spec.series.length === 1);
-  /* And a chart with no axis bound says so instead of pretending. */
-  out.honest = f.scaleSharing(bar);
+  /* And a chart that genuinely cannot share an axis says so instead of
+     pretending. Found rather than named: which charts those are moved when the
+     config route landed, and a hard-coded id would quietly stop testing the
+     case it was written for. */
+  const cannot = reg.CHARTS.find((d) => !f.scaleSharing(d).can);
+  out.honest = cannot ? f.scaleSharing(cannot) : null;
+  out.honestId = cannot ? cannot.id : '';
+  out.honestEngine = cannot ? eng.engineOf(cannot) : '';
 
   /* A slider called "Largest city" is not an axis maximum. */
   out.notAxes = ['city-map', 'proportional-symbol-map', 'flow-map', 'word-cloud']
@@ -4255,8 +4355,12 @@ check(new Set(facet.freeMaxima).size === 1 && facet.freeMaxima[0] !== facet.shar
   facet.freeMaxima.join(',') + ' vs ' + facet.sharedMaxima.join(','));
 check(facet.notAxes.every((s) => s.endsWith(':none')),
   'a "Largest city" slider is not mistaken for an axis', facet.notAxes.join(' '));
-check(!facet.honest.can && /own axis|scaled to itself/i.test(facet.honest.why),
-  'a chart that cannot share an axis says so', facet.honest.why);
+check(facet.honest && !facet.honest.can && /own axis|scaled to itself/i.test(facet.honest.why),
+  'a chart that cannot share an axis says so',
+  `${facet.honestId} (${facet.honestEngine}): ${(facet.honest || {}).why}`);
+check(facet.honestEngine !== 'chartjs',
+  'and it is one that draws its own axis, not one that returns a config',
+  facet.honestEngine);
 check(facet.exportPlates === facet.count && facet.exportIds,
   'the export carries one plate per panel', String(facet.exportPlates));
 check(facet.exportNames && facet.exportCss && facet.exportRuns,
@@ -4281,6 +4385,97 @@ check(facet.offered.join(',') === 'Region',
   facet.offered.join(','));
 check(facet.columns.join(',') === '1,2,3,4', 'the grid never goes past four across',
   facet.columns.join(','));
+
+/* Matched scales the other way round.
+ *
+ * A canvas `draw` computes its domain privately inside the function that gets
+ * serialised, so no facet can reach it. Chart.js does not: `build()` returns a
+ * config, and a config is data. Writing the axis afterwards puts panels on one
+ * scale without a single build function being touched. */
+const facetScales = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const f = await import('/js/studio/facet.js');
+  const out = {};
+
+  const yMaxOf = (cfg) => cfg && cfg.options && cfg.options.scales
+    && cfg.options.scales.y && cfg.options.scales.y.max;
+
+  // A Chart.js chart with no axis-bound control of its own — so any sharing
+  // that happens here came from the config route.
+  const def = reg.getChart('bar-vertical');
+  out.noBoundControl = !f.boundKeys(def).max && !f.boundKeys(def).min;
+  out.saysYes = f.scaleSharing(def);
+
+  const spec = reg.newSpec(def);
+  // Panels with deliberately different peaks: without sharing they draw to
+  // their own maxima and the grid lies about the comparison.
+  spec.series = [
+    { label: 'Small', color: '#6C63D8', data: [10, 14, 12, 16] },
+    { label: 'Large', color: '#16916A', data: [800, 940, 870, 1010] },
+  ];
+  f.facetBySeries(def, spec);
+  const panels = f.panelSpecs(def, spec);
+  out.panels = panels.length;
+
+  const bounds = f.sharedScaleBounds(def, panels, spec.facet);
+  out.bounds = bounds;
+  const shared = panels.map((p) => yMaxOf(
+    f.applyScaleBounds(def.chartjs.build(p.spec, { width: 400, height: 240 }), bounds),
+  ));
+  out.sharedMaxima = shared;
+  out.coversPeak = shared.every((m) => typeof m === 'number' && m >= 1010);
+
+  // Independent scales must leave the config alone, or the switch does nothing.
+  spec.facet.scales = 'free';
+  const freeBounds = f.sharedScaleBounds(def, f.panelSpecs(def, spec), spec.facet);
+  out.freeIsNull = freeBounds === null;
+  spec.facet.scales = 'shared';
+
+  // And it reaches the generated code, not just the preview.
+  const code = eng.generateCode(def, spec);
+  out.inExport = (code.js.match(/max:\s*-?\d/g) || []).length;
+
+  // A chart with no cartesian axis is still honest about it.
+  const pie = reg.getChart('pie');
+  out.pieSays = f.scaleSharing(pie);
+
+  // A chart that pins its own axis keeps it — a facet does not overrule a
+  // deliberate choice.
+  const pinned = { options: { scales: { y: { max: 100 } } } };
+  f.applyScaleBounds(pinned, { y: { max: 4000 } });
+  out.pinnedKept = pinned.options.scales.y.max === 100;
+
+  // How much wider the net is now.
+  let bound = 0; let viaConfig = 0;
+  for (const d of reg.CHARTS) {
+    const k = f.boundKeys(d);
+    if (k.max || k.min) { bound++; continue; }
+    if (f.scaleSharing(d).can) viaConfig++;
+  }
+  out.byControl = bound;
+  out.byConfig = viaConfig;
+  return out;
+});
+
+check(facetScales.noBoundControl, 'the test chart has no axis control of its own');
+check(facetScales.saysYes.can, 'so sharing must have come from its config',
+  facetScales.saysYes.why);
+check(facetScales.panels === 2, 'two panels with very different peaks',
+  String(facetScales.panels));
+check(new Set(facetScales.sharedMaxima).size === 1 && facetScales.coversPeak,
+  'both are drawn to one axis that reaches the larger',
+  JSON.stringify(facetScales.sharedMaxima));
+check(facetScales.freeIsNull, 'independent scales write nothing at all');
+check(facetScales.inExport >= 2, 'and the shared axis is in the exported code',
+  `${facetScales.inExport} bounds emitted`);
+check(!facetScales.pieSays.can && /own axis|scaled to itself/i.test(facetScales.pieSays.why),
+  'a chart with no cartesian axis still says panels do not compare',
+  facetScales.pieSays.why);
+check(facetScales.pinnedKept, 'a chart that pins its own axis keeps it');
+check(facetScales.byConfig >= 25,
+  'the config route roughly triples how many charts can share an axis',
+  `${facetScales.byControl} by control + ${facetScales.byConfig} by config`);
 
 /* And it works in the studio, on a real page, without leaking a chart per
  * rebuild. Twelve Chart.js instances left behind on every control edit is the
@@ -4400,6 +4595,30 @@ const facetExports = await page.evaluate(async () => {
     if (/Code generation failed/.test(code.standalone)) continue;
     picked.set(engine, { id: def.id, engine, panels: panels.length, html: code.standalone });
   }
+
+  // The one DOM chart reads `items`, which has no notion of a series — so the
+  // loop above never reaches the fifth code path in `buildJS`. Split it by a
+  // column instead, which every shape supports, rather than leaving a whole
+  // renderer's export untested.
+  if (!picked.has('dom')) {
+    const def = reg.getChart('waffle');
+    const spec = reg.newSpec(def);
+    const rows = [];
+    ['Q1', 'Q2', 'Q3'].forEach((q, qi) => {
+      ['Chrome', 'Safari', 'Firefox'].forEach((b, bi) => {
+        rows.push([q, b, String(60 - bi * 20 + qi * 2)]);
+      });
+    });
+    if (f.facetByColumn(def, spec, { headers: ['Quarter', 'Browser', 'Share'], rows }, 0).ok) {
+      const panels = f.panelSpecs(def, spec);
+      const code = eng.generateCode(def, spec);
+      if (panels && !/Code generation failed/.test(code.standalone)) {
+        picked.set('dom', {
+          id: def.id, engine: 'dom', panels: panels.length, html: code.standalone,
+        });
+      }
+    }
+  }
   return [...picked.values()];
 });
 
@@ -4423,7 +4642,10 @@ for (const item of facetExports) {
       }
       const svg = p.querySelector('svg');
       if (svg) return svg.querySelectorAll('path,circle,rect,line').length > 3;
-      return p.children.length > 0 && p.textContent.trim().length > 0;
+      // A DOM chart draws with elements, not ink or paths — a waffle's cells
+      // carry no text at all, so counting descendants is the only honest
+      // question to ask of this branch.
+      return p.querySelectorAll('*').length > 3;
     });
     return {
       plates: plates.length,
@@ -4440,10 +4662,10 @@ for (const item of facetExports) {
   check(state.names.length === item.panels,
     `and names every panel: ${item.id}`, state.names.join(','));
 }
-check(facetExports.length >= 3, 'faceted exports were checked on more than one renderer',
-  facetExports.map((e) => e.engine).join(','));
+check(facetExports.length === 5, 'every renderer has a faceted export that runs',
+  facetExports.map((e) => e.engine + ':' + e.id).join(' '));
 
-console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetUi.panels} in the studio, ${facetExportsOk}/${facetExports.length} exports run`);
+console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetExportsOk}/${facetExports.length} exports run, ${facetScales.byControl + facetScales.byConfig} charts share an axis`);
 
 /* Suite 27 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

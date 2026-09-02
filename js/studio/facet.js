@@ -275,11 +275,151 @@ export function scaleSharing(def) {
   if (keys.max || keys.min) {
     return { can: true, why: 'Every panel is drawn to the same axis as the largest one.' };
   }
+  // Chart.js hands back a config rather than drawing directly, so its axis can
+  // be written after the fact. Asked of the chart's own example, because that
+  // is the only data available before anyone has split anything.
+  if (def && def.chartjs && chartjsCanShare(def)) {
+    return {
+      can: true,
+      why: 'Every panel is drawn to the same axis as the largest one.',
+    };
+  }
   return {
     can: false,
     why: 'This chart works its own axis out from the data, so each panel is scaled to itself. '
        + 'Compare shapes between panels, not heights.',
   };
+}
+
+/** Whether this Chart.js chart exposes a numeric axis a bound can be put on. */
+function chartjsCanShare(def) {
+  let config = null;
+  try {
+    config = def.chartjs.build(structuredClone(def.spec), { width: 400, height: 240 });
+  } catch { return false; }
+  const scales = config && config.options && config.options.scales;
+  if (!scales) return false;
+  return Object.keys(scales).some((id) => clampableScale(id, scales[id]));
+}
+
+/* -- shared scales the other way round ------------------------------------ */
+
+/**
+ * Chart.js configs can be put on one axis without asking the chart anything.
+ *
+ * The rule that stops a facet forcing a scale is that domains are computed
+ * *privately, inside the very functions that get serialised* - true of the 48
+ * canvas charts and the 21 D3 mounts, and **not** true of Chart.js. There,
+ * `build()` returns a config, and a config is data: the same reason `build()`
+ * may use imports freely while a `draw` may not. So the axis can be written
+ * after the fact, without a single build function being touched.
+ *
+ * That takes matched scales from the charts exposing an axis-bound slider to
+ * those plus 30 of the 39 Chart.js charts. The 9 it cannot help - pie,
+ * doughnut, gauge, polar area, the three radars, treemap and sankey - have no
+ * shared axis to put anything on.
+ */
+const AXIS_ID = /^([xy])\d*$/;
+
+/** Whether a scale is a numeric axis a bound can be written onto. */
+function clampableScale(id, scale) {
+  if (!AXIS_ID.test(id)) return false;
+  const type = String((scale && scale.type) || '');
+  // A category axis holds labels, a time axis holds dates, and a radial one is
+  // not what "the same axis" means to a reader comparing two panels.
+  return !/category|time|timeseries|radial/.test(type);
+}
+
+/** Every number a config plots against one axis letter. */
+function axisValues(config, axis) {
+  const out = [];
+  const datasets = (config && config.data && config.data.datasets) || [];
+  for (const ds of datasets) {
+    for (const point of (ds && ds.data) || []) {
+      if (typeof point === 'number') { if (axis === 'y') out.push(point); continue; }
+      // A floating bar is [from, to] and both ends sit on the value axis.
+      if (Array.isArray(point)) {
+        if (axis === 'y') point.forEach((v) => { if (typeof v === 'number') out.push(v); });
+        continue;
+      }
+      if (point && typeof point === 'object' && typeof point[axis] === 'number') {
+        out.push(point[axis]);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The bounds every panel's config should share, or `null`.
+ *
+ * Returned as `{ [scaleId]: {max, min?} }` so a caller can apply them to a
+ * config it builds later - the live preview builds one panel at a time, and
+ * the code generator has all of them at once.
+ */
+export function sharedScaleBounds(def, panels, facet) {
+  if (!def || !def.chartjs || !panels || panels.length < 2) return null;
+  if (facet && facet.scales === 'free') return null;
+  // Where the chart exposes its own axis-bound control, that route has already
+  // written the shared value into every panel's spec. Two mechanisms writing
+  // one axis would only ever disagree at the rounding.
+  const keys = boundKeys(def);
+  if (keys.max || keys.min) return null;
+
+  let configs;
+  try {
+    configs = panels.map((p) => def.chartjs.build(p.spec, { width: 400, height: 240 }));
+  } catch { return null; }
+
+  const scales = (configs[0] && configs[0].options && configs[0].options.scales) || null;
+  if (!scales) return null;
+
+  const out = {};
+  for (const id of Object.keys(scales)) {
+    if (!clampableScale(id, scales[id])) continue;
+    // Every panel has to carry the scale, or one of them is handed a bound for
+    // an axis it does not draw.
+    const everywhere = configs.every(
+      (c) => c && c.options && c.options.scales && c.options.scales[id],
+    );
+    if (!everywhere) continue;
+
+    const axis = id[0];
+    const values = configs.reduce((all, c) => all.concat(axisValues(c, axis)), []);
+    if (values.length < 2) continue;
+    const hi = Math.max.apply(null, values);
+    const lo = Math.min.apply(null, values);
+    if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi === lo) continue;
+
+    const bound = {};
+    if (hi > 0) bound.max = nice(hi, true);
+    // A floor is only worth forcing where the data actually goes below zero;
+    // pinning a positive series to its own minimum crops it.
+    if (lo < 0) bound.min = nice(lo, false);
+    if (Object.keys(bound).length) out[id] = bound;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Write those bounds onto one config, in place.
+ *
+ * Never over a bound the chart set for itself: a chart that pins its own axis -
+ * a percentage stack to 100, a gauge to its dial - said something deliberate,
+ * and a facet is not entitled to overrule it.
+ */
+export function applyScaleBounds(config, bounds) {
+  if (!config || !bounds) return config;
+  const scales = config.options && config.options.scales;
+  if (!scales) return config;
+  for (const id of Object.keys(bounds)) {
+    const scale = scales[id];
+    const bound = bounds[id];
+    if (!scale) continue;
+    if (bound.max !== undefined && scale.max === undefined) scale.max = bound.max;
+    if (bound.min !== undefined && scale.min === undefined) scale.min = bound.min;
+  }
+  return config;
 }
 
 /* ── the one place panels come from ──────────────────────────────────────── */

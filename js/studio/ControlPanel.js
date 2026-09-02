@@ -21,7 +21,7 @@ import {
   loadCountryMeta, localCityName,
 } from './geodata.js';
 import { flagIcon } from './flags.js';
-import { confusablePairs, describePairs, simulate, CVD_KINDS } from './cvd.js';
+import { confusablePairs, describePairs, simulate, CVD_KINDS, paletteOf } from './cvd.js';
 import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
 import {
   isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
@@ -275,10 +275,19 @@ function widgetLabels(ctrl, spec, notify) {
  * The series editor: colour, name, values and add/remove — the control most
  * charts actually need.
  */
-function widgetSeries(ctrl, spec, notify) {
+function widgetSeries(ctrl, spec, notify, def) {
   const key = ctrl.key || 'series';
   const host = el('div', 'ctrl-group');
   host.style.gap = '.45rem';
+
+  // The colour-vision check reaches here too. Half the library keeps a colour
+  // per series inside this widget rather than in a `colors` control, and for a
+  // long time that half was quietly exempt from a check the product presents
+  // as universal — which is worse than not having the check, because the
+  // silence reads as a pass.
+  const coloured = () => paletteOf(def, spec).colors;
+  const nameAt = (i) => paletteOf(def, spec).names[i] || '';
+  const cvd = colourWarning(coloured, nameAt, () => paint());
 
   function paint() {
     host.innerHTML = '';
@@ -289,7 +298,10 @@ function widgetSeries(ctrl, spec, notify) {
       row.style.flexWrap = 'wrap';
 
       const sw = el('span', 'swatch');
-      sw.style.background = s.color || paletteAt(i);
+      // Simulated while previewing, but the picker still edits the real
+      // colour: this is inspection, never an edit.
+      const shown = s.color || paletteAt(i);
+      sw.style.background = cvd.showing() ? simulate(shown, cvd.showing()) : shown;
       sw.title = 'Change colour';
 
       const meta = el('div', 'series-meta');
@@ -355,6 +367,9 @@ function widgetSeries(ctrl, spec, notify) {
       });
       host.appendChild(add);
     }
+
+    host.append(cvd.warn, cvd.sim);
+    cvd.paint();
   }
 
   paint();
@@ -388,48 +403,32 @@ function widgetColor(ctrl, spec, notify) {
   return wrap;
 }
 
-function widgetColors(ctrl, spec, notify) {
-  const key = ctrl.key || 'colors';
-  const wrap = field(ctrl.label || 'Colours');
-  const strip = el('div', 'palette');
-
-  // Which deficiency the strip is currently showing, or '' for normal vision.
-  let showing = '';
-
+/**
+ * The colour-vision warning and its simulate toggle.
+ *
+ * One component rather than a copy in each palette widget: the two widgets
+ * edit different things — an array of hex, and an array of objects that happen
+ * to carry one — but they make the *same* statement about the palette, and a
+ * second copy of that statement is a second thing to keep true.
+ *
+ * `read()` hands back the colours whenever they are asked for rather than a
+ * snapshot, because both widgets repaint on every edit and a captured list
+ * would go stale on the first colour change.
+ *
+ * @param {() => string[]} read       the colours as they stand now
+ * @param {(i:number) => string} nameAt  what to call colour i
+ * @param {() => void} repaint       redraw the swatches in the new mode
+ */
+function colourWarning(read, nameAt, repaint) {
   const warn = el('p', 'palette-warn');
   const sim = el('button', 'palette-sim');
   sim.type = 'button';
-
-  /** What to call series i in the warning — its own name if the chart has one. */
-  const nameAt = (i) => {
-    const names = ctrl.names && ctrl.names(spec);
-    return (names && names[i]) || '';
-  };
+  let showing = '';
 
   function paint() {
-    strip.innerHTML = '';
-    const list = getPath(spec, key) || [];
-    list.forEach((colour, i) => {
-      const dot = el('span', 'palette-dot');
-      // The dot shows the simulated colour while previewing, but the picker
-      // still edits the real one — you are inspecting the palette, not
-      // recolouring the chart to something nobody chose.
-      dot.style.background = showing ? simulate(colour, showing) : colour;
-      dot.title = nameAt(i) || colour;
-      attachColourPicker(dot, colour, (next) => {
-        list[i] = next;
-        notify();
-        paint();
-      });
-      strip.appendChild(dot);
-    });
-    paintWarning(list);
-  }
-
-  function paintWarning(list) {
     // Only the colours this chart actually uses. Checking the whole 8-colour
     // palette would report pairs no reader will ever see side by side.
-    const pairs = confusablePairs(list);
+    const pairs = confusablePairs(read());
     warn.textContent = describePairs(pairs, nameAt);
     warn.hidden = !pairs.length;
     sim.hidden = !pairs.length && !showing;
@@ -441,10 +440,48 @@ function widgetColors(ctrl, spec, notify) {
 
   sim.addEventListener('click', () => {
     showing = showing ? '' : (sim.dataset.kind || CVD_KINDS[0].key);
-    paint();
+    repaint();
   });
 
-  wrap.append(strip, warn, sim);
+  return { warn, sim, paint, showing: () => showing };
+}
+
+function widgetColors(ctrl, spec, notify) {
+  const key = ctrl.key || 'colors';
+  const wrap = field(ctrl.label || 'Colours');
+  const strip = el('div', 'palette');
+
+  /** What to call series i in the warning — its own name if the chart has one. */
+  const nameAt = (i) => {
+    const names = ctrl.names && ctrl.names(spec);
+    return (names && names[i]) || '';
+  };
+
+  const cvd = colourWarning(() => getPath(spec, key) || [], nameAt, () => paint());
+  // Which deficiency the strip is currently showing, or '' for normal vision.
+  const showingNow = () => cvd.showing();
+
+  function paint() {
+    strip.innerHTML = '';
+    const list = getPath(spec, key) || [];
+    list.forEach((colour, i) => {
+      const dot = el('span', 'palette-dot');
+      // The dot shows the simulated colour while previewing, but the picker
+      // still edits the real one — you are inspecting the palette, not
+      // recolouring the chart to something nobody chose.
+      dot.style.background = showingNow() ? simulate(colour, showingNow()) : colour;
+      dot.title = nameAt(i) || colour;
+      attachColourPicker(dot, colour, (next) => {
+        list[i] = next;
+        notify();
+        paint();
+      });
+      strip.appendChild(dot);
+    });
+    cvd.paint();
+  }
+
+  wrap.append(strip, cvd.warn, cvd.sim);
   paint();
   wrap._repaint = paint;
   return wrap;
