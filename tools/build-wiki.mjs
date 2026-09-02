@@ -68,7 +68,9 @@ const SHAPE_BLURB = {
 const studioUrl = (id) => `${SITE}/studio.html?chart=${encodeURIComponent(id)}`;
 const link = (def) => `[${def.title}](${studioUrl(def.id)})`;
 /** A pipe would end the table cell it sits in. */
-const cell = (s) => String(s == null ? '' : s).replace(/\|/g, '\\|');
+const cell = (s) => String(s == null ? '' : s)
+  .replace(/\\/g, '\\\\')
+  .replace(/\|/g, '\\|');
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 const anchor = (name) => name.toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-');
