@@ -28,10 +28,11 @@ const el = (tag, cls, text) => {
  *   columns hold words and what "+ Column" adds. See `columnRules` in dataio.
  * @param {Function} [opts.onChange] called with { headers, rows } after any edit
  * @param {object} [opts.colours] lets the table edit the chart's colours:
- *   `{ mode: 'column'|'row', at(i), set(i, hex) }`. A series is a column and an
- *   item is a row, so the swatch goes wherever that chart's colours actually
- *   live. Omitted where the palette does not line up with either, because a
- *   swatch on the wrong thing is worse than none.
+ *   `{ modeFor(headers, rows), at(i), set(i, hex) }`. A series is a column and
+ *   an item is a row, so the swatch goes wherever that chart's colours actually
+ *   live. `modeFor` is asked on every render rather than once, so adding a
+ *   series column adds its swatch instead of waiting for the editor to be
+ *   reopened.
  * @returns {{ el, getData, setData, addRow, validate }}
  */
 export function createDataGrid(opts) {
@@ -56,6 +57,7 @@ export function createDataGrid(opts) {
    */
   /* Colours, when the caller has told us where they belong. */
   const colours = opts.colours || null;
+  const colourMode = () => (colours ? colours.modeFor(headers, rows) : null);
   /** A swatch button for palette slot `i`, or null. */
   function swatchFor(i) {
     if (!colours || i < 0) return null;
@@ -280,7 +282,7 @@ export function createDataGrid(opts) {
      * row rather than by column keep their swatch in the row gutter, which is
      * the same idea turned ninety degrees.
      */
-    if (colours && colours.mode === 'column') {
+    if (colourMode() === 'column') {
       const cr = el('tr', 'dgrid-colour-row');
       const lead = el('th', 'dgrid-gutter dgrid-colour-lead', 'Colour');
       lead.scope = 'row';
@@ -305,7 +307,7 @@ export function createDataGrid(opts) {
       const tr = el('tr');
       const gutter = el('td', 'dgrid-gutter', String(r + 1));
       // An item is a row, so its colour belongs against its number.
-      if (colours && colours.mode === 'row') {
+      if (colourMode() === 'row') {
         const rowSwatch = swatchFor(r);
         if (rowSwatch) gutter.appendChild(rowSwatch);
       }

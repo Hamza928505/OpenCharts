@@ -30,6 +30,7 @@ import {
 import { toast } from './toast.js';
 import { facetableColumns, facetByColumn, facetSource, isFaceted } from './facet.js';
 import { paletteOf } from './cvd.js';
+import { paletteAt } from './palette.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -133,25 +134,42 @@ export function openDataDialog(def, spec, onApply, seedText) {
    * something about to be replaced.
    */
   const startPalette = paletteOf(def, spec);
-  let pendingColours = [...startPalette.colors];
+  const pendingColours = [...startPalette.colors];
+  // Only what somebody actually picked is written back. A swatch showing the
+  // colour a column *will* be drawn in has not been chosen by anyone, and
+  // writing it would turn a default into a decision.
+  const chosenColours = new Set();
 
-  function colourMode(data) {
-    if (!pendingColours.length) return null;
-    const valueCols = (data.headers || []).length - labelColumnsFor(data.headers || []);
-    if (pendingColours.length === valueCols) return 'column';
-    if (pendingColours.length === (data.rows || []).length) return 'row';
+  /**
+   * Where this chart's colours belong — under the columns, or beside the rows.
+   *
+   * Settled once, from the table the editor opens on. Recomputing it per render
+   * would move the swatches from the head to the gutter halfway through an
+   * edit, which is worse than leaving them where they were. *How many* there
+   * are is not settled here: the grid renders one per column and asks again on
+   * every render, so adding a series brings its swatch with it.
+   */
+  const startValueCols = start.headers.length - labelColumnsFor(start.headers);
+  const colourLayout = (() => {
+    const n = startPalette.colors.length;
+    if (!startPalette.from) return null;
+    // A single-series chart still has a colour, and it belongs to its column.
+    if (n <= 1) return startValueCols >= 1 ? 'column' : null;
+    if (n === startValueCols) return 'column';
+    if (n === start.rows.length) return 'row';
     return null;
-  }
-
-  // The mode is settled from the table the editor opens on. Recomputing it per
-  // render would move the swatches from the headings to the gutter halfway
-  // through an edit, which is a worse answer than leaving them where they were.
-  const colourLayout = colourMode({ headers: start.headers, rows: start.rows });
+  })();
 
   const gridColours = colourLayout ? {
-    mode: colourLayout,
-    at: (i) => pendingColours[i] || '',
-    set: (i, hex) => { if (i >= 0 && i < pendingColours.length) pendingColours[i] = hex; },
+    modeFor: () => colourLayout,
+    // A column with no colour of its own shows the one it will be given, so
+    // the row is never half empty — `applyData` assigns from the same list.
+    at: (i) => pendingColours[i] || paletteAt(i),
+    set: (i, hex) => {
+      if (i < 0) return;
+      pendingColours[i] = hex;
+      chosenColours.add(i);
+    },
   } : null;
 
   // Declared before the grid because the grid asks for it while it renders:
@@ -1141,9 +1159,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
     // Colours go on after the data, because `applyData` rebuilds the arrays
     // they live in. Resolved again rather than reused: the spec it wrote is
     // not the spec this dialog opened on.
-    if (colourLayout) {
+    if (colourLayout && chosenColours.size) {
       const after = paletteOf(def, spec);
-      pendingColours.forEach((hex, i) => { if (hex) after.set(i, hex); });
+      chosenColours.forEach((i) => after.set(i, pendingColours[i]));
     }
     toast(res.message, 'ok');
     onApply(res.message);
