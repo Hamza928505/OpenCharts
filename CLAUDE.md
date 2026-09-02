@@ -495,6 +495,33 @@ per category, and hands ~180px back to the chart. Three rules:
 - **Desktop only.** Below 900px the rail is already a slide-over drawer, and a
   56px strip competing with it would be a third behaviour.
 
+**The controls column is as wide as the reader wants it.** It was a fixed
+300px — 262px once the padding is off — and that column now carries the data
+preview, the series editor, the palette, the facet control and the notes.
+Everything fits and nothing is comfortable. Picking a bigger number would have
+been the wrong shape of answer: the layout argument here is that chrome is
+spent *before* the subject of the page gets any, and a wider default spends
+more of it on every reader whether or not they wanted it. So `resize.js` puts a
+grip on the column's edge, writes `--controls-w`, and remembers it — the same
+bargain the rail's collapsed spine makes.
+
+Three things it has to get right:
+
+- **The grip is a sibling of the column, never a child.** `buildControls`
+  empties `.controls` on every chart load and every data edit, so a handle
+  inside it is thrown away the first time anything changes — the trap the hover
+  readout fell into, for the same reason. It is absolutely positioned against
+  `.studio`, so it also takes no cell of the grid.
+- **The drag listens on the document, not the grip.** The pointer outruns a 7px
+  strip, and a drag that stops when the cursor leaves it is one nobody can
+  finish. The listeners are removed by the function that added them.
+- **Not offered below 900px**, where the controls stack and there is no divider
+  to drag. A control that divides nothing is a control that lies.
+
+`--controls-w` already drove the grid, so nothing else had to learn about this,
+and the chart re-measures on its own: the stage really does change size, so the
+`ResizeObserver` on the host fires — unlike the rail, which needed telling.
+
 **Focus** (`body[data-focus="1"]`, Ctrl/Cmd+Shift+F, Escape to leave) hides
 every panel but the plate. Distinct from `[data-embed]`, which strips the studio
 permanently for an iframe — this is a mode you come back from, so the stage bar
@@ -1664,6 +1691,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `toast.js` | Transient notices |
 | `tooltip.js` | Hover readouts for the canvas, SVG and DOM charts |
 | `motion.js` | Pointer-driven motion — the sheen, the ripple, the dialog's origin |
+| `resize.js` | The grip that sets how wide the controls column is |
 | `annotate.js` | Notes, rules and bands laid over the plate, and the drag that places them |
 | `facet.js` | Small multiples — one spec split into a grid of complete specs |
 | `a11y.js` | The chart as text — its description and its data as a table |

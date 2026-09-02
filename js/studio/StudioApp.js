@@ -20,6 +20,7 @@ import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 import { takeHandOff } from './DataMatch.js';
 import { applyData } from './dataio.js';
 import { initMotion, markChanged } from './motion.js';
+import { mountControlsResize } from './resize.js';
 import { tableMarkup } from './a11y.js';
 import { attachAnnotationDrag, plateOf } from './annotate.js';
 
@@ -73,6 +74,9 @@ export class StudioApp {
     this._buildRail();
     this._bindChrome();
     initMotion();
+    // The controls column carries a lot now; how wide it needs to be is the
+    // reader's call, not a number picked here.
+    mountControlsResize(this.controlsEl);
 
     // Re-render on width change; charts that draw to raw canvas need it, and
     // Chart.js handles its own resize but a rebuild keeps everything in step.
