@@ -2849,7 +2849,7 @@ const cvdReach = await page.evaluate(async () => {
     comparable, oneColour,
   };
 });
-check(cvdReach.from.series === 48,
+check(cvdReach.from.series === 53,
   'the check now reads the charts that keep a colour per series',
   `${cvdReach.from.series} via series, ${cvdReach.from.colors} via colors`);
 check(cvdReach.comparable === 94,
@@ -2972,6 +2972,86 @@ check(fresh.depth === 0 && fresh.disabled,
   'and opening another chart starts a fresh history',
   `${fresh.depth} steps`);
 
+
+
+/* The chart from the report: one series, so it resolved to no palette at all
+ * and got no Colour row. `paletteOf` demanded two colours — a colour-vision
+ * rule, since a lone series has no pair that can merge — and the editor was
+ * reading it as "this chart has no colours". */
+await page.goto(`${base}/studio.html?chart=line-basic`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const oneSeries = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const out = { series: app.spec.series.length };
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1200);
+  const row = () => document.querySelector('.dgrid-colour-row');
+  out.rowShown = !!row();
+  if (!out.rowShown) return out;
+  out.swatches = row().querySelectorAll('.dgrid-swatch').length;
+
+  // Adding a series must bring its swatch with it, rather than waiting for the
+  // editor to be closed and reopened.
+  const add = [...document.querySelectorAll('.dlg .btn')].find((b) => /\+ Series/.test(b.textContent));
+  if (add) { add.click(); await sleep(400); }
+  out.afterAdd = row().querySelectorAll('.dgrid-swatch').length;
+  out.newShowsAColour = [...row().querySelectorAll('.dgrid-swatch')]
+    .every((b) => !!b.style.background);
+
+  const before = app.spec.series[0].color;
+  row().querySelector('.dgrid-swatch').click();
+  await sleep(300);
+  const dots = [...document.querySelectorAll('.colour-pop .palette-dot')];
+  if (dots[3]) { dots[3].click(); await sleep(300); }
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Use this data/.test(b.textContent)).click();
+  await sleep(1400);
+  out.changed = app.spec.series[0].color !== before;
+  // The series nobody touched keeps the colour it was going to have, rather
+  // than the swatch's default being written back as a decision.
+  out.secondUntouched = app.spec.series.length > 1;
+  return out;
+});
+check(oneSeries.series === 1 && oneSeries.rowShown,
+  'a single-series chart gets a Colour row too',
+  `${oneSeries.series} series, row=${oneSeries.rowShown}`);
+check(oneSeries.swatches === 1, 'with one swatch for its one series',
+  `${oneSeries.swatches} swatches`);
+check(oneSeries.afterAdd === 2 && oneSeries.newShowsAColour,
+  'and adding a series brings its swatch with it, already showing its colour',
+  `${oneSeries.afterAdd} swatches`);
+check(oneSeries.changed && oneSeries.secondUntouched,
+  'picking one applies it without disturbing the other');
+
+/* A series created by a paste takes its colour from the one palette.
+ *
+ * `dataio` kept its own copy of that list, and the copy had already drifted:
+ * the palette was corrected for colour-blind readers and this one still held
+ * the eight that collided, so every pasted column brought the old set back. */
+const newSeries = await page.evaluate(async () => {
+  const { PALETTE } = await import('/js/studio/palette.js');
+  const { applyData } = await import('/js/studio/dataio.js');
+  const reg = await import('/js/studio/registry.js');
+  const m = await import('/js/studio/cvd.js');
+  const def = reg.getChart('line-basic');
+  const spec = reg.newSpec(def);
+  applyData(def, spec, {
+    headers: ['label', 'A', 'B', 'C', 'D', 'E', 'F'],
+    rows: [['Jan', '1', '2', '3', '4', '5', '6'], ['Feb', '2', '3', '4', '5', '6', '7']],
+  });
+  const colours = spec.series.map((x) => x.color);
+  return {
+    colours,
+    fromPalette: colours.every((c, i) => c === PALETTE[i % PALETTE.length]),
+    merging: m.confusablePairs(colours).length,
+  };
+});
+check(newSeries.fromPalette,
+  'a pasted column takes its colour from the one palette, not a copy of it',
+  newSeries.colours.join(' '));
+check(!newSeries.merging,
+  'so six pasted series still do not merge for a colour-blind reader',
+  `${newSeries.merging} pairs`);
 
 /* The palette as a set, and swatches on the printed spec.
  *
@@ -3124,9 +3204,23 @@ const gridColour = await page.evaluate(async () => {
   const before = app.spec.series.map((x) => x.color);
   [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
   await sleep(1100);
-  const heads = [...document.querySelectorAll('.dgrid thead .dgrid-swatch')];
+  const row = document.querySelector('.dgrid-colour-row');
+  const heads = [...document.querySelectorAll('.dgrid-colour-row .dgrid-swatch')];
   const gutters = document.querySelectorAll('.dgrid tbody .dgrid-swatch').length;
-  if (!heads.length) return { heads: 0, gutters };
+  if (!row || !heads.length) return { heads: 0, gutters, hasRow: !!row };
+  // A row of the table, in the head with the header it describes — not a
+  // swatch tucked into the heading's own cell.
+  const headerCells = document.querySelector('.dgrid thead tr').children.length;
+  const centre = (e) => { const b = e.getBoundingClientRect(); return b.left + b.width / 2; };
+  const colCentres = [...document.querySelectorAll('.dgrid thead tr th')]
+    .slice(1, -1).map(centre);
+  const layout = {
+    lead: row.querySelector('.dgrid-colour-lead').textContent,
+    inHead: row.parentElement.tagName,
+    cellsMatchHeader: row.children.length === headerCells,
+    blanks: row.querySelectorAll('.is-blank').length,
+    aligned: heads.every((b) => colCentres.some((x) => Math.abs(x - centre(b)) <= 2)),
+  };
   heads[0].click();
   await sleep(300);
   const dots = [...document.querySelectorAll('.colour-pop .palette-dot')];
@@ -3138,14 +3232,22 @@ const gridColour = await page.evaluate(async () => {
     heads: heads.length,
     gutters,
     before,
+    hasRow: true,
+    ...layout,
     swatchPainted: heads[0].style.background,
     heldUntilApply: JSON.stringify(before) === JSON.stringify(heldBefore),
     after: app.spec.series.map((x) => x.color),
   };
 });
+check(gridColour.hasRow && gridColour.inHead === 'THEAD' && gridColour.lead === 'Colour',
+  'a series chart gets a Colour row in the table',
+  `row=${gridColour.hasRow} in=${gridColour.inHead} lead=${gridColour.lead}`);
 check(gridColour.heads === 2 && gridColour.gutters === 0,
-  'a series chart puts a swatch on each column heading',
-  `${gridColour.heads} headings, ${gridColour.gutters} gutters`);
+  'with one swatch per series column and none in the gutter',
+  `${gridColour.heads} swatches, ${gridColour.gutters} gutters`);
+check(gridColour.cellsMatchHeader && gridColour.blanks === 1 && gridColour.aligned,
+  'its cells line up with the columns, blank under the label column',
+  `cells=${gridColour.cellsMatchHeader} blanks=${gridColour.blanks} aligned=${gridColour.aligned}`);
 check(!!gridColour.swatchPainted, 'the swatch shows the colour it will apply',
   gridColour.swatchPainted);
 check(gridColour.heldUntilApply,

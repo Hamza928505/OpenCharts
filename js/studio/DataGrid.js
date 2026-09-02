@@ -28,10 +28,11 @@ const el = (tag, cls, text) => {
  *   columns hold words and what "+ Column" adds. See `columnRules` in dataio.
  * @param {Function} [opts.onChange] called with { headers, rows } after any edit
  * @param {object} [opts.colours] lets the table edit the chart's colours:
- *   `{ mode: 'column'|'row', at(i), set(i, hex) }`. A series is a column and an
- *   item is a row, so the swatch goes wherever that chart's colours actually
- *   live. Omitted where the palette does not line up with either, because a
- *   swatch on the wrong thing is worse than none.
+ *   `{ modeFor(headers, rows), at(i), set(i, hex) }`. A series is a column and
+ *   an item is a row, so the swatch goes wherever that chart's colours actually
+ *   live. `modeFor` is asked on every render rather than once, so adding a
+ *   series column adds its swatch instead of waiting for the editor to be
+ *   reopened.
  * @returns {{ el, getData, setData, addRow, validate }}
  */
 export function createDataGrid(opts) {
@@ -56,6 +57,7 @@ export function createDataGrid(opts) {
    */
   /* Colours, when the caller has told us where they belong. */
   const colours = opts.colours || null;
+  const colourMode = () => (colours ? colours.modeFor(headers, rows) : null);
   /** A swatch button for palette slot `i`, or null. */
   function swatchFor(i) {
     if (!colours || i < 0) return null;
@@ -242,17 +244,7 @@ export function createDataGrid(opts) {
       inp.spellcheck = false;
       inp.setAttribute('aria-label', `Name of column ${c + 1}`);
       inp.addEventListener('input', () => { headers[c] = inp.value; notify(); });
-      // A series is a column, so its colour belongs against its name.
-      const headSwatch = (colours && colours.mode === 'column')
-        ? swatchFor(dataCol(c) - labelCount())
-        : null;
-      if (headSwatch) {
-        const wrap = el('div', 'dgrid-head-wrap');
-        wrap.append(headSwatch, inp);
-        th.appendChild(wrap);
-      } else {
-        th.appendChild(inp);
-      }
+      th.appendChild(inp);
       // A text column may go while there are more of them than the shape
       // needs — that is what lets a fourth Sankey stage be taken back out. A
       // value column may go while more than the minimum remain, except on a
@@ -277,6 +269,36 @@ export function createDataGrid(opts) {
     });
     hr.appendChild(el('th', 'dgrid-gutter', ''));
     thead.appendChild(hr);
+
+    /* A row for the colours.
+     *
+     * A series *is* a column here, so its colour reads as another thing said
+     * about that column — like its name — and belongs under the name, in line
+     * with it. Hanging the swatch off the heading text put it in the same cell
+     * as the input and made it look like part of the name.
+     *
+     * It sits in the `thead`, with the header row it describes: it is not data,
+     * it is never validated, and `getData` never sees it. Charts that colour by
+     * row rather than by column keep their swatch in the row gutter, which is
+     * the same idea turned ninety degrees.
+     */
+    if (colourMode() === 'column') {
+      const cr = el('tr', 'dgrid-colour-row');
+      const lead = el('th', 'dgrid-gutter dgrid-colour-lead', 'Colour');
+      lead.scope = 'row';
+      lead.title = 'The colour each series is drawn in';
+      cr.appendChild(lead);
+      headers.forEach((_, c) => {
+        const td = el('td', 'dgrid-colour-cell');
+        const swatch = swatchFor(dataCol(c) - labelCount());
+        // A label column names things; it has no colour of its own to set.
+        if (swatch) td.appendChild(swatch);
+        else td.classList.add('is-blank');
+        cr.appendChild(td);
+      });
+      cr.appendChild(el('td', 'dgrid-gutter', ''));
+      thead.appendChild(cr);
+    }
     table.appendChild(thead);
 
     /* body */
@@ -285,7 +307,7 @@ export function createDataGrid(opts) {
       const tr = el('tr');
       const gutter = el('td', 'dgrid-gutter', String(r + 1));
       // An item is a row, so its colour belongs against its number.
-      if (colours && colours.mode === 'row') {
+      if (colourMode() === 'row') {
         const rowSwatch = swatchFor(r);
         if (rowSwatch) gutter.appendChild(rowSwatch);
       }

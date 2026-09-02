@@ -11,6 +11,8 @@
  * question they should never have to answer.
  */
 
+import { PALETTE } from './palette.js';
+
 /** Split a line respecting double-quoted fields. */
 function splitLine(line, delim) {
   const out = [];
@@ -364,12 +366,17 @@ export function toCSV(headers, rows) {
  * get a sensible chart, not an exception.
  * ───────────────────────────────────────────────────────────────────────── */
 
-const PALETTE_FALLBACK = [
-  '#6C63D8', '#16916A', '#CE5229', '#2F76C9',
-  '#A5720F', '#C13F69', '#5A6270', '#7A9A2E',
-];
+/**
+ * The colour a series gets when it does not already have one.
+ *
+ * Read from `palette.js` rather than copied. It *was* copied, and the copy had
+ * already drifted: the palette was corrected for colour-blind readers and this
+ * list still held the eight that collided, so every series created by a paste
+ * or a new column brought the old set back one colour at a time. Two lists
+ * that have to agree are one list.
+ */
 const colourAt = (i, existing) => (existing && existing[i] && existing[i].color)
-  || PALETTE_FALLBACK[i % PALETTE_FALLBACK.length];
+  || PALETTE[i % PALETTE.length];
 
 export const SHAPES = {
   /**
@@ -570,7 +577,7 @@ export const SHAPES = {
         [l[fromF], l[toF]].forEach((n) => { if (!seen.includes(n)) seen.push(n); });
       });
       patch[opts.nodesKey] = seen;
-      patch[opts.colorsKey || 'colors'] = seen.map((_, i) => PALETTE_FALLBACK[i % PALETTE_FALLBACK.length]);
+      patch[opts.colorsKey || 'colors'] = seen.map((_, i) => PALETTE[i % PALETTE.length]);
     }
     return patch;
   },
@@ -673,7 +680,7 @@ export const SHAPES = {
     const patch = { [opts.key || 'tree']: root };
     if (opts.groupsKey) {
       patch[opts.groupsKey] = root.children.map((c) => c.name);
-      patch[opts.colorsKey || 'colors'] = root.children.map((_, i) => PALETTE_FALLBACK[i % PALETTE_FALLBACK.length]);
+      patch[opts.colorsKey || 'colors'] = root.children.map((_, i) => PALETTE[i % PALETTE.length]);
     }
     return patch;
   },

@@ -230,7 +230,13 @@ export function paletteOf(def, spec) {
         at: i,
       }))
       .filter((e) => e.colour);
-    if (kept.length >= 2) return pack(list, kept, 'series');
+    // One colour is a palette worth *editing*, even though it is not one worth
+    // *checking* — a lone series has no pair that can merge. This used to
+    // demand two, which is a colour-vision rule, and it left every
+    // single-series chart looking to the editor as though it had no colours at
+    // all. Callers that need a pair check the length; this reports what is
+    // there.
+    if (kept.length) return pack(list, kept, 'series');
   }
 
   // A single-series chart has one colour and therefore no pair that can merge.
