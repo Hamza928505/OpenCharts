@@ -230,6 +230,49 @@ pasted observations were parsed, accepted, confirmed — and silently discarded.
 The suite now catches this class of bug for every chart at once: see
 "the data must reach the chart" in `test/run.mjs`.
 
+### Editing a colour
+
+Two places, one popover, and neither of them is where it started.
+
+**The popover is a portal.** It used to append itself *into the swatch* as an
+absolutely-positioned child, which put it at the mercy of whatever it happened
+to sit inside — and the sidebar is the worst possible host: `.controls` is a
+scroll container, so a popover opening near the bottom of the column was
+clipped by it; the panel is a flex column, so it overlapped whatever control
+came next, usually `+ Add series`; and it only ever opened downward with no
+room check. `colorpicker.js` puts one element on `document.body`, positioned
+`fixed` from the swatch's own rect, so no ancestor's `overflow` can reach it,
+nothing is a sibling to paint over it, and it flips above the swatch when the
+window bottom is closer than it is tall.
+
+Being pinned to a rect means it has to close when that rect moves, so a scroll
+or a resize dismisses it. That is also the bug that took longest to see:
+`first.focus()` scrolls an ancestor to bring the focused dot into view, which
+fired the scroll listener, which closed the popover **on the frame it opened**
+— but only when the sidebar happened to be scrollable, which is why it worked
+by hand and failed in the suite. `focus({ preventScroll: true })` is not a
+nicety here.
+
+**Colours are editable from the data table**, because that is where a reader
+looks for them. They are not part of the table — the grid holds words and
+numbers, and a colour is neither — so `DataGrid` takes a `colours` accessor and
+renders a swatch beside the thing that owns it:
+
+- **A series is a column**, so its swatch sits against the column heading.
+- **An item is a row**, so its swatch sits in the row's gutter, by the number.
+
+Which of the two is not declared per chart. It follows from whether the palette
+has one entry per value column or one per row, and where it matches neither no
+swatch is offered — a swatch on the wrong thing is worse than none. The same
+`paletteOf(def, spec)` that the colour-vision check reads answers it, and now
+carries a `set(i, hex)` that writes back to the entry a colour came from rather
+than to its filtered position.
+
+**The edits are held until Apply**, like everything else in that dialog.
+`applyData` rebuilds the arrays the colours live in, so a colour written before
+it would be written into something about to be replaced — the palette is
+resolved *again* afterwards and the pending colours written to that.
+
 ### Reshaping a table
 
 `rankCharts` solved half of the wide-table problem: it takes a 45-column export
@@ -1473,6 +1516,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `geodata.js` | Loads `data/countries.json`, `data/country-meta.json` and `data/cities/<ISO2>.json` |
 | `flags.js` | The flag icon set — `data/flags.json`, fetched once, painted into pickers |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
+| `colorpicker.js` | The swatch popover, portalled so nothing can clip it |
 | `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec tabs, copy, download, paste-a-spec |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |

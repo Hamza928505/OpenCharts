@@ -2754,6 +2754,90 @@ body[data-focus="1"] .stage-data { display: none; }
   .seg-btn { font-size: 11px; padding: .34rem .2rem; }
 }
 
+/* ── The colour popover ──────────────────────────────────────────────────────
+ *
+ * A portal on `document.body`, positioned `fixed` from the swatch it belongs
+ * to — see `colorpicker.js` for why it is not a child of the swatch any more.
+ * Its z-index only has to beat the dialog, because nothing else is a sibling
+ * of it.
+ */
+.colour-pop {
+  position: fixed;
+  z-index: 200;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--rule-firm);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.colour-pop-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 20px);
+  gap: 5px;
+  align-items: center;
+}
+
+.colour-pop-grid .palette-dot { width: 20px; height: 20px; }
+
+.colour-pop-custom {
+  width: 20px; height: 20px;
+  padding: 0;
+  border: 1px solid var(--rule-firm);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.colour-pop-auto {
+  font: inherit;
+  font-size: 11.5px;
+  padding: .3rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.colour-pop-auto:hover { border-color: var(--rule-firm); color: var(--ink); }
+
+/* ── Colours in the data table ───────────────────────────────────────────────
+ *
+ * A series is a column and an item is a row, so the swatch sits wherever that
+ * chart's colours actually live — in the heading, or in the row's gutter. It
+ * is a button rather than a cell so it can never be typed into: the table
+ * holds words and numbers, and a colour is neither.
+ */
+.dgrid-swatch {
+  width: 14px; height: 14px;
+  flex: 0 0 14px;
+  padding: 0;
+  border: 1px solid rgba(0,0,0,.18);
+  border-radius: 4px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.dgrid-swatch:hover { transform: scale(1.15); }
+.dgrid-swatch:active { transform: scale(.96); }
+.dgrid-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  .dgrid-swatch { border-color: rgba(255,255,255,.22); }
+}
+
+.dgrid thead th .dgrid-head-wrap {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+/* The gutter holds a row number; with colours it holds the swatch too. */
+.dgrid-gutter .dgrid-swatch { margin-left: .3rem; }
+
 /* ── Small multiples ─────────────────────────────────────────────────────────
  *
  * The grid a faceted chart draws into. Restated here rather than imported from

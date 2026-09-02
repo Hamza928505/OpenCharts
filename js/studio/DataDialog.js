@@ -29,6 +29,7 @@ import {
 } from './transform.js';
 import { toast } from './toast.js';
 import { facetableColumns, facetByColumn, facetSource, isFaceted } from './facet.js';
+import { paletteOf } from './cvd.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -115,6 +116,44 @@ export function openDataDialog(def, spec, onApply, seedText) {
   // handed over from a file does not, so that one still has to be worked out.
   const start = parseTable(startText, fromChart ? true : expectedCols);
 
+  /* ── colours in the table ────────────────────────────────────────────
+   *
+   * Colours are not part of the table — they live on the spec, and the table
+   * holds words and numbers. But the reader thinks of a series as a column and
+   * an item as a row, and that is where they look to recolour one, so the
+   * swatch goes there.
+   *
+   * Which of the two it is, is not declared per chart: it follows from whether
+   * the palette has one entry per value column or one per row. Where it lines
+   * up with neither, no swatch is offered — a swatch on the wrong thing is
+   * worse than none.
+   *
+   * Edits are held here until Apply. The spec's arrays are rebuilt by
+   * `applyData`, so writing a colour into the old one would be writing into
+   * something about to be replaced.
+   */
+  const startPalette = paletteOf(def, spec);
+  let pendingColours = [...startPalette.colors];
+
+  function colourMode(data) {
+    if (!pendingColours.length) return null;
+    const valueCols = (data.headers || []).length - labelColumnsFor(data.headers || []);
+    if (pendingColours.length === valueCols) return 'column';
+    if (pendingColours.length === (data.rows || []).length) return 'row';
+    return null;
+  }
+
+  // The mode is settled from the table the editor opens on. Recomputing it per
+  // render would move the swatches from the headings to the gutter halfway
+  // through an edit, which is a worse answer than leaving them where they were.
+  const colourLayout = colourMode({ headers: start.headers, rows: start.rows });
+
+  const gridColours = colourLayout ? {
+    mode: colourLayout,
+    at: (i) => pendingColours[i] || '',
+    set: (i, hex) => { if (i >= 0 && i < pendingColours.length) pendingColours[i] = hex; },
+  } : null;
+
   // Declared before the grid because the grid asks for it while it renders:
   // a column being split on is not the chart's data, so it is not validated as
   // a number.
@@ -126,6 +165,7 @@ export function openDataDialog(def, spec, onApply, seedText) {
     shape: desc.shape,
     minRows: 1,
     skipColumn: (headers) => (facetBy ? headers.indexOf(facetBy) : -1),
+    colours: gridColours,
     onChange: () => {
       status.textContent = '';
       status.className = 'dlg-status';
@@ -1097,6 +1137,14 @@ export function openDataDialog(def, spec, onApply, seedText) {
     // data — but a facet by a column that is no longer chosen has to go, or
     // the chart would keep drawing panels from a table nobody asked it to.
     if (col < 0 && isFaceted(spec) && spec.facet.kind === 'value') delete spec.facet;
+
+    // Colours go on after the data, because `applyData` rebuilds the arrays
+    // they live in. Resolved again rather than reused: the spec it wrote is
+    // not the spec this dialog opened on.
+    if (colourLayout) {
+      const after = paletteOf(def, spec);
+      pendingColours.forEach((hex, i) => { if (hex) after.set(i, hex); });
+    }
     toast(res.message, 'ok');
     onApply(res.message);
     dismiss();
