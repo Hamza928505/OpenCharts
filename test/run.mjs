@@ -2863,6 +2863,95 @@ check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette 
 
 
 
+
+/* The controls column is as wide as the reader wants it.
+ *
+ * It was a fixed 300px — 262px once the padding is off — and that column now
+ * carries the data preview, the series editor, the palette, the facet control
+ * and the notes. Picking a bigger number would spend more chrome on every
+ * reader whether or not they wanted it, so the width is a choice instead. */
+await page.setViewportSize({ width: 1440, height: 900 });
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+
+const widthOf = (sel) => page.evaluate((s2) =>
+  Math.round(document.querySelector(s2).getBoundingClientRect().width), sel);
+const dragGrip = async (dx) => {
+  const box = await page.locator('.controls-grip').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + dx, box.y + 300, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+};
+
+const gripCount = await page.locator('.controls-grip').count();
+check(gripCount === 1, 'the controls column has one resize grip', String(gripCount));
+
+const startW = await widthOf('.controls');
+const startStage = await widthOf('.stage');
+await dragGrip(140);
+const wideW = await widthOf('.controls');
+const wideStage = await widthOf('.stage');
+check(wideW > startW + 100, 'dragging it widens the column',
+  `${startW} → ${wideW}`);
+check(wideStage < startStage - 100, 'and the chart gives up exactly that space',
+  `${startStage} → ${wideStage}`);
+
+await dragGrip(900);
+const capped = await widthOf('.controls');
+await dragGrip(-900);
+const floored = await widthOf('.controls');
+check(capped <= 560 && floored >= 260,
+  'it stops at a sensible width in both directions',
+  `max ${capped}, min ${floored}`);
+
+// A grip inside `.controls` would be wiped by `buildControls`, which empties
+// that column on every chart load and every data edit.
+await page.evaluate(async () => {
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const app = window.openCharts;
+  buildControls(document.querySelector('.controls'), app.def, app.spec, () => app._onEdit());
+});
+await page.waitForTimeout(300);
+const afterRebuild = await page.locator('.controls-grip').count();
+check(afterRebuild === 1, 'and it survives the controls being rebuilt',
+  `${afterRebuild} grips`);
+
+await dragGrip(120);
+const chosen = await widthOf('.controls');
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const remembered = await widthOf('.controls');
+check(remembered === chosen, 'the width is remembered across a reload',
+  `${chosen} → ${remembered}`);
+
+await page.locator('.controls-grip').dblclick();
+await page.waitForTimeout(350);
+const reset = await widthOf('.controls');
+check(reset === 300, 'and a double-click puts it back', String(reset));
+
+// The hand-drawn renderers measure their host, so a width change has to reach
+// them — this is the bug the rail's own resize taught.
+const remeasured = await page.evaluate(() => {
+  const c = document.querySelector('.chart-host canvas');
+  if (!c || !c.parentElement) return null;
+  return Math.abs(c.getBoundingClientRect().width
+    - c.parentElement.getBoundingClientRect().width) < 3;
+});
+check(remeasured, 'the chart re-measures rather than keeping its old size');
+
+// Below the two-column breakpoint the controls stack, so there is nothing to
+// divide and the handle is not offered.
+await page.setViewportSize({ width: 700, height: 900 });
+await page.waitForTimeout(400);
+const hiddenNarrow = await page.evaluate(() => {
+  const g = document.querySelector('.controls-grip');
+  return !g || getComputedStyle(g).display === 'none';
+});
+check(hiddenNarrow, 'and it is not offered where the studio stacks');
+await page.setViewportSize({ width: 1280, height: 900 });
+
 /* Undo and redo for the studio itself.
  *
  * The data grid has had them since it shipped, and they cover the table and
