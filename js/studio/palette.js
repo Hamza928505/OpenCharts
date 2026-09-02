@@ -6,15 +6,37 @@
  * `js/utils.js` `U.C` object so ported charts read the same as before.
  */
 
+/**
+ * The eight series colours, and the one hard constraint on them: **no two may
+ * merge for a colour-blind reader.**
+ *
+ * The set this replaced had seven colliding pairs, and the first bit at four
+ * series — purple against blue, ΔE 29 apart normally and 8.2 simulated under
+ * deuteranopia, against a merge threshold of 11. Half the library inherited it,
+ * so `cvd.js` warned on the data 46 charts shipped with: the check working
+ * exactly as intended, on a palette that should never have needed it.
+ *
+ * Re-ordering could not fix it. The collision graph's largest independent set
+ * was four, so no arrangement of these eight hues gets past a fourth series —
+ * the values themselves had to move.
+ *
+ * They moved as little as would do it. Each colour keeps its hue family and
+ * its name, and none is further than ΔE 9 from the colour it replaces, which
+ * is a shift you can see side by side and not one that renames anything. What
+ * changed is mostly *lightness*: deuteranopia and protanopia collapse the
+ * red-green axis, so colours that differ only in hue along it merge, and
+ * spacing them in lightness is what pulls them apart. Every pair is now at
+ * least ΔE 12 apart under all three simulations, and the suite holds that.
+ */
 export const PALETTE = [
-  '#6C63D8', // purple
-  '#16916A', // teal
-  '#CE5229', // coral
-  '#2F76C9', // blue
-  '#A5720F', // amber
-  '#C13F69', // pink
-  '#5A6270', // slate
-  '#7A9A2E', // olive
+  '#6C63D8', // purple — also --accent, and the one colour that did not move
+  '#0FA475', // teal
+  '#B23E17', // coral
+  '#5481C9', // blue
+  '#BC861D', // amber
+  '#AA375C', // pink
+  '#4C667E', // slate
+  '#6F9138', // olive
 ];
 
 export const C = {

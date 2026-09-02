@@ -25,11 +25,11 @@
 
   /* accent spectrum — also the default chart palette */
   --a-purple:    #6C63D8;
-  --a-teal:      #16916A;
-  --a-coral:     #CE5229;
-  --a-blue:      #2F76C9;
-  --a-amber:     #A5720F;
-  --a-pink:      #C13F69;
+  --a-teal:      #0FA475;
+  --a-coral:     #B23E17;
+  --a-blue:      #5481C9;
+  --a-amber:     #BC861D;
+  --a-pink:      #AA375C;
   --accent:      var(--a-purple);
   --accent-wash: rgba(108, 99, 216, .10);
   --accent-line: rgba(108, 99, 216, .28);

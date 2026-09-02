@@ -2733,7 +2733,26 @@ const cvdMath = await page.evaluate(async () => {
     simHex: /^#[0-9a-f]{6}$/i.test(m.simulate('#CE5229', 'deuteranopia')),
     // Identical colours are zero apart; the check must not divide by chance.
     selfDistance: m.distance('#6C63D8', '#6C63D8'),
+    threshold: m.MERGE_THRESHOLD,
     paletteFirstThree: m.confusablePairs(PALETTE.slice(0, 3)).length,
+    // The whole palette, not its first three. The set this replaced had seven
+    // colliding pairs and the first bit at four series, so half the library
+    // warned on the data it shipped with — the check working as intended, on a
+    // palette that should never have needed it.
+    paletteAll: m.confusablePairs(PALETTE).length,
+    paletteSize: PALETTE.length,
+    paletteWorst: (() => {
+      let worst = Infinity;
+      for (let i = 0; i < PALETTE.length; i++) {
+        for (let j = i + 1; j < PALETTE.length; j++) {
+          for (const k of m.CVD_KINDS) {
+            const d = m.distance(m.simulate(PALETTE[i], k.key), m.simulate(PALETTE[j], k.key));
+            if (d < worst) worst = d;
+          }
+        }
+      }
+      return Math.round(worst * 10) / 10;
+    })(),
     sentence: m.describePairs(redGreen, (i) => ['Revenue', 'Cost'][i]),
   };
 });
@@ -2748,6 +2767,12 @@ check(cvdMath.simHex, 'a simulated colour is still a hex colour');
 check(cvdMath.selfDistance === 0, 'a colour is zero distance from itself', String(cvdMath.selfDistance));
 check(!cvdMath.paletteFirstThree, 'the palette a three-series chart opens with is safe',
   `${cvdMath.paletteFirstThree} pairs merge`);
+check(!cvdMath.paletteAll,
+  'and so is the whole palette, at any number of series',
+  `${cvdMath.paletteAll} of ${(cvdMath.paletteSize * (cvdMath.paletteSize - 1)) / 2} pairs merge`);
+check(cvdMath.paletteWorst >= cvdMath.threshold,
+  'every default pair clears the merge threshold under all three deficiencies',
+  `worst simulated ΔE ${cvdMath.paletteWorst} against a threshold of ${cvdMath.threshold}`);
 check(/Revenue and Cost/.test(cvdMath.sentence), 'the warning uses the series names', cvdMath.sentence);
 
 /* And it reaches the control panel. `area-band` carries a `colors` widget;

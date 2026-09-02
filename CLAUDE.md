@@ -634,6 +634,27 @@ Three rules, all of which the suite holds:
   does not need the tool refusing them; they need to be told which two series
   just became one.
 
+**The palette itself had to pass the check.** Extending it to all 114 charts
+found that the default eight had *seven* colliding pairs, and the first bit at
+four series — purple against blue, ΔE 29 apart normally and 8.2 simulated under
+deuteranopia, against a threshold of 11. 46 of the 94 comparable charts warned
+on the data they shipped with: the check working exactly as intended, on a
+palette that should never have needed it. Half the library warning out of the
+box is also the noise this module's own rule about already-similar pairs exists
+to avoid, so the answer was to fix the palette rather than quieten the check.
+
+Re-ordering could not do it. The collision graph's largest independent set was
+four, so no arrangement of those eight hues gets past a fourth series — the
+values had to move, and they moved as little as would work. Every colour keeps
+its hue family and its name, none is further than ΔE 9 from the one it
+replaced, and `--a-purple` did not move at all because it is `--accent`. What
+changed is mostly **lightness**: deuteranopia and protanopia collapse the
+red-green axis, so colours separated only along it merge, and spacing them in
+lightness is what pulls them apart. Every pair now clears ΔE 12 under all three
+simulations, **0 of 94 charts warn on their own data**, and the suite asserts
+the whole palette rather than its first three — which is what the old check
+measured, and why this went unseen.
+
 The matrices are Machado et al. (2009) at severity 1.0 and operate on *linear*
 RGB, which is why `toLinear` runs first — applying them to gamma-encoded bytes
 is the usual way this comes out wrong, and it fails quietly, shifting every
@@ -1315,6 +1336,20 @@ column, and any cell that will not read as a number. `looksNumeric()` in
 detection, and it is deliberately **narrower** than "strip everything that is
 not a digit": that looser rule makes `Q1` numeric and breaks header detection
 on any table with quarter columns.
+
+**It scans rather than matches, and that is a fix rather than a style.** The
+two patterns it used were ambiguous — `\d*[.,]?\d+` can split a run of digits
+in as many ways as it is long, and `(?:[ ,.]\d{3})*(?:[.,]\d+)?` cannot tell a
+thousands group from a decimal without trying both — so each cost O(n²) on a
+long run of digits that failed at the end. Every cell of every pasted table
+comes through here and a table is somebody else's file, so quadratic was the
+wrong shape for it whatever the constant; CodeQL flagged both as polynomial
+regular expressions on uncontrolled data and was right. The replacement walks
+the string once, and the two shapes it accepts — grouped thousands, and a plain
+run with at most one decimal separator — are checked against the digit runs it
+found. Behaviour is unchanged: the rewrite was compared against the old
+implementation over 60,000 fuzzed inputs and every fixed case worth naming,
+with no disagreement.
 
 `columnRules(shape)` in `dataio.js` says how the grid may treat a shape's
 columns: how many leading ones hold words, the floor below which ✕ is not
