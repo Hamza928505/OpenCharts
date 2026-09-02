@@ -25,11 +25,11 @@
 
   /* accent spectrum — also the default chart palette */
   --a-purple:    #6C63D8;
-  --a-teal:      #16916A;
-  --a-coral:     #CE5229;
-  --a-blue:      #2F76C9;
-  --a-amber:     #A5720F;
-  --a-pink:      #C13F69;
+  --a-teal:      #0FA475;
+  --a-coral:     #B23E17;
+  --a-blue:      #5481C9;
+  --a-amber:     #BC861D;
+  --a-pink:      #AA375C;
   --accent:      var(--a-purple);
   --accent-wash: rgba(108, 99, 216, .10);
   --accent-line: rgba(108, 99, 216, .28);
@@ -2753,6 +2753,93 @@ body[data-focus="1"] .stage-data { display: none; }
   .card-canvas { height: 140px; }
   .seg-btn { font-size: 11px; padding: .34rem .2rem; }
 }
+
+/* ── The Colours tab ─────────────────────────────────────────────────────────
+ *
+ * The palette as a set, which is the question neither the sidebar nor the data
+ * table answers: those edit one colour beside the thing it belongs to.
+ * `.code-body` is a `pre`, so everything here has to re-declare the font it
+ * wants rather than inherit the monospace the code tabs need.
+ */
+.palette-editor {
+  font-family: var(--sans);
+  white-space: normal;
+  padding: 1.1rem 1.2rem 1.3rem;
+}
+
+.palette-editor-head {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 0 0 .9rem;
+}
+
+.palette-editor-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: .4rem 1.4rem;
+}
+
+.palette-editor-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .3rem 0;
+  min-width: 0;
+}
+
+.palette-editor-dot {
+  width: 22px; height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+  border: 1px solid rgba(0,0,0,.16);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+.palette-editor-dot:hover { transform: scale(1.12); }
+.palette-editor-dot:active { transform: scale(.97); }
+.palette-editor-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.palette-editor-name {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.palette-editor-hex {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  flex: 0 0 auto;
+}
+
+.palette-editor-empty { font-size: 13px; color: var(--ink-soft); margin: 0; }
+
+.palette-editor .palette-warn,
+.palette-editor .palette-sim { margin-top: .9rem; }
+
+@media (prefers-color-scheme: dark) {
+  .palette-editor-dot { border-color: rgba(255,255,255,.2); }
+}
+
+/* A swatch on each colour printed in the Spec tab. Inline, so it sits in the
+   line of code rather than pushing it around. */
+.spec-swatch {
+  display: inline-block;
+  width: 10px; height: 10px;
+  padding: 0;
+  margin-right: .35em;
+  vertical-align: baseline;
+  border: 1px solid rgba(128,128,128,.5);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.spec-swatch:hover { transform: scale(1.25); }
+.spec-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ── The colour popover ──────────────────────────────────────────────────────
  *

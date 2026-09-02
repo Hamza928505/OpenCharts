@@ -37,6 +37,17 @@ const RAIL_KEY = 'opencharts.rail';
  */
 const RAIL_MODE_KEY = 'opencharts.rail-mode';
 
+/** How many steps of studio history to keep, matching the data grid's. */
+const HISTORY_LIMIT = 60;
+
+/**
+ * Edits closer together than this fold into one undo step.
+ *
+ * A slider drag fires an edit per pixel, and an undo that walked back one
+ * pixel at a time is not what anybody means by undo.
+ */
+const COALESCE_MS = 400;
+
 /** CSS.escape is not in every browser this may be opened in. */
 const cssEscape = (value) => {
   const s = String(value == null ? '' : value);
@@ -52,6 +63,9 @@ export class StudioApp {
     this.inst = null;
     this.codePanel = new CodePanel($('#codepanel'));
     this.codePanel.onApplySpec = (parsed) => this._applySpec(parsed);
+    this.codePanel.onUndo = () => this.undo();
+    this.codePanel.onRedo = () => this.redo();
+    this._bindHistoryKeys();
     this.sourcesEl = $('#sources');
     this.helpEl = $('#help');
 
@@ -407,11 +421,123 @@ export class StudioApp {
     buildControls(this.controlsEl, def, this.spec, () => this._onEdit());
     this._markActive();
     this.rebuild();
+    // Opening a chart is not an edit of the last one: the history starts here.
+    this._resetHistory();
 
     if (this.broughtData) {
       toast('Your table — ' + this.broughtData, 'ok');
       this.broughtData = null;
     }
+  }
+
+  /* ── history ───────────────────────────────────────────────────────────
+   *
+   * Snapshots of the whole spec, not inverse operations — the same bargain
+   * `DataGrid` makes and for the same reason: a spec is JSON by construction
+   * (the share link and the Spec tab both prove it round-trips), so a copy is
+   * cheap beside the render that follows it, and an undo cannot drift from the
+   * edit it reverses.
+   *
+   * The grid's undo covers the table. This covers everything else the studio
+   * can change — colours, sliders, toggles, the facet, the notes — which until
+   * now were all one-way doors.
+   */
+  _snapshot() { return JSON.stringify(this.spec); }
+
+  /** Start a fresh history, on load or on opening another chart. */
+  _resetHistory() {
+    this.past = [];
+    this.future = [];
+    this.lastCommitted = this._snapshot();
+    this.lastCommitAt = 0;
+    this._paintHistory();
+  }
+
+  /**
+   * Bank the state as it was before the edit that just happened.
+   *
+   * Edits inside `COALESCE_MS` of each other fold into one step. A slider drag
+   * fires an edit per pixel, and an undo that walked back one pixel at a time
+   * is not what anybody means by undo — the grid solves the same problem by
+   * banking once per cell on the first keystroke. Time is the honest proxy
+   * here, because `_onEdit` is told that *something* changed and not what.
+   *
+   * `step: true` refuses to fold. A table applied from the dialog or a spec
+   * pasted into the code panel is a deliberate act with a boundary either
+   * side of it, however fast it followed the last one.
+   */
+  _commit({ step = false } = {}) {
+    const now = this._snapshot();
+    if (now === this.lastCommitted) return;
+    const at = Date.now();
+    const fold = !step && this.past.length > 0 && (at - this.lastCommitAt) < COALESCE_MS;
+    if (!fold) {
+      this.past.push(this.lastCommitted);
+      if (this.past.length > HISTORY_LIMIT) this.past.shift();
+    }
+    // Any new edit is a new branch: what was undone is no longer ahead.
+    this.future.length = 0;
+    this.lastCommitted = now;
+    this.lastCommitAt = at;
+    this._paintHistory();
+  }
+
+  undo() {
+    if (!this.past.length) return false;
+    this.future.push(this.lastCommitted);
+    this._restore(this.past.pop());
+    return true;
+  }
+
+  redo() {
+    if (!this.future.length) return false;
+    this.past.push(this.lastCommitted);
+    this._restore(this.future.pop());
+    return true;
+  }
+
+  /** Put a banked spec back on screen without recording it as a new edit. */
+  _restore(json) {
+    this.spec = JSON.parse(json);
+    if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
+    // The controls are rebuilt, not just repainted: an undo can change how
+    // many series exist, and a stale row would edit an index that has gone.
+    buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+    this.rebuild();
+    this.lastCommitted = json;
+    // Deliberately not `Date.now()`: an edit made straight after an undo is a
+    // new step, never a fold into the one that was just undone.
+    this.lastCommitAt = 0;
+    this._paintHistory();
+  }
+
+  _paintHistory() {
+    if (this.codePanel && this.codePanel.setHistory) {
+      this.codePanel.setHistory({
+        canUndo: this.past.length > 0,
+        canRedo: this.future.length > 0,
+      });
+    }
+  }
+
+  /**
+   * Ctrl+Z / Ctrl+Shift+Z, bound at the document.
+   *
+   * Stood down while the data editor is open — that grid binds its own Ctrl+Z
+   * on its own root and means the table by it, which is what every spreadsheet
+   * does — and while somebody is typing, where the browser's own undo is the
+   * one they want.
+   */
+  _bindHistoryKeys() {
+    document.addEventListener('keydown', (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      if (document.querySelector('.dlg-scrim')) return;
+      const t = e.target;
+      if (t && t.closest && t.closest('input, textarea, [contenteditable]')) return;
+      e.preventDefault();
+      if (e.shiftKey) this.redo();
+      else this.undo();
+    });
   }
 
   _onEdit() {
@@ -426,6 +552,7 @@ export class StudioApp {
       history.replaceState({ id: this.def.id }, '', url.toString());
     }
     this.rebuild();
+    this._commit();
   }
 
   /** Open the full-size data editor. */
@@ -435,6 +562,8 @@ export class StudioApp {
       // Rebuild the controls too: new data can mean a different number of series.
       buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
       this.rebuild();
+      // A table is one deliberate act however quickly it followed the last.
+      this._commit({ step: true });
     });
   }
 
@@ -527,6 +656,9 @@ export class StudioApp {
     // The short one costs nothing next to the code generation above it.
     code.prompt = buildPrompt(this.def, this.spec, code, 'full');
     code.promptShort = buildPrompt(this.def, this.spec, code, 'data');
+    // The code tabs need only strings; the Colours tab edits the live spec, so
+    // it is handed the chart itself.
+    this.codePanel.setChart(this.def, this.spec, () => this._onEdit());
     this.codePanel.setCode(code, this.def.id);
     if (this.dataEl) this.dataEl.innerHTML = tableMarkup(this.def, this.spec);
     if (this.sourcesEl) renderSources(this.sourcesEl, code.deps || []);
@@ -561,6 +693,7 @@ export class StudioApp {
     if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
     buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
     this.rebuild();
+    this._commit({ step: true });
     return { ok: true, message: 'Spec applied' };
   }
 

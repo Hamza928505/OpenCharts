@@ -634,6 +634,27 @@ Three rules, all of which the suite holds:
   does not need the tool refusing them; they need to be told which two series
   just became one.
 
+**The palette itself had to pass the check.** Extending it to all 114 charts
+found that the default eight had *seven* colliding pairs, and the first bit at
+four series — purple against blue, ΔE 29 apart normally and 8.2 simulated under
+deuteranopia, against a threshold of 11. 46 of the 94 comparable charts warned
+on the data they shipped with: the check working exactly as intended, on a
+palette that should never have needed it. Half the library warning out of the
+box is also the noise this module's own rule about already-similar pairs exists
+to avoid, so the answer was to fix the palette rather than quieten the check.
+
+Re-ordering could not do it. The collision graph's largest independent set was
+four, so no arrangement of those eight hues gets past a fourth series — the
+values had to move, and they moved as little as would work. Every colour keeps
+its hue family and its name, none is further than ΔE 9 from the one it
+replaced, and `--a-purple` did not move at all because it is `--accent`. What
+changed is mostly **lightness**: deuteranopia and protanopia collapse the
+red-green axis, so colours separated only along it merge, and spacing them in
+lightness is what pulls them apart. Every pair now clears ΔE 12 under all three
+simulations, **0 of 94 charts warn on their own data**, and the suite asserts
+the whole palette rather than its first three — which is what the old check
+measured, and why this went unseen.
+
 The matrices are Machado et al. (2009) at severity 1.0 and operate on *linear*
 RGB, which is why `toLinear` runs first — applying them to gamma-encoded bytes
 is the usual way this comes out wrong, and it fails quietly, shifting every
@@ -683,6 +704,70 @@ Two things the editor has to get right, both checked:
 - **Malformed JSON keeps the text.** The editor stays open holding what was
   pasted, with the parser's own message in a toast, so it can be fixed rather
   than retyped.
+
+### The Colours tab
+
+The seventh view in the code panel, and the only other one that is not code.
+The sidebar edits a colour beside its series and the data table edits one
+against its column or row — both answer *what colour is this one*. Neither
+answers *do these twelve work together*, which is the question a palette
+raises, so this shows the whole set at once: a swatch, a name and a hex per
+series, with the colour-vision warning underneath.
+
+`view: true` on the tab means it renders a component rather than highlighted
+source, and Copy and Download stand down — there is nothing to copy from a
+view that is not text. Editing here is an ordinary spec edit, so it joins the
+undo history like any other.
+
+**The Spec tab prints a swatch on every colour it holds.** A hex string is the
+one value in a spec a reader cannot judge by reading. The swatch is inserted
+into the highlighted *output*, never the source, so the highlighter stays a
+pure function of its text — and a pick edits the printed JSON and re-applies
+the whole thing rather than resolving the hex back to a path. The highlighter
+emits text in source order, so the nth swatch on screen is the nth match in the
+source, which is all the mapping this needs and it cannot disagree with what
+the reader is looking at. Where the two ever fail to line up, nothing is
+decorated rather than a swatch being wired to the wrong colour.
+
+`palette-ui.js` holds both the warning and the editor. The warning began inside
+`ControlPanel.js` for two widgets; this tab was the third caller, and a third
+copy of one statement about the palette would be a third thing to keep true.
+
+### Undo in the studio
+
+The data editor has had undo since it shipped, and it covers the table and
+nothing else — so every colour, slider, toggle, facet and note in the studio
+was a one-way door. `StudioApp` keeps its own stack, and the buttons sit in the
+**code bar** rather than beside the chart: that bar is where the other verbs
+already are, and what they undo is the *spec* — the same thing the Spec tab two
+buttons along prints.
+
+Snapshots of the whole spec, not inverse operations, which is the bargain
+`DataGrid` already makes and for the same reason: a spec is JSON by
+construction — the share link and the Spec view both prove it round-trips — so
+a copy costs nothing beside the render that follows it, and an undo cannot
+drift from the edit it reverses.
+
+Four rules, all checked:
+
+- **A drag is one step.** A slider fires an edit per pixel, and an undo that
+  walked back a pixel at a time is not what anybody means by undo. Edits within
+  `COALESCE_MS` fold together. The grid solves the same problem by banking once
+  per cell on the first keystroke; time is the honest proxy here, because
+  `_onEdit` is told that *something* changed and never what.
+- **A table or a pasted spec refuses to fold.** `_commit({ step: true })` — both
+  are deliberate acts with a boundary either side, however fast they followed
+  the last edit.
+- **An edit after an undo drops the redo branch**, and an edit straight after an
+  undo is always a new step: `_restore` sets `lastCommitAt = 0` rather than to
+  now, so it cannot fold into the thing that was just undone.
+- **The controls are rebuilt, not repainted.** An undo can change how many
+  series exist, and a stale row would edit an index that has gone.
+
+`Ctrl+Z` / `Ctrl+Shift+Z` are bound at the document and **stand down while the
+data editor is open** — that grid binds its own on its own root and means the
+table by it, which is what every spreadsheet does — and while somebody is
+typing, where the browser's own undo is the one they want.
 
 ### Undo in the data editor
 
@@ -1252,6 +1337,20 @@ detection, and it is deliberately **narrower** than "strip everything that is
 not a digit": that looser rule makes `Q1` numeric and breaks header detection
 on any table with quarter columns.
 
+**It scans rather than matches, and that is a fix rather than a style.** The
+two patterns it used were ambiguous — `\d*[.,]?\d+` can split a run of digits
+in as many ways as it is long, and `(?:[ ,.]\d{3})*(?:[.,]\d+)?` cannot tell a
+thousands group from a decimal without trying both — so each cost O(n²) on a
+long run of digits that failed at the end. Every cell of every pasted table
+comes through here and a table is somebody else's file, so quadratic was the
+wrong shape for it whatever the constant; CodeQL flagged both as polynomial
+regular expressions on uncontrolled data and was right. The replacement walks
+the string once, and the two shapes it accepts — grouped thousands, and a plain
+run with at most one decimal separator — are checked against the digit runs it
+found. Behaviour is unchanged: the rewrite was compared against the old
+implementation over 60,000 fuzzed inputs and every fixed case worth naming,
+with no disagreement.
+
 `columnRules(shape)` in `dataio.js` says how the grid may treat a shape's
 columns: how many leading ones hold words, the floor below which ✕ is not
 offered, how many a row must fill, and what `+ Column` adds. Get the first one
@@ -1527,7 +1626,8 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `flags.js` | The flag icon set — `data/flags.json`, fetched once, painted into pickers |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
 | `colorpicker.js` | The swatch popover, portalled so nothing can clip it |
-| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec tabs, copy, download, paste-a-spec |
+| `palette-ui.js` | The colour-vision warning and the whole-palette editor |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |

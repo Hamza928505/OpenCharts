@@ -149,19 +149,100 @@ function preambleRows(grid) {
  * or period columns. Currency symbols, thousands separators and a trailing
  * percent are allowed; stray letters are not.
  */
+const CURRENCY = '$£€¥₹';
+const isDigit = (c) => c >= '0' && c <= '9';
+const isSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r'
+  || c === '\f' || c === '\v' || c === '\u00a0';
+const isGroupSep = (c) => c === ' ' || c === ',' || c === '.';
+const isDecimalSep = (c) => c === ',' || c === '.';
+
+/**
+ * The mantissa, as digit runs and the separators between them.
+ *
+ * Scanned rather than matched. The two patterns this replaced were ambiguous —
+ * `\d*[.,]?\d+` can split a run of digits in as many ways as it is long, and
+ * `(?:[ ,.]\d{3})*(?:[.,]\d+)?` cannot tell a thousands group from a decimal
+ * without trying both — so each cost O(n²) on a long run of digits that failed
+ * at the end. Every cell of every pasted table comes through here, and a table
+ * is somebody else's file, so quadratic was the wrong shape for it whatever
+ * the constant. Reported by CodeQL as a polynomial regular expression on
+ * uncontrolled data, and it was right.
+ *
+ * @returns {{runs: number[], seps: string[]} | null} null if a character
+ *   appears that is neither a digit nor a separator.
+ */
+function scanMantissa(m) {
+  const runs = [];
+  const seps = [];
+  let run = 0;
+  for (let i = 0; i < m.length; i++) {
+    const c = m[i];
+    if (isDigit(c)) { run++; continue; }
+    if (!isGroupSep(c)) return null;
+    runs.push(run);
+    seps.push(c);
+    run = 0;
+  }
+  runs.push(run);
+  return { runs, seps };
+}
+
+/** `1,234`, `1 234 567`, `1.234.567,89` — grouped thousands, maybe a decimal. */
+function isGrouped(runs, seps) {
+  if (runs[0] < 1 || runs[0] > 3) return false;
+  const n = seps.length;
+  if (n === 0) return true;
+  // Either every separator introduces a group of exactly three…
+  let allThrees = true;
+  for (let i = 1; i <= n; i++) if (runs[i] !== 3) { allThrees = false; break; }
+  if (allThrees) return true;
+  // …or all but the last do, and the last introduces the decimal.
+  for (let i = 1; i < n; i++) if (runs[i] !== 3) return false;
+  return runs[n] >= 1 && isDecimalSep(seps[n - 1]);
+}
+
+/** `42`, `1234.5`, `.5` — one run, at most one decimal separator. */
+function isPlain(runs, seps) {
+  if (seps.length === 0) return runs[0] >= 1;
+  if (seps.length !== 1) return false;
+  return isDecimalSep(seps[0]) && runs[1] >= 1;
+}
+
 const looksNumeric = (cell) => {
   if (cell === '' || cell == null) return true;
-  const trimmed = String(cell).trim();
-  if (!trimmed) return true;
-  // Peel off a leading sign and currency, and a trailing percent or currency.
-  const core = trimmed
-    .replace(/^[-+]?\s*[$£€¥₹]?\s*/, '')
-    .replace(/\s*[%$£€¥₹]?$/, '')
-    .trim();
-  if (!core) return false;
-  // What remains must be digits with optional separators and an exponent.
-  return /^\d{1,3}(?:[ ,.]\d{3})*(?:[.,]\d+)?(?:[eE][-+]?\d+)?$/.test(core)
-    || /^\d*[.,]?\d+(?:[eE][-+]?\d+)?$/.test(core);
+  const s = String(cell).trim();
+  if (!s) return true;
+
+  // Peel a leading sign and currency, and a trailing percent or currency —
+  // the same two edges the regexes used to strip, in the same order.
+  let i = 0;
+  let j = s.length;
+  if (s[i] === '+' || s[i] === '-') i++;
+  while (i < j && isSpace(s[i])) i++;
+  if (i < j && CURRENCY.includes(s[i])) i++;
+  while (i < j && isSpace(s[i])) i++;
+  while (j > i && isSpace(s[j - 1])) j--;
+  if (j > i && (s[j - 1] === '%' || CURRENCY.includes(s[j - 1]))) j--;
+  while (j > i && isSpace(s[j - 1])) j--;
+  if (j <= i) return false;
+
+  const core = s.slice(i, j);
+
+  // An exponent, if there is one, is everything from the first e — a second
+  // one is a stray letter and fails below, as it did before.
+  let mantissa = core;
+  const e = core.search(/[eE]/);
+  if (e >= 0) {
+    mantissa = core.slice(0, e);
+    let k = e + 1;
+    if (core[k] === '+' || core[k] === '-') k++;
+    if (k >= core.length) return false;
+    for (; k < core.length; k++) if (!isDigit(core[k])) return false;
+  }
+
+  const scan = scanMantissa(mantissa);
+  if (!scan) return false;
+  return isGrouped(scan.runs, scan.seps) || isPlain(scan.runs, scan.seps);
 };
 
 const allNumeric = (cells) => cells.length > 0 && cells.every(looksNumeric);
