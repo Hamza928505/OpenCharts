@@ -93,6 +93,28 @@ export class CodePanel {
     });
     actions.appendChild(this.modeSwitch);
 
+    /* Undo and redo.
+     *
+     * They live here rather than beside the chart because this bar is where
+     * the other verbs are, and because what they undo is the *spec* — the same
+     * thing the Spec tab two buttons along prints. The data grid has had its
+     * own undo since it shipped; it covers the table and nothing else, so
+     * every colour, slider and toggle in the studio was a one-way door.
+     */
+    this.undoBtn = document.createElement('button');
+    this.undoBtn.className = 'btn btn-sm';
+    this.undoBtn.type = 'button';
+    this.undoBtn.title = 'Undo the last change (Ctrl+Z)';
+    this.undoBtn.innerHTML = '<span aria-hidden="true">↶</span> Undo';
+    this.undoBtn.addEventListener('click', () => this.onUndo && this.onUndo());
+
+    this.redoBtn = document.createElement('button');
+    this.redoBtn.className = 'btn btn-sm';
+    this.redoBtn.type = 'button';
+    this.redoBtn.title = 'Redo (Ctrl+Shift+Z)';
+    this.redoBtn.innerHTML = '<span aria-hidden="true">↷</span> Redo';
+    this.redoBtn.addEventListener('click', () => this.onRedo && this.onRedo());
+
     this.copyBtn = document.createElement('button');
     this.copyBtn.className = 'btn btn-sm';
     this.copyBtn.type = 'button';
@@ -110,7 +132,8 @@ export class CodePanel {
     this.editBtn.type = 'button';
     this.editBtn.addEventListener('click', () => this.toggleEdit());
 
-    actions.append(this.copyBtn, this.editBtn, this.dlBtn);
+    actions.append(this.undoBtn, this.redoBtn, this.copyBtn, this.editBtn, this.dlBtn);
+    this.setHistory({ canUndo: false, canRedo: false });
     bar.appendChild(actions);
 
     const scroll = document.createElement('div');
@@ -141,6 +164,17 @@ export class CodePanel {
    * @param {{html:string,css:string,js:string,standalone:string,prompt:string,promptShort:string,note:string}} code
    * @param {string} filename  base name for the download
    */
+  /**
+   * Light the two buttons according to what there is to go back to.
+   *
+   * A control that cannot do anything must not look as though it can — the
+   * same rule the grid's own pair follows.
+   */
+  setHistory({ canUndo, canRedo }) {
+    if (this.undoBtn) this.undoBtn.disabled = !canUndo;
+    if (this.redoBtn) this.redoBtn.disabled = !canRedo;
+  }
+
   setCode(code, filename) {
     this.code = code;
     this.filename = filename || 'chart';

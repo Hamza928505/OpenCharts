@@ -684,6 +684,42 @@ Two things the editor has to get right, both checked:
   pasted, with the parser's own message in a toast, so it can be fixed rather
   than retyped.
 
+### Undo in the studio
+
+The data editor has had undo since it shipped, and it covers the table and
+nothing else — so every colour, slider, toggle, facet and note in the studio
+was a one-way door. `StudioApp` keeps its own stack, and the buttons sit in the
+**code bar** rather than beside the chart: that bar is where the other verbs
+already are, and what they undo is the *spec* — the same thing the Spec tab two
+buttons along prints.
+
+Snapshots of the whole spec, not inverse operations, which is the bargain
+`DataGrid` already makes and for the same reason: a spec is JSON by
+construction — the share link and the Spec view both prove it round-trips — so
+a copy costs nothing beside the render that follows it, and an undo cannot
+drift from the edit it reverses.
+
+Four rules, all checked:
+
+- **A drag is one step.** A slider fires an edit per pixel, and an undo that
+  walked back a pixel at a time is not what anybody means by undo. Edits within
+  `COALESCE_MS` fold together. The grid solves the same problem by banking once
+  per cell on the first keystroke; time is the honest proxy here, because
+  `_onEdit` is told that *something* changed and never what.
+- **A table or a pasted spec refuses to fold.** `_commit({ step: true })` — both
+  are deliberate acts with a boundary either side, however fast they followed
+  the last edit.
+- **An edit after an undo drops the redo branch**, and an edit straight after an
+  undo is always a new step: `_restore` sets `lastCommitAt = 0` rather than to
+  now, so it cannot fold into the thing that was just undone.
+- **The controls are rebuilt, not repainted.** An undo can change how many
+  series exist, and a stale row would edit an index that has gone.
+
+`Ctrl+Z` / `Ctrl+Shift+Z` are bound at the document and **stand down while the
+data editor is open** — that grid binds its own on its own root and means the
+table by it, which is what every spreadsheet does — and while somebody is
+typing, where the browser's own undo is the one they want.
+
 ### Undo in the data editor
 
 `DataGrid.js` keeps a stack of `{ headers, rows }` snapshots rather than

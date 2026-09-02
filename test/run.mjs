@@ -2837,6 +2837,116 @@ check(!cvdReach.unreachable.length, 'and the checker is handed a usable palette 
   cvdReach.unreachable.slice(0, 4).join(', '));
 
 
+
+/* Undo and redo for the studio itself.
+ *
+ * The data grid has had them since it shipped, and they cover the table and
+ * nothing else — so every colour, slider, toggle, facet and note was a one-way
+ * door. These are spec snapshots, the same bargain the grid makes: a spec is
+ * JSON by construction, so a copy is cheap beside the render that follows it. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const studioHistory = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const btn = (re) => [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => re.test(b.textContent));
+  const undoBtn = btn(/Undo/);
+  const redoBtn = btn(/Redo/);
+  const out = { present: !!(undoBtn && redoBtn) };
+  if (!out.present) return out;
+
+  out.startDisabled = undoBtn.disabled && redoBtn.disabled;
+
+  const startColour = app.spec.series[0].color;
+  app.spec.series[0].color = '#CE5229';
+  app._onEdit();
+  await sleep(500);
+  out.undoLit = !undoBtn.disabled;
+  out.redoStillDim = redoBtn.disabled;
+
+  undoBtn.click();
+  await sleep(400);
+  out.undoneColour = app.spec.series[0].color === startColour;
+  out.redoLit = !redoBtn.disabled;
+  // The chart is redrawn from the restored spec, not left showing the old one.
+  out.chartRedrew = !!document.querySelector('.chart-host canvas');
+
+  redoBtn.click();
+  await sleep(400);
+  out.redoneColour = app.spec.series[0].color === '#CE5229';
+
+  // A drag fires an edit per pixel; that is one step, not eight.
+  const beforeDrag = app.spec.opts.radius;
+  const depthBefore = app.past.length;
+  for (let i = 0; i < 8; i++) { app.spec.opts.radius = 6 + i; app._onEdit(); await sleep(20); }
+  await sleep(450);
+  out.stepsAdded = app.past.length - depthBefore;
+  undoBtn.click();
+  await sleep(350);
+  out.dragUndoneWhole = app.spec.opts.radius === beforeDrag;
+
+  // Keyboard.
+  app.spec.opts.radius = 12;
+  app._onEdit();
+  await sleep(500);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+  await sleep(350);
+  out.keyboardUndo = app.spec.opts.radius !== 12;
+
+  // A new edit after an undo drops what was ahead: there is no branch to
+  // redo into any more.
+  app.spec.opts.radius = 9;
+  app._onEdit();
+  await sleep(500);
+  out.futureDropped = redoBtn.disabled;
+  return out;
+});
+check(studioHistory.present, 'the code panel carries undo and redo');
+check(studioHistory.startDisabled, 'both start disabled, with nothing to go back to');
+check(studioHistory.undoLit && studioHistory.redoStillDim,
+  'an edit lights undo and leaves redo dim',
+  `undo=${studioHistory.undoLit} redo-dim=${studioHistory.redoStillDim}`);
+check(studioHistory.undoneColour && studioHistory.chartRedrew,
+  'undo puts the colour back and redraws the chart');
+check(studioHistory.redoLit && studioHistory.redoneColour, 'and redo puts it forward again');
+check(studioHistory.stepsAdded === 1 && studioHistory.dragUndoneWhole,
+  'a drag is one undo step, not one per pixel',
+  `${studioHistory.stepsAdded} steps added`);
+check(studioHistory.keyboardUndo, 'Ctrl+Z undoes from the keyboard');
+check(studioHistory.futureDropped, 'and editing after an undo drops the redo branch');
+
+/* The grid keeps its own Ctrl+Z: inside a data editor it means the table. */
+const guarded = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1100);
+  const before = JSON.stringify(app.spec);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+  await sleep(300);
+  const untouched = JSON.stringify(app.spec) === before;
+  const cancel = [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Cancel/.test(b.textContent));
+  if (cancel) cancel.click();
+  await sleep(300);
+  return { untouched, dialogWasOpen: true };
+});
+check(guarded.untouched,
+  'the studio stands down while the data editor is open, so the grid keeps its own');
+
+/* Opening another chart starts a fresh studioHistory, not a continuation. */
+await page.goto(`${base}/studio.html?chart=bar-lollipop`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const fresh = await page.evaluate(() => {
+  const app = window.openCharts;
+  const undoBtn = [...document.querySelectorAll('.code-actions .btn')]
+    .find((b) => /Undo/.test(b.textContent));
+  return { depth: app.past.length, disabled: undoBtn.disabled };
+});
+check(fresh.depth === 0 && fresh.disabled,
+  'and opening another chart starts a fresh history',
+  `${fresh.depth} steps`);
+
 /* The colour popover, and colours in the data table.
  *
  * The popover used to be an absolutely-positioned child of the swatch, inside
