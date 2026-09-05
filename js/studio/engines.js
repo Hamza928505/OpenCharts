@@ -65,7 +65,7 @@ export function sizeCanvas(canvas, w, h) {
 /** Resolve the drawing height for a definition at a given render size. */
 function heightFor(def, opts) {
   if (opts.height) return opts.height;
-  const block = def.canvas || def.d3 || def.dom || {};
+  const block = def.canvas || def.d3 || def.echarts || def.dom || {};
   return block.height || 340;
 }
 
@@ -317,7 +317,8 @@ export function destroyInstance(inst) {
     return;
   }
   try {
-    if (inst.chart && typeof inst.chart.destroy === 'function') inst.chart.destroy();
+    if (inst.chart && typeof inst.chart.dispose === 'function') inst.chart.dispose();
+    else if (inst.chart && typeof inst.chart.destroy === 'function') inst.chart.destroy();
   } catch { /* already gone */ }
 }
 
@@ -590,7 +591,7 @@ function buildCSS(def, spec) {
     parts.push(`.oc-facet-plate .chart-wrap {\n  height: ${h}px;\n}`);
   }
 
-  if (engine === 'd3' || engine === 'dom') {
+  if (engine === 'd3' || engine === 'dom' || engine === 'echarts') {
     parts.push(panels
       ? `.oc-facet-plate > div {\n  width: 100%;\n  min-height: ${h}px;\n}`
       : `#chart {\n  width: 100%;\n  min-height: ${h}px;\n}`);

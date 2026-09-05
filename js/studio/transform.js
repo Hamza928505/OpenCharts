@@ -268,13 +268,34 @@ function opBin(table, step) {
 
 const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin };
 
+/**
+ * Run every step in order.
+ *
+ * Returns the table after each step as well as the final one, because the
+ * editor has to offer each step the columns that exist *at that point* —
+ * grouping renames and drops columns, so a sort added after it cannot be
+ * choosing from the original headings.
+ *
+ * A step that throws is skipped and reported rather than taking the run down:
+ * half-built steps exist while somebody is still typing one.
+ *
+ * When Arquero (`window.aq`) is available and no step uses the `bin`
+ * operation (not yet ported), the entire pipeline is run through Arquero
+ * for better performance on large tables.  If anything goes wrong the
+ * function falls back to the built-in runners transparently.
+ *
+ * @returns {{ table: {headers:string[],rows:string[][]}, stages: Array, errors: string[] }}
+ */
 export function runSteps(table, steps) {
   let current = clone(table);
   const stages = [clone(current)];
   const errors = [];
 
-  // Use Arquero if available for the entire pipeline
-  if (typeof window.aq !== 'undefined' && steps && steps.length > 0) {
+  // Use Arquero if available for the entire pipeline.
+  // Skip if any step uses 'bin' — not yet ported to Arquero — because aborting
+  // mid-pipeline leaves stages and current in an inconsistent state.
+  const hasBin = steps && steps.some((s) => s && s.op === 'bin');
+  if (typeof window.aq !== 'undefined' && steps && steps.length > 0 && !hasBin) {
     try {
       const aq = window.aq;
       // Convert to Arquero table
@@ -348,10 +369,6 @@ export function runSteps(table, steps) {
           } else if (step.op === 'limit') {
             const n = Math.max(1, step.n | 0 || 10);
             aqTable = aqTable.slice(0, n);
-          } else if (step.op === 'bin') {
-            // fallback to native
-            aqTable = null; 
-            throw new Error('Bin not implemented in Arquero path yet');
           }
 
           if (aqTable) {

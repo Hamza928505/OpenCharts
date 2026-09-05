@@ -14,7 +14,9 @@ export const echartsSamples = [
       xAxisData: ['12a', '1a', '2a', '3a', '4a', '5a'],
       yAxisData: ['Saturday', 'Friday', 'Thursday'],
     },
+    controls: [],
     echarts: {
+      height: 400,
       build(spec, env) {
         return {
           tooltip: { position: 'top' },
