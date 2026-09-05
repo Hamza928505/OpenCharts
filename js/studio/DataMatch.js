@@ -12,9 +12,9 @@
  * Ranking beyond that would be an opinion dressed as a result.
  */
 
-import { CHARTS } from './registry.js';
+import { CHARTS, newSpec } from './registry.js';
 import {
-  checkTableShape, expectedFormat, looksNumeric, columnRules, countOf,
+  checkTableShape, expectedFormat, looksNumeric, columnRules, countOf, applyData,
 } from './dataio.js';
 
 /** Where a table is handed to the studio, since it is too big for a URL. */
@@ -202,6 +202,34 @@ function projectFor(def, table, cls) {
  * @param {{headers: string[], rows: string[][]}} table
  * @returns {{fits: Array, partial: Array, misses: Array, shape: object}}
  */
+/**
+ * Whether this chart's own reader refuses the table, and what it says.
+ *
+ * `checkTableShape` asks about the table's *shape* — how many columns, which
+ * of them hold words. That is the right first question and it is not the whole
+ * one: `places` wants coordinates that are coordinates, and any four columns
+ * of sales satisfy its arithmetic while `SHAPES.places` refuses them. Four
+ * charts were listed as reading the reader's table and then quietly drew their
+ * own example instead — `city-map`, `flow-map`, `proportional-symbol-map` and
+ * `voronoi` on any three-column table of numbers.
+ *
+ * The page promises "these charts can read your table", so the check behind it
+ * has to be the reader. A miss naming what the chart needs beats a fit that
+ * draws somebody else's numbers under their column headings.
+ *
+ * `applyData` writes into the spec it is given, so it is given a fresh one.
+ *
+ * @returns {string|null} the reader's message, or null if it read the table
+ */
+function refusedBy(def, table) {
+  try {
+    const res = applyData(def, newSpec(def), table);
+    return res.ok ? null : (res.message || 'This chart could not read the table.');
+  } catch (err) {
+    return (err && err.message) || 'This chart could not read the table.';
+  }
+}
+
 export function rankCharts(table) {
   const fits = [];
   const partial = [];
@@ -210,13 +238,20 @@ export function rankCharts(table) {
 
   for (const def of CHARTS) {
     if (!def.data) continue;
-    const fit = checkTableShape(def, table);
     const expected = expectedFormat(def);
+    const fit = checkTableShape(def, table);
     const entry = { def, message: fit.message, columns: expected.columns, hint: expected.hint };
-    if (fit.ok) { fits.push(entry); continue; }
+
+    if (fit.ok) {
+      const refused = refusedBy(def, table);
+      if (!refused) { fits.push(entry); continue; }
+      // The shape passed and the reader still said no. Say what the reader
+      // said, then see whether some of the columns fare better.
+      entry.message = refused;
+    }
 
     const slice = projectFor(def, table, cls);
-    if (slice) {
+    if (slice && !refusedBy(def, slice.table)) {
       partial.push({ ...entry, message: slice.message, using: slice.using, table: slice.table });
     } else {
       misses.push(entry);

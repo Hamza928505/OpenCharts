@@ -387,6 +387,21 @@ offered only where that chart's own `checkTableShape` passes on it, and the
 columns are named on the tile so the reader sees exactly what was picked.
 Three rules shape which columns:
 
+**The shape passing is necessary and not sufficient — the reader has to take
+it too.** `checkTableShape` asks how many columns there are and which of them
+hold words. That is a question about the *table*, and "can this chart read it"
+is a question about the *reader*. The two disagreed on four charts: `city-map`,
+`flow-map`, `proportional-symbol-map` and `voronoi` all satisfy the arithmetic
+of `places` on any three-column table of numbers, while `SHAPES.places` refuses
+numbers that are not coordinates. They were listed as reading the reader's
+table and then drew their own example, because `_specFor` falls back to
+`newSpec` when `applyData` fails — silently, since a tile that quietly swaps in
+somebody else's numbers under your column headings looks exactly like one that
+worked. `refusedBy(def, table)` now runs the real `applyData` against a fresh
+spec, and anything the reader refuses is demoted to a miss carrying the
+reader's own message. It runs on the projection too, so the partial path cannot
+make a promise the fit path is no longer allowed to.
+
 - **`classifyColumns` asks three questions, not two.** `words` and `numbers`
   are strict, because `checkTableShape` fails a value column on a *single*
   cell that will not read as a number. `categorical` is the third: a column
@@ -403,7 +418,20 @@ Three rules shape which columns:
   place names" beats a fit that renders a blank world.
 
 The suite holds the whole thing to one promise: every projection it offers is
-applied, and the data has to reach the spec. See "wide table" in `test/run.mjs`.
+applied, and the data has to reach the spec. See "wide table" in `test/run.mjs`,
+and "every chart the matcher offers is read by its own reader" beside it, which
+asks the question of four different tables at once.
+
+**Narrowing the grid and holding a table are two different states.** `this.fit`
+is the set of charts that can read it; `this.onlyFit` is whether the grid is
+filtered to them. They were one thing, and so `Show all charts` nulled the
+table, emptied the paste box and cleared the set — meaning "show me every
+chart" also threw away the data the whole panel exists to take. Every tile
+reverted to its example and clicking one handed the studio nothing, which is
+exactly what it looks like when a feature is broken. Widened, the charts that
+can read the table still preview it and still carry it through; the rest show
+their own example, which is all they have to show. Forgetting the table is what
+`Clear` is for, and it sits beside the box the table was typed into.
 
 **And the tiles draw it.** `_specFor(def)` applies the same table the tile
 names, so a matched gallery previews the reader's own rows rather than ninety
@@ -422,10 +450,25 @@ data looks like. Two rules, both checked:
 a tile is drawing instead of guessing from its pixels.
 
 The table reaches the studio through `sessionStorage` (`handOff` /
-`takeHandOff`), because a table does not fit in a URL, and is taken exactly
-once — reloading the studio is a fresh start, not a repeat of somebody's paste.
-`StudioApp.load` applies it before the first render, so the chart never draws
-its example and then jump-cuts.
+`takeHandOff`), because a table does not fit in a URL. `StudioApp.load` applies
+it before the first render, so the chart never draws its example and then
+jump-cuts.
+
+**Read from storage once, kept in memory for the visit.** Those are two
+different "once" and conflating them cost the feature most of its value.
+Reading storage once is what makes a *reload* a fresh start rather than a
+repeat of somebody's paste, and that rule stands. But `load` also runs on every
+rail click and every ←/→, and consuming the table there meant the chart
+somebody clicked drew their data and every chart they looked at next drew the
+example — when walking the charts that matched your table is the entire point
+of having matched it. The table is taken from storage on the first `load` and
+held on the instance (`this.brought`) after that. It is held even when the
+first chart cannot read it, because the old code removed it before checking
+`res.ok`, so one unlucky first pick lost the table for the whole visit. It
+survives an in-studio data edit too: switching chart rebuilds the spec from
+`newSpec` regardless, so carrying the table somebody arrived with loses nothing
+that was not already going. The toast is said once, on arrival — announcing it
+on every switch is noise.
 
 ### Certainty about the header row
 
@@ -1735,7 +1778,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **655 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
+The suite is **666 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

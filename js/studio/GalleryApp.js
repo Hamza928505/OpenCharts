@@ -55,6 +55,10 @@ export class GalleryApp {
      */
     this.projected = new Map();
     this.fit = null;
+    // Whether the grid is narrowed to `fit`. Distinct from having a table at
+    // all: "show me every chart" and "forget my table" are two intentions, and
+    // one button used to do both.
+    this.onlyFit = true;
 
     this._buildFilters();
     this._buildStats();
@@ -166,6 +170,8 @@ export class GalleryApp {
       // the tile says, what the studio opens on, and what the prompt quotes.
       this.projected = new Map(ranked.partial.map((e) => [e.def.id, e.table]));
       this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
+      // A new table is a new question, so it is asked narrowed again.
+      this.onlyFit = true;
       this._renderReading(read, table, ranked);
       const total = this.fit.size;
       setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
@@ -291,11 +297,11 @@ export class GalleryApp {
     this.grid.innerHTML = '';
 
     let matches = searchCharts(this.query, this.category);
-    if (this.fit) matches = matches.filter((c) => this.fit.has(c.id));
+    if (this.fit && this.onlyFit) matches = matches.filter((c) => this.fit.has(c.id));
     this.countEl.textContent = `${matches.length} of ${CHART_COUNT}`;
 
     if (!matches.length) {
-      this.grid.innerHTML = this.fit
+      this.grid.innerHTML = (this.fit && this.onlyFit)
         ? '<div class="empty"><div class="display">Nothing in this category</div>'
           + '<p>No chart here reads a table that shape. Try All, or clear the table.</p></div>'
         : '<div class="empty"><div class="display">Nothing here</div>'
@@ -320,25 +326,42 @@ export class GalleryApp {
     }
   }
 
-  /** Says the grid is filtered, and how to stop — a filter with no way out is a trap. */
+  /**
+   * Says whether the grid is narrowed, and how to change that — a filter with
+   * no way out is a trap.
+   *
+   * It toggles the *filter* and nothing else. It used to also null `this.table`
+   * and empty the paste box, so "show me every chart" silently threw the
+   * reader's table away: every tile reverted to its own example and clicking
+   * one handed the studio nothing. Forgetting the table is what Clear is for,
+   * beside the box the table was typed into.
+   *
+   * Widened, the charts that can read the table still preview it and still
+   * carry it into the studio; the ones that cannot show their own example,
+   * which is all they have to show.
+   */
   _matchNote(count) {
     const note = document.createElement('div');
     note.className = 'match-note';
-    note.innerHTML = `<span>Showing the <b>${count}</b> charts that can read your table.</span>`;
+    const label = document.createElement('span');
     const btn = document.createElement('button');
     btn.className = 'btn btn-sm';
     btn.type = 'button';
-    btn.textContent = 'Show all charts';
+
+    if (this.onlyFit) {
+      label.innerHTML = `Showing the <b>${count}</b> charts that can read your table.`;
+      btn.textContent = 'Show all charts';
+    } else {
+      label.innerHTML = `Showing every chart. <b>${this.fit.size}</b> can read your table; `
+        + 'the rest show their own example.';
+      btn.textContent = 'Show only the matches';
+    }
+
     btn.addEventListener('click', () => {
-      this.table = null;
-      this.projected = new Map();
-      this.fit = null;
-      const text = document.querySelector('#match-text');
-      if (text) text.value = '';
-      if (this.matchStatus) this.matchStatus.textContent = 'Commas, tabs and semicolons all work.';
+      this.onlyFit = !this.onlyFit;
       this.render();
     });
-    note.appendChild(btn);
+    note.append(label, btn);
     return note;
   }
 
