@@ -15,11 +15,72 @@ const el = (tag, cls, text) => {
 let sessionApiKey = null;
 
 const STORAGE_KEY = 'opencharts.ai-key';
+const ENC_PREFIX = 'enc:v1:';
+const PASSPHRASE = 'opencharts-ai-config-local';
 
-export function getStoredApiKey() {
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function bytesToBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function base64ToBytes(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+async function deriveAesKey(salt) {
+  const material = await crypto.subtle.importKey(
+    'raw',
+    textEncoder.encode(PASSPHRASE),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptForStorage(plainText) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveAesKey(salt);
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    textEncoder.encode(plainText)
+  );
+  return ENC_PREFIX + [bytesToBase64(salt), bytesToBase64(iv), bytesToBase64(new Uint8Array(cipherBuf))].join(':');
+}
+
+async function decryptFromStorage(payload) {
+  if (!payload) return null;
+  if (!payload.startsWith(ENC_PREFIX)) return null;
+  const parts = payload.slice(ENC_PREFIX.length).split(':');
+  if (parts.length !== 3) return null;
+  const salt = base64ToBytes(parts[0]);
+  const iv = base64ToBytes(parts[1]);
+  const data = base64ToBytes(parts[2]);
+  const key = await deriveAesKey(salt);
+  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+  return textDecoder.decode(plainBuf);
+}
+
+export async function getStoredApiKey() {
   if (sessionApiKey) return sessionApiKey;
   try {
-    return localStorage.getItem(STORAGE_KEY) || null;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return await decryptFromStorage(stored);
   } catch (e) {
     return null;
   }
@@ -54,7 +115,10 @@ export function openAiConfigDialog() {
     const input = el('input', 'link-input');
     input.type = 'password';
     input.placeholder = 'sk-...';
-    input.value = getStoredApiKey() || '';
+    input.value = '';
+    getStoredApiKey().then((storedKey) => {
+      if (storedKey) input.value = storedKey;
+    }).catch(() => {});
     input.style.width = '100%';
     input.style.marginBottom = '12px';
     inputWrap.appendChild(input);
@@ -111,7 +175,7 @@ export function openAiConfigDialog() {
       toast('API Key cleared', 'ok');
     });
 
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', async () => {
       const key = input.value.trim();
       if (!key) {
         toast('Please enter a valid key or click Clear', 'warn');
@@ -121,7 +185,8 @@ export function openAiConfigDialog() {
       sessionApiKey = key;
       if (checkbox.checked) {
         try {
-          localStorage.setItem(STORAGE_KEY, key);
+          const encrypted = await encryptForStorage(key);
+          localStorage.setItem(STORAGE_KEY, encrypted);
         } catch (e) {
           toast('Could not save to localStorage', 'warn');
         }
