@@ -29,6 +29,7 @@ import { financeCharts } from './charts/finance.js';
 import { geoCharts } from './charts/geo.js';
 import { timeseriesCharts } from './charts/timeseries.js';
 import { engineCharts } from './charts/engine.js';
+import { echartsSamples } from './charts/echarts-samples.js';
 import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
 import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
 import { ANNOTATION_CONTROL } from './annotate.js';
@@ -78,6 +79,7 @@ const ALL = [
   ...geoCharts,
   ...kpiCharts,
   ...engineCharts,
+  ...echartsSamples,
 ];
 
 /* Decorate each definition with what the UI needs, once at module load. */

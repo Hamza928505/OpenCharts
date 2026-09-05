@@ -14,6 +14,7 @@ import { renderSources } from './SourcesPanel.js';
 import { renderHelp } from './HelpPanel.js';
 import { buildPrompt } from './prompt.js';
 import { openDataDialog } from './DataDialog.js';
+import { openAiConfigDialog } from './ai-config.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
@@ -323,6 +324,7 @@ export class StudioApp {
     $('#btn-share')?.addEventListener('click', () => this._share());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
+    $('#btn-ai-config')?.addEventListener('click', () => openAiConfigDialog());
 
     // Restore the rail the way it was left. Read once, here, rather than at
     // module load: a private window can throw on read too.

@@ -20,6 +20,7 @@ import {
 
 export const ENGINE_LABEL = {
   chartjs: 'Chart.js',
+  echarts: 'Apache ECharts',
   d3:      'D3',
   canvas:  'Canvas 2D',
   native:  'OpenCharts',
@@ -28,6 +29,7 @@ export const ENGINE_LABEL = {
 
 export const ENGINE_CHIP = {
   chartjs: 'chip-chartjs',
+  echarts: 'chip-canvas',
   d3:      'chip-d3',
   canvas:  'chip-canvas',
   native:  'chip-native',
@@ -37,6 +39,7 @@ export const ENGINE_CHIP = {
 /** Which renderer block a definition uses. */
 export const engineOf = (def) =>
   def.chartjs ? 'chartjs'
+  : def.echarts ? 'echarts'
   : def.d3     ? 'd3'
   : def.canvas ? 'canvas'
   : def.native ? 'native'
@@ -62,7 +65,7 @@ export function sizeCanvas(canvas, w, h) {
 /** Resolve the drawing height for a definition at a given render size. */
 function heightFor(def, opts) {
   if (opts.height) return opts.height;
-  const block = def.canvas || def.d3 || def.dom || {};
+  const block = def.canvas || def.d3 || def.echarts || def.dom || {};
   return block.height || 340;
 }
 
@@ -183,6 +186,28 @@ function renderOne(def, host, spec, opts = {}) {
     }
   }
 
+  if (engine === 'echarts') {
+    if (typeof window.echarts === 'undefined') {
+      return failure(host, 'Apache ECharts failed to load.');
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-wrap';
+    wrap.style.cssText = `position:relative;width:100%;height:${height}px`;
+    host.appendChild(wrap);
+    try {
+      const chart = window.echarts.init(wrap);
+      const config = def.echarts.build(spec, ctxInfo);
+      chart.setOption(config);
+      const draw = () => {
+        chart.resize();
+        annotate();
+      };
+      return { engine, chart, wrap, redraw: draw };
+    } catch (err) {
+      return failure(host, err.message);
+    }
+  }
+
   if (engine === 'canvas') {
     const canvas = document.createElement('canvas');
     host.appendChild(canvas);
@@ -292,7 +317,8 @@ export function destroyInstance(inst) {
     return;
   }
   try {
-    if (inst.chart && typeof inst.chart.destroy === 'function') inst.chart.destroy();
+    if (inst.chart && typeof inst.chart.dispose === 'function') inst.chart.dispose();
+    else if (inst.chart && typeof inst.chart.destroy === 'function') inst.chart.destroy();
   } catch { /* already gone */ }
 }
 
@@ -515,9 +541,17 @@ function buildHTML(def, spec) {
 
   // The mark itself carries the short label, so a reader landing on the
   // graphic hears what it is; the long description hangs off the figure.
-  const plate = (id, label) => ((engine === 'd3' || engine === 'dom')
-    ? `<div id="${id}" role="img" aria-label="${escapeText(label)}"></div>`
-    : `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`);
+  const plate = (id, label) => {
+    if (engine === 'd3' || engine === 'dom') {
+      return `<div id="${id}" role="img" aria-label="${escapeText(label)}"></div>`;
+    }
+    // ECharts sizes itself from its container, so the div needs the height
+    // `.chart-wrap` carries — unlike d3/dom, which grow with their content.
+    if (engine === 'echarts') {
+      return `<div id="${id}" role="img" aria-label="${escapeText(label)}" class="chart-wrap"></div>`;
+    }
+    return `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`;
+  };
 
   const panels = panelSpecs(def, spec);
   // The plate and the mark inside it must not share an id. They did, and
@@ -565,7 +599,7 @@ function buildCSS(def, spec) {
     parts.push(`.oc-facet-plate .chart-wrap {\n  height: ${h}px;\n}`);
   }
 
-  if (engine === 'd3' || engine === 'dom') {
+  if (engine === 'd3' || engine === 'dom' || engine === 'echarts') {
     parts.push(panels
       ? `.oc-facet-plate > div {\n  width: 100%;\n  min-height: ${h}px;\n}`
       : `#chart {\n  width: 100%;\n  min-height: ${h}px;\n}`);
@@ -687,6 +721,45 @@ function buildJS(def, spec) {
       `const config = ${serialize(config, 0)};`,
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
+      ...annots,
+      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
+    ];
+    if (hasLegend) lines.push('', legendCode(legend, true));
+    return tidy(lines.join('\n'));
+  }
+
+  if (engine === 'echarts') {
+    if (panels) {
+      const built = panels.map((p) => ({
+        name: p.name,
+        config: def.echarts.build(p.spec, { width: panelWidth, height: h })
+      }));
+      return tidy([
+        ...header,
+        '',
+        `const panels = ${serialize(built, 0)};`,
+        '',
+        `const charts = panels.map((panel, i) => {`,
+        `  const chart = echarts.init(document.getElementById('chart-' + i));`,
+        `  chart.setOption(panel.config);`,
+        `  return chart;`,
+        `});`,
+        `window.addEventListener('resize', () => charts.forEach(c => c.resize()));`,
+        ...annots,
+        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...legendLines(true),
+      ].join('\n'));
+    }
+
+    const config = def.echarts.build(spec, { width: 800, height: heightFor(def, {}) });
+    const lines = [
+      ...header,
+      '',
+      `const config = ${serialize(config, 0)};`,
+      '',
+      `const chart = echarts.init(document.getElementById('chart'));`,
+      `chart.setOption(config);`,
+      `window.addEventListener('resize', () => chart.resize());`,
       ...annots,
       ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
     ];

@@ -279,6 +279,11 @@ const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit
  * A step that throws is skipped and reported rather than taking the run down:
  * half-built steps exist while somebody is still typing one.
  *
+ * When Arquero (`window.aq`) is available and no step uses the `bin`
+ * operation (not yet ported), the entire pipeline is run through Arquero
+ * for better performance on large tables.  If anything goes wrong the
+ * function falls back to the built-in runners transparently.
+ *
  * @returns {{ table: {headers:string[],rows:string[][]}, stages: Array, errors: string[] }}
  */
 export function runSteps(table, steps) {
@@ -286,6 +291,131 @@ export function runSteps(table, steps) {
   const stages = [clone(current)];
   const errors = [];
 
+  // Use Arquero if available for the entire pipeline.
+  // Skip if any step uses 'bin' — not yet ported to Arquero — because aborting
+  // mid-pipeline leaves stages and current in an inconsistent state.
+  const hasBin = steps && steps.some((s) => s && s.op === 'bin');
+  if (typeof window.aq !== 'undefined' && steps && steps.length > 0 && !hasBin) {
+    try {
+      const aq = window.aq;
+      // Convert to Arquero table
+      const data = {};
+      const colNames = table.headers.map((h, i) => h || `Column ${i + 1}`);
+      colNames.forEach((h, i) => {
+        const raw = table.rows.map((r) => r[i]);
+        // Coerce a column, not a cell: the native runners fold per value and
+        // never turn a whole column numeric, so a column is only numeric here
+        // if every non-empty cell parses. Otherwise one stray label would make
+        // aq.op.sum return NaN where `fold` quietly skips it.
+        const filled = raw.filter((v) => v != null && String(v).trim() !== '');
+        const numeric = filled.length > 0
+          && filled.every((v) => Number.isFinite(toNumber(v)));
+        data[h] = raw.map((v) => {
+          if (v == null || String(v).trim() === '') return numeric ? null : '';
+          return numeric ? toNumber(v) : String(v);
+        });
+      });
+      let aqTable = aq.table(data);
+
+      (steps || []).forEach((step, i) => {
+        try {
+          // A half-built step is skipped and reported, the same as the native
+          // runners do — someone is still typing one.
+          if (!step || !RUNNERS[step.op]) {
+            errors.push(`Step ${i + 1} does nothing.`);
+            stages.push(clone(current));
+            return;
+          }
+          if (step.op === 'filter') {
+            const colName = colNames[step.col];
+            const test = step.test || 'is';
+            const a = step.a == null ? '' : String(step.a).toLowerCase();
+            const na = toNumber(step.a);
+            const nb = toNumber(step.b);
+            
+            // Build arquero escape filter
+            aqTable = aqTable.filter(aq.escape((d) => {
+              const raw = d[colName];
+              const text = raw == null ? '' : String(raw).trim().toLowerCase();
+              const num = Number(raw);
+              switch (test) {
+                case 'is': return text === a.trim();
+                case 'not': return text !== a.trim();
+                case 'contains': return text.includes(a.trim());
+                case 'gt': return Number.isFinite(num) && Number.isFinite(na) && num > na;
+                case 'lt': return Number.isFinite(num) && Number.isFinite(na) && num < na;
+                case 'between': return Number.isFinite(num) && Number.isFinite(na) && Number.isFinite(nb) && num >= Math.min(na, nb) && num <= Math.max(na, nb);
+                case 'filled': return text !== '';
+                default: return true;
+              }
+            }));
+          } else if (step.op === 'group') {
+            const by = step.col | 0;
+            const agg = step.agg || 'sum';
+            const byColName = colNames[by];
+            const chosen = Array.isArray(step.vals) ? step.vals : null;
+            const valueCols = (chosen || defaultValueCols({ headers: colNames, rows: current.rows }, by))
+              .filter((c) => c !== by && c >= 0 && c < colNames.length)
+              .map(c => colNames[c]);
+            
+            const rollups = {};
+            if (agg === 'count' || !valueCols.length) {
+              rollups['Count'] = aq.op.count();
+            } else {
+              valueCols.forEach(c => {
+                if (agg === 'sum') rollups[c] = aq.op.sum(c);
+                else if (agg === 'mean') rollups[c] = aq.op.mean(c);
+                else if (agg === 'median') rollups[c] = aq.op.median(c);
+                else if (agg === 'min') rollups[c] = aq.op.min(c);
+                else if (agg === 'max') rollups[c] = aq.op.max(c);
+                else rollups[c] = aq.op.sum(c);
+              });
+            }
+            aqTable = aqTable.groupby(byColName).rollup(rollups);
+            
+          } else if (step.op === 'sort') {
+            const colName = colNames[step.col];
+            if (step.dir === 'desc') {
+              aqTable = aqTable.orderby(aq.desc(colName));
+            } else {
+              aqTable = aqTable.orderby(colName);
+            }
+          } else if (step.op === 'limit') {
+            const n = Math.max(1, step.n | 0 || 10);
+            aqTable = aqTable.slice(0, n);
+          }
+
+          if (aqTable) {
+            // Read back out
+            const outHeaders = aqTable.columnNames();
+            const outRows = [];
+            aqTable.objects().forEach(obj => {
+              outRows.push(outHeaders.map(h => {
+                const v = obj[h];
+                if (v == null) return '';
+                // Match the native runners: trim the float noise an aggregate
+                // leaves rather than writing 3.3333333333333335 into the grid.
+                return typeof v === 'number' ? tidyNumber(v) : String(v);
+              }));
+            });
+            current = { headers: outHeaders, rows: outRows };
+            colNames.length = 0;
+            colNames.push(...outHeaders);
+          }
+        } catch (err) {
+          errors.push(`Step ${i + 1} (${step.op}) failed: ${err.message}`);
+        }
+        stages.push(clone(current));
+      });
+
+      return { table: current, stages, errors };
+    } catch (e) {
+      console.warn("Arquero transform failed, falling back to native", e);
+      // fallback to native on error
+    }
+  }
+
+  // Native fallback
   (steps || []).forEach((step, i) => {
     const run = RUNNERS[step && step.op];
     if (!run) { errors.push(`Step ${i + 1} does nothing.`); stages.push(clone(current)); return; }

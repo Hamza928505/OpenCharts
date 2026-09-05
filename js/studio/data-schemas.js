@@ -496,6 +496,20 @@ export const DATA_SCHEMAS = {
       ]);
     },
   },
+  'echarts-heatmap': {
+    shape: 'matrix',
+    example: 'day,12a,1a,2a,3a\nSaturday,5,1,0,0\nFriday,3,2,0,0',
+    hint: 'First column is the row label; each further column is a cell.',
+    toText: (s) => {
+      const rows = s.rows || [];
+      const cols = s.cols || [];
+      const at = new Map((s.cells || []).map((c) => [c.y + ':' + c.x, c.v]));
+      return csv([
+        ['day', ...cols],
+        ...rows.map((label, y) => [label, ...cols.map((_, x) => at.get(y + ':' + x) ?? '')]),
+      ]);
+    },
+  },
   'voronoi': {
     shape: 'places', key: 'seeds',
     example: 'name,x,y\nDepot N,22,18\nDepot E,78,26\nDepot S,62,82',

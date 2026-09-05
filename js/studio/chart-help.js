@@ -417,6 +417,10 @@ export const CHART_HELP = {
     read: 'A year as a grid of weeks, one square per day, coloured by that day’s value.',
     watch: 'Colour steps compress the scale, so a very busy day and a moderately busy one can look identical.',
   },
+  'echarts-heatmap': {
+    read: 'One cell per row-and-column pair; colour is the value, read against the scale below the grid.',
+    watch: 'Colour is judged poorly in absolute terms, so neighbouring cells read as equal well before they are. Sort the rows and columns or the pattern hides in the noise.',
+  },
 
   /* ── Finance ──────────────────────────────────────────────────────────── */
   ohlc: {

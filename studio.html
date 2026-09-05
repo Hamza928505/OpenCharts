@@ -37,6 +37,8 @@
 <script src="https://unpkg.com/@sgratzl/chartjs-chart-boxplot@4.2.4/build/index.umd.min.js"></script>
 <script src="lib/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/arquero@5.4.1/dist/arquero.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 </head>
 <body>
 
@@ -92,6 +94,9 @@
           <span class="idx tnum" id="chart-idx"></span>
           <button class="btn btn-sm btn-ghost" id="btn-next" type="button" aria-label="Next chart">→</button>
         </span>
+        <button class="btn btn-sm" id="btn-ai-config" type="button" title="Configure AI Analyst">
+          <span aria-hidden="true">🤖</span> AI Settings
+        </button>
         <span id="theme-mount"></span>
       </div>
     </header>
