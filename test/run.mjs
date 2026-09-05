@@ -371,12 +371,28 @@ const match = await page.evaluate(async () => {
   const years = await paste('region,2023,2024\nNorth,520,680\nSouth,440,575', null);
   const yearsFixed = await paste('region,2023,2024\nNorth,520,680\nSouth,440,575', true);
 
-  // The banner has to lead back out of the filter.
+  // The banner has to lead back out of the filter — and *only* out of the
+  // filter. It used to null the table and empty the paste box as well, so
+  // "show me every chart" silently discarded the reader's data: every tile
+  // reverted to its own example and clicking one handed the studio nothing.
   document.querySelector('.match-note .btn').click();
   await sleep(300);
   const cleared = document.querySelectorAll('.card').length;
+  const g = window.openChartsGallery;
+  const widened = {
+    keptTable: !!(g && g.table && g.table.rows.length),
+    keptFit: !!(g && g.fit && g.fit.size),
+    stillCarries: !!document.querySelector('.card-shell .card'),
+    note: !!document.querySelector('.match-note'),
+    box: (document.querySelector('#match-text') || {}).value || '',
+  };
 
-  return { total, flow, junk, years, yearsFixed, cleared };
+  // ...and it leads back in.
+  document.querySelector('.match-note .btn').click();
+  await sleep(300);
+  const narrowedAgain = document.querySelectorAll('.card').length;
+
+  return { total, flow, junk, years, yearsFixed, cleared, widened, narrowedAgain };
 });
 
 check(match.flow.cards > 0 && match.flow.cards < match.total,
@@ -410,6 +426,61 @@ check(match.yearsFixed.cards > match.flow.cards,
   `${match.yearsFixed.cards} vs ${match.flow.cards}`);
 check(match.cleared === match.total, 'and the banner leads back to every chart',
   `${match.cleared} of ${match.total}`);
+check(match.widened.keptTable && match.widened.keptFit && match.widened.box.trim() !== '',
+  'showing every chart widens the filter without discarding the table',
+  JSON.stringify(match.widened));
+check(match.widened.note && match.narrowedAgain === match.yearsFixed.cards,
+  'and the note leads back into it',
+  `${match.narrowedAgain} vs ${match.yearsFixed.cards}`);
+
+/* Everything the matcher offers, the chart's own reader has to take.
+ *
+ * `checkTableShape` asks about the table's *shape* — how many columns, which
+ * hold words — and that is not the same question as "does this chart's reader
+ * accept it". Four charts passed the first and failed the second on any plain
+ * three-column table: `city-map`, `flow-map`, `proportional-symbol-map` and
+ * `voronoi` all satisfy the arithmetic of `places` while `SHAPES.places`
+ * refuses numbers that are not coordinates. They were listed as reading the
+ * reader's table and then drew their own example, silently, because
+ * `_specFor` falls back to `newSpec` when `applyData` fails.
+ *
+ * A tile that names somebody's columns and draws somebody else's numbers is
+ * the worst outcome this page has, because it looks like it worked. */
+const honest = await page.evaluate(async () => {
+  const { rankCharts } = await import('/js/studio/DataMatch.js');
+  const { parseTable, applyData } = await import('/js/studio/dataio.js');
+  const { newSpec } = await import('/js/studio/registry.js');
+
+  const TABLES = {
+    plain: 'region,q1,q2\nNorth,520,680\nSouth,410,390\nEast,300,455\nWest,270,610',
+    flow: 'from,to,value\nOrganic,Visit,4200\nVisit,Checkout,3800\nAd,Visit,1200',
+    wide: 'id,date,region,revenue,units,margin\n'
+      + '1,2024-01-01,North,520,12,0.31\n2,2024-01-02,South,410,9,0.22\n'
+      + '3,2024-01-03,East,300,7,0.18\n4,2024-01-04,West,270,6,0.27',
+    places: 'city,lon,lat,value\nAmman,35.93,31.95,120\nIrbid,35.85,32.55,64',
+  };
+
+  const broken = [];
+  let offered = 0;
+  for (const [name, csv] of Object.entries(TABLES)) {
+    const table = parseTable(csv, true);
+    const ranked = rankCharts(table);
+    for (const entry of [...ranked.fits, ...ranked.partial]) {
+      offered++;
+      // A partial entry carries the projection it was offered on; a fit reads
+      // the whole table. Either way, that is the table the tile will apply.
+      const t = entry.table || table;
+      let ok = false;
+      try { ok = applyData(entry.def, newSpec(entry.def), t).ok; } catch { ok = false; }
+      if (!ok) broken.push(`${name}:${entry.def.id}`);
+    }
+  }
+  return { offered, broken };
+});
+
+check(!honest.broken.length,
+  'every chart the matcher offers is read by its own reader',
+  `${honest.broken.length} of ${honest.offered} — ${honest.broken.slice(0, 8).join(', ')}`);
 
 /* A spreadsheet written for people rather than for a chart: a title row, a row
  * of merged section banners, then the header — and more columns than any chart
@@ -585,6 +656,62 @@ check(studio.gutterLines > 0, 'code panel renders line numbers');
 check(studio.sources > 0, 'sources panel lists dependencies');
 check(studio.railGroups > 0, 'rail renders collapsible categories');
 console.log(`  ${green('✓')} studio — ${studio.controls} control groups, ${studio.sources} sources`);
+
+/* A table brought from the gallery has to survive switching chart.
+ *
+ * `load` runs on the rail, on the ←/→ buttons and on the first paint, and it
+ * used to consume the handoff out of session storage on the first of those.
+ * So the chart somebody clicked drew their table and every chart they looked
+ * at next drew the example — which is the opposite of what matching a table
+ * to ninety charts is for. Worse, the table was consumed even when the first
+ * chart could not read it, so one bad first pick lost it for the whole visit.
+ *
+ * Storage is still read once: reloading the studio is a fresh start. */
+await page.evaluate((table) => {
+  sessionStorage.setItem('opencharts.table', JSON.stringify(table));
+}, {
+  headers: ['region', 'q1', 'q2'],
+  rows: [['Namek', '911', '412'], ['Vegeta', '733', '288'], ['Yardrat', '605', '199']],
+});
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(700);
+
+const carriedOn = await page.evaluate(async () => {
+  const app = window.openCharts;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shows = () => app.def.toText(app.spec);
+
+  const first = shows();
+  // Switching chart the way the rail and the ←/→ buttons do.
+  app.load('line-basic');
+  await sleep(400);
+  const second = shows();
+  app.load('area-basic');
+  await sleep(400);
+  const third = shows();
+
+  // The toast announces the table once, not on every switch.
+  const toasts = document.querySelectorAll('.toast').length;
+  return {
+    first: /Namek/.test(first),
+    second: /Namek/.test(second),
+    third: /Namek/.test(third),
+    consumed: !sessionStorage.getItem('opencharts.table'),
+    toasts,
+  };
+});
+
+check(carriedOn.first, 'a table handed over by the gallery reaches the first chart');
+check(carriedOn.second && carriedOn.third,
+  'and every chart switched to after it', JSON.stringify(carriedOn));
+check(carriedOn.consumed, 'while storage is read once, so a reload is a fresh start');
+check(carriedOn.toasts <= 1, 'and the table is announced once, not per switch',
+  String(carriedOn.toasts));
+
+// That check left the page on another chart holding somebody's table. The
+// suites below read the studio's own example, so put it back on a clean one.
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(700);
 
 /* Suite 6 — editing a control actually changes the generated code. */
 const live = await page.evaluate(async () => {

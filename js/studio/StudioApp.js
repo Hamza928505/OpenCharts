@@ -397,15 +397,32 @@ export class StudioApp {
 
     // A reader who matched a table in the gallery and clicked through meant to
     // draw *that*, not the example. It travels in session storage because a
-    // table does not fit in a URL, and is taken exactly once — a later reload
-    // of the same page is a fresh start, not a repeat of somebody's paste.
+    // table does not fit in a URL.
+    //
+    // Taken from storage exactly once — a later *reload* of the studio is a
+    // fresh start, not a repeat of somebody's paste — but kept in memory for
+    // as long as this page lives, because `load` also runs on every rail click
+    // and every ←/→, and walking the charts that matched your table is the
+    // whole point of having matched it. Consuming it on the first chart left
+    // every chart after that drawing the example.
+    //
+    // Held across an in-studio data edit too: switching chart rebuilds the
+    // spec from `newSpec` regardless, so carrying the table somebody arrived
+    // with loses nothing that was not already going.
     if (!shared) {
-      const brought = takeHandOff();
-      if (brought) {
-        const res = applyData(def, this.spec, brought);
+      if (!this.tookHandOff) {
+        this.tookHandOff = true;
+        this.brought = takeHandOff();
+      }
+      if (this.brought) {
+        const res = applyData(def, this.spec, this.brought);
         if (res.ok) {
           if (typeof def.onChange === 'function') def.onChange(this.spec);
-          this.broughtData = res.message;
+          // Said once, on arrival. A toast on every chart switch is noise.
+          if (!this.announcedBrought) {
+            this.announcedBrought = true;
+            this.broughtData = res.message;
+          }
         }
       }
     }
