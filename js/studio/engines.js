@@ -20,6 +20,7 @@ import {
 
 export const ENGINE_LABEL = {
   chartjs: 'Chart.js',
+  echarts: 'Apache ECharts',
   d3:      'D3',
   canvas:  'Canvas 2D',
   native:  'OpenCharts',
@@ -28,6 +29,7 @@ export const ENGINE_LABEL = {
 
 export const ENGINE_CHIP = {
   chartjs: 'chip-chartjs',
+  echarts: 'chip-canvas',
   d3:      'chip-d3',
   canvas:  'chip-canvas',
   native:  'chip-native',
@@ -37,6 +39,7 @@ export const ENGINE_CHIP = {
 /** Which renderer block a definition uses. */
 export const engineOf = (def) =>
   def.chartjs ? 'chartjs'
+  : def.echarts ? 'echarts'
   : def.d3     ? 'd3'
   : def.canvas ? 'canvas'
   : def.native ? 'native'
@@ -178,6 +181,28 @@ function renderOne(def, host, spec, opts = {}) {
       const chart = new window.Chart(canvas, config);
       annotate();
       return { engine, chart, canvas };
+    } catch (err) {
+      return failure(host, err.message);
+    }
+  }
+
+  if (engine === 'echarts') {
+    if (typeof window.echarts === 'undefined') {
+      return failure(host, 'Apache ECharts failed to load.');
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-wrap';
+    wrap.style.cssText = `position:relative;width:100%;height:${height}px`;
+    host.appendChild(wrap);
+    try {
+      const chart = window.echarts.init(wrap);
+      const config = def.echarts.build(spec, ctxInfo);
+      chart.setOption(config);
+      const draw = () => {
+        chart.resize();
+        annotate();
+      };
+      return { engine, chart, wrap, redraw: draw };
     } catch (err) {
       return failure(host, err.message);
     }
@@ -515,8 +540,8 @@ function buildHTML(def, spec) {
 
   // The mark itself carries the short label, so a reader landing on the
   // graphic hears what it is; the long description hangs off the figure.
-  const plate = (id, label) => ((engine === 'd3' || engine === 'dom')
-    ? `<div id="${id}" role="img" aria-label="${escapeText(label)}"></div>`
+  const plate = (id, label) => ((engine === 'd3' || engine === 'dom' || engine === 'echarts')
+    ? `<div id="${id}" role="img" aria-label="${escapeText(label)}" class="chart-wrap"></div>`
     : `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`);
 
   const panels = panelSpecs(def, spec);
@@ -687,6 +712,45 @@ function buildJS(def, spec) {
       `const config = ${serialize(config, 0)};`,
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
+      ...annots,
+      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
+    ];
+    if (hasLegend) lines.push('', legendCode(legend, true));
+    return tidy(lines.join('\n'));
+  }
+
+  if (engine === 'echarts') {
+    if (panels) {
+      const built = panels.map((p) => ({
+        name: p.name,
+        config: def.echarts.build(p.spec, { width: panelWidth, height: h })
+      }));
+      return tidy([
+        ...header,
+        '',
+        `const panels = ${serialize(built, 0)};`,
+        '',
+        `const charts = panels.map((panel, i) => {`,
+        `  const chart = echarts.init(document.getElementById('chart-' + i));`,
+        `  chart.setOption(panel.config);`,
+        `  return chart;`,
+        `});`,
+        `window.addEventListener('resize', () => charts.forEach(c => c.resize()));`,
+        ...annots,
+        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...legendLines(true),
+      ].join('\n'));
+    }
+
+    const config = def.echarts.build(spec, { width: 800, height: heightFor(def, {}) });
+    const lines = [
+      ...header,
+      '',
+      `const config = ${serialize(config, 0)};`,
+      '',
+      `const chart = echarts.init(document.getElementById('chart'));`,
+      `chart.setOption(config);`,
+      `window.addEventListener('resize', () => chart.resize());`,
       ...annots,
       ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
     ];

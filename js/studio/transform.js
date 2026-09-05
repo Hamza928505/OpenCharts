@@ -268,24 +268,117 @@ function opBin(table, step) {
 
 const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin };
 
-/**
- * Run every step in order.
- *
- * Returns the table after each step as well as the final one, because the
- * editor has to offer each step the columns that exist *at that point* —
- * grouping renames and drops columns, so a sort added after it cannot be
- * choosing from the original headings.
- *
- * A step that throws is skipped and reported rather than taking the run down:
- * half-built steps exist while somebody is still typing one.
- *
- * @returns {{ table: {headers:string[],rows:string[][]}, stages: Array, errors: string[] }}
- */
 export function runSteps(table, steps) {
   let current = clone(table);
   const stages = [clone(current)];
   const errors = [];
 
+  // Use Arquero if available for the entire pipeline
+  if (typeof window.aq !== 'undefined' && steps && steps.length > 0) {
+    try {
+      const aq = window.aq;
+      // Convert to Arquero table
+      const data = {};
+      const colNames = table.headers.map((h, i) => h || `Column ${i + 1}`);
+      colNames.forEach((h, i) => {
+        data[h] = table.rows.map(r => {
+          const val = r[i];
+          const num = toNumber(val);
+          return Number.isFinite(num) ? num : (val == null ? null : String(val));
+        });
+      });
+      let aqTable = aq.table(data);
+
+      (steps || []).forEach((step, i) => {
+        try {
+          if (step.op === 'filter') {
+            const colName = colNames[step.col];
+            const test = step.test || 'is';
+            const a = step.a == null ? '' : String(step.a).toLowerCase();
+            const na = toNumber(step.a);
+            const nb = toNumber(step.b);
+            
+            // Build arquero escape filter
+            aqTable = aqTable.filter(aq.escape((d) => {
+              const raw = d[colName];
+              const text = raw == null ? '' : String(raw).trim().toLowerCase();
+              const num = Number(raw);
+              switch (test) {
+                case 'is': return text === a.trim();
+                case 'not': return text !== a.trim();
+                case 'contains': return text.includes(a.trim());
+                case 'gt': return Number.isFinite(num) && Number.isFinite(na) && num > na;
+                case 'lt': return Number.isFinite(num) && Number.isFinite(na) && num < na;
+                case 'between': return Number.isFinite(num) && Number.isFinite(na) && Number.isFinite(nb) && num >= Math.min(na, nb) && num <= Math.max(na, nb);
+                case 'filled': return text !== '';
+                default: return true;
+              }
+            }));
+          } else if (step.op === 'group') {
+            const by = step.col | 0;
+            const agg = step.agg || 'sum';
+            const byColName = colNames[by];
+            const chosen = Array.isArray(step.vals) ? step.vals : null;
+            const valueCols = (chosen || defaultValueCols({headers: colNames, rows: table.rows}, by))
+              .filter((c) => c !== by && c >= 0 && c < colNames.length)
+              .map(c => colNames[c]);
+            
+            const rollups = {};
+            if (agg === 'count' || !valueCols.length) {
+              rollups['Count'] = aq.op.count();
+            } else {
+              valueCols.forEach(c => {
+                if (agg === 'sum') rollups[c] = aq.op.sum(c);
+                else if (agg === 'mean') rollups[c] = aq.op.mean(c);
+                else if (agg === 'median') rollups[c] = aq.op.median(c);
+                else if (agg === 'min') rollups[c] = aq.op.min(c);
+                else if (agg === 'max') rollups[c] = aq.op.max(c);
+                else rollups[c] = aq.op.sum(c);
+              });
+            }
+            aqTable = aqTable.groupby(byColName).rollup(rollups);
+            
+          } else if (step.op === 'sort') {
+            const colName = colNames[step.col];
+            if (step.dir === 'desc') {
+              aqTable = aqTable.orderby(aq.desc(colName));
+            } else {
+              aqTable = aqTable.orderby(colName);
+            }
+          } else if (step.op === 'limit') {
+            const n = Math.max(1, step.n | 0 || 10);
+            aqTable = aqTable.slice(0, n);
+          } else if (step.op === 'bin') {
+            // fallback to native
+            aqTable = null; 
+            throw new Error('Bin not implemented in Arquero path yet');
+          }
+
+          if (aqTable) {
+            // Read back out
+            const outHeaders = aqTable.columnNames();
+            const outRows = [];
+            aqTable.objects().forEach(obj => {
+              outRows.push(outHeaders.map(h => (obj[h] == null ? '' : String(obj[h]))));
+            });
+            current = { headers: outHeaders, rows: outRows };
+            colNames.length = 0;
+            colNames.push(...outHeaders);
+          }
+        } catch (err) {
+          errors.push(`Step ${i + 1} (${step.op}) failed: ${err.message}`);
+        }
+        stages.push(clone(current));
+      });
+
+      return { table: current, stages, errors };
+    } catch (e) {
+      console.warn("Arquero transform failed, falling back to native", e);
+      // fallback to native on error
+    }
+  }
+
+  // Native fallback
   (steps || []).forEach((step, i) => {
     const run = RUNNERS[step && step.op];
     if (!run) { errors.push(`Step ${i + 1} does nothing.`); stages.push(clone(current)); return; }

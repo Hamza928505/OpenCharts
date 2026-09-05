@@ -121,6 +121,31 @@ export const LIBRARIES = {
     role: 'Box plot & violin controller for Chart.js',
     requires: 'chart',
   },
+  arquero: {
+    key: 'arquero',
+    kind: 'script',
+    name: 'Arquero',
+    version: '5.4.1',
+    license: 'BSD-3-Clause',
+    provider: 'jsDelivr',
+    homepage: 'https://uwdata.github.io/arquero/',
+    url: 'https://cdn.jsdelivr.net/npm/arquero@5.4.1/dist/arquero.min.js',
+    local: null,
+    role: 'Tabular data wrangling and aggregation',
+  },
+
+  echarts: {
+    key: 'echarts',
+    kind: 'script',
+    name: 'Apache ECharts',
+    version: '5.5.0',
+    license: 'Apache-2.0',
+    provider: 'jsDelivr',
+    homepage: 'https://echarts.apache.org/',
+    url: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js',
+    local: null,
+    role: 'Advanced canvas charting library',
+  },
 };
 
 /**
@@ -163,6 +188,7 @@ export const NO_SOURCE = {
  */
 export function dependenciesFor(def) {
   const engine = def.chartjs ? 'chartjs'
+    : def.echarts ? 'echarts'
     : def.d3 ? 'd3'
     : def.canvas ? 'canvas'
     : def.native ? 'native'
@@ -171,6 +197,14 @@ export function dependenciesFor(def) {
   if (engine === 'chartjs') {
     const out = [LIBRARIES.chart];
     (def.chartjs.plugins || []).forEach((key) => {
+      if (LIBRARIES[key]) out.push(LIBRARIES[key]);
+      else console.warn(`[cdn] "${def.id}" names unknown plugin "${key}"`);
+    });
+    return out;
+  }
+  if (engine === 'echarts') {
+    const out = [LIBRARIES.echarts];
+    (def.echarts.plugins || []).forEach((key) => {
       if (LIBRARIES[key]) out.push(LIBRARIES[key]);
       else console.warn(`[cdn] "${def.id}" names unknown plugin "${key}"`);
     });
