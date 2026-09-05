@@ -302,16 +302,30 @@ export function runSteps(table, steps) {
       const data = {};
       const colNames = table.headers.map((h, i) => h || `Column ${i + 1}`);
       colNames.forEach((h, i) => {
-        data[h] = table.rows.map(r => {
-          const val = r[i];
-          const num = toNumber(val);
-          return Number.isFinite(num) ? num : (val == null ? null : String(val));
+        const raw = table.rows.map((r) => r[i]);
+        // Coerce a column, not a cell: the native runners fold per value and
+        // never turn a whole column numeric, so a column is only numeric here
+        // if every non-empty cell parses. Otherwise one stray label would make
+        // aq.op.sum return NaN where `fold` quietly skips it.
+        const filled = raw.filter((v) => v != null && String(v).trim() !== '');
+        const numeric = filled.length > 0
+          && filled.every((v) => Number.isFinite(toNumber(v)));
+        data[h] = raw.map((v) => {
+          if (v == null || String(v).trim() === '') return numeric ? null : '';
+          return numeric ? toNumber(v) : String(v);
         });
       });
       let aqTable = aq.table(data);
 
       (steps || []).forEach((step, i) => {
         try {
+          // A half-built step is skipped and reported, the same as the native
+          // runners do — someone is still typing one.
+          if (!step || !RUNNERS[step.op]) {
+            errors.push(`Step ${i + 1} does nothing.`);
+            stages.push(clone(current));
+            return;
+          }
           if (step.op === 'filter') {
             const colName = colNames[step.col];
             const test = step.test || 'is';
@@ -340,7 +354,7 @@ export function runSteps(table, steps) {
             const agg = step.agg || 'sum';
             const byColName = colNames[by];
             const chosen = Array.isArray(step.vals) ? step.vals : null;
-            const valueCols = (chosen || defaultValueCols({headers: colNames, rows: table.rows}, by))
+            const valueCols = (chosen || defaultValueCols({ headers: colNames, rows: current.rows }, by))
               .filter((c) => c !== by && c >= 0 && c < colNames.length)
               .map(c => colNames[c]);
             
@@ -376,7 +390,13 @@ export function runSteps(table, steps) {
             const outHeaders = aqTable.columnNames();
             const outRows = [];
             aqTable.objects().forEach(obj => {
-              outRows.push(outHeaders.map(h => (obj[h] == null ? '' : String(obj[h]))));
+              outRows.push(outHeaders.map(h => {
+                const v = obj[h];
+                if (v == null) return '';
+                // Match the native runners: trim the float noise an aggregate
+                // leaves rather than writing 3.3333333333333335 into the grid.
+                return typeof v === 'number' ? tidyNumber(v) : String(v);
+              }));
             });
             current = { headers: outHeaders, rows: outRows };
             colNames.length = 0;

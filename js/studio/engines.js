@@ -541,9 +541,17 @@ function buildHTML(def, spec) {
 
   // The mark itself carries the short label, so a reader landing on the
   // graphic hears what it is; the long description hangs off the figure.
-  const plate = (id, label) => ((engine === 'd3' || engine === 'dom' || engine === 'echarts')
-    ? `<div id="${id}" role="img" aria-label="${escapeText(label)}" class="chart-wrap"></div>`
-    : `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`);
+  const plate = (id, label) => {
+    if (engine === 'd3' || engine === 'dom') {
+      return `<div id="${id}" role="img" aria-label="${escapeText(label)}"></div>`;
+    }
+    // ECharts sizes itself from its container, so the div needs the height
+    // `.chart-wrap` carries — unlike d3/dom, which grow with their content.
+    if (engine === 'echarts') {
+      return `<div id="${id}" role="img" aria-label="${escapeText(label)}" class="chart-wrap"></div>`;
+    }
+    return `<div class="chart-wrap"><canvas id="${id}" role="img" aria-label="${escapeText(label)}"></canvas></div>`;
+  };
 
   const panels = panelSpecs(def, spec);
   // The plate and the mark inside it must not share an id. They did, and

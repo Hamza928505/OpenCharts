@@ -971,10 +971,12 @@ const hoverLives = await page.evaluate(async () => {
   host.style.cssText = 'width:820px;height:440px;position:fixed;left:0;top:0;opacity:0';
   document.body.appendChild(host);
 
-  // One chart per self-drawn engine; the other two bring their own tooltips.
+  // One chart per self-drawn engine; Chart.js, the custom engine and ECharts
+  // all bring their own tooltips.
+  const BUILT_IN_TIPS = new Set(['chartjs', 'native', 'echarts']);
   const pick = {};
   for (const def of reg.CHARTS) {
-    if (def.engine !== 'chartjs' && def.engine !== 'native' && !pick[def.engine]) pick[def.engine] = def.id;
+    if (!BUILT_IN_TIPS.has(def.engine) && !pick[def.engine]) pick[def.engine] = def.id;
   }
 
   const out = {};

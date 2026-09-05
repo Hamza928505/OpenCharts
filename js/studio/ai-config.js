@@ -25,6 +25,15 @@ export function getStoredApiKey() {
   }
 }
 
+/** Whether a key is persisted in localStorage. Storage access can throw. */
+function hasPersistedKey() {
+  try {
+    return !!localStorage.getItem(STORAGE_KEY);
+  } catch (e) {
+    return false;
+  }
+}
+
 export function openAiConfigDialog() {
   return new Promise((resolve) => {
     const scrim = el('div', 'dlg-scrim ask-scrim');
@@ -58,7 +67,7 @@ export function openAiConfigDialog() {
     const checkbox = el('input');
     checkbox.type = 'checkbox';
     // Check it if they already have one in localStorage
-    checkbox.checked = !!localStorage.getItem(STORAGE_KEY);
+    checkbox.checked = hasPersistedKey();
     checkboxWrap.append(checkbox, el('span', null, 'Save this key in localStorage (Not recommended for shared devices)'));
     inputWrap.appendChild(checkboxWrap);
 
