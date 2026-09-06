@@ -411,6 +411,53 @@ in exactly one bin, and that counting rows accounts for all of them. A
 transform that is merely plausible is worse than none: it puts numbers on a
 chart nobody can trace back to the file.
 
+### Which chart to actually draw
+
+`profile.js` describes a table and `recommend.js` has an opinion about it.
+Together they answer the question the matcher could not: `rankCharts` says
+"98 of 115 charts can read this", which is true and nearly useless to somebody
+holding a spreadsheet — it is a list of everything, ordered by category.
+
+**This deliberately reverses the rule stated one section down**, that nothing
+decides whether a chart is a *good* way to show the data. That rule is right
+about `DataMatch` and wrong as a rule for the product. The reversal is safe
+only because of what replaces it:
+
+- **Every suggestion states its reason, in the reader's own column names** —
+  "5 values in `region` and one measure — bars put them on a common baseline".
+  A score with no sentence is exactly what the old rule protected against, and
+  none is shown.
+- **Every suggestion carries its own caution**, taken from the `watch` line in
+  `chart-help.js`. A recommender that cannot say what is wrong with its own
+  suggestion is advertising.
+- **It cannot narrow anything.** `rankCharts` still decides what is possible;
+  this only orders and explains, and the grid below is untouched.
+- **Where no rule fires, the reader is told so** rather than handed a guess.
+
+Three things it got wrong first, each now a check:
+
+- **An identifier is recognised by its name, never by distinctness.** This is
+  a lesson `transform.js` already records — "ids are often all-distinct
+  integers, and so was the revenue column in the first table this was tested
+  against" — and `profile.js` was written with a distinctness rule anyway. It
+  flagged `revenue`, `visits`, `value` and 41 of 42 measures in a wide export
+  as identifiers, dropping them from the profile, so five regions and one
+  measure produced **no suggestion at all**. The one value rule kept is exact:
+  a column counting 1, 2, 3 … from zero or one is a row counter whatever it is
+  called.
+- **A column that is *nearly* numeric had no voice.** 60% numbers fails the
+  test for a measure, so no suggestion mentioned it — and the "cells will read
+  as 0" warning only fired for columns that had passed. The reader was told
+  nothing about the one column stopping them. It now names the offending
+  cells: "revenue is 60% numbers — 2 cells (N/A, n/a) stop it being read as a
+  measure at all."
+- **A rule naming a chart that does not exist does nothing, silently.** Six
+  ids were wrong on the first pass (`bar-grouped`, `radar-basic`, `lollipop`,
+  `scatter-groups`, `density`, `donut`) and the only symptom was a list one
+  shorter than it should have been. `namedCharts()` exposes every id any rule
+  can produce — from two stubs, since several branch on how many measures
+  there are — and the suite checks them against the registry.
+
 ### Which chart fits a table
 
 `DataMatch.js` asks `checkTableShape` for every chart at once and hands the
@@ -1928,6 +1975,8 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `chart-help.js` | The `read` and `watch` line per chart, with a category fallback |
 | `HelpPanel.js` | Those two lines, rendered beside the chart |
 | `loader.js` | Fetches a third-party library the first time a chart needs it |
+| `profile.js` | What is in a table — types, spread, outliers, what is wrong with it |
+| `recommend.js` | Which chart to draw, and the reason, and the caution |
 | `share.js` | The spec compressed into a link, and read back out of one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |
@@ -1962,7 +2011,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **678 checks**. Twenty-nine suites cover the registry, every chart (render + non-blank canvas +
+The suite is **691 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

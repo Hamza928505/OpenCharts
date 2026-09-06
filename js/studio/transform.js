@@ -118,7 +118,7 @@ export function numericColumns(table) {
  * A default, never a verdict: the editor shows which columns are being folded
  * and lets any of them be ticked back in.
  */
-const ID_NAME = /^(id|.*[_ -]id|.*id|code|key|uuid|guid|index|idx|no|num|number|row|rank|year|yr)$/i;
+export const ID_NAME = /^(id|.*[_ -]id|.*id|code|key|uuid|guid|index|idx|no|num|number|row|rank|year|yr)$/i;
 
 /** The columns a group step folds unless told otherwise. */
 export function defaultValueCols(table, keyCol) {
