@@ -8,7 +8,7 @@
 
 import { CHARTS, CATEGORIES, getChart, chartIndex, newSpec } from './registry.js';
 import { renderChart, destroyInstance, resizeInstance, renderLegend, generateCode } from './engines.js';
-import { buildControls } from './ControlPanel.js';
+import { buildControls, buildStageTools } from './ControlPanel.js';
 import { CodePanel } from './CodePanel.js';
 import { renderSources } from './SourcesPanel.js';
 import { renderHelp } from './HelpPanel.js';
@@ -113,6 +113,7 @@ export class StudioApp {
     this.legendEl   = $('#legend');
     this.metricsEl  = $('#metrics');
     this.controlsEl = $('#controls');
+    this.stageToolsEl = $('#stage-tools');
     this.railList   = $('#rail-list');
     this.titleEl    = $('#chart-title');
     this.blurbEl    = $('#chart-blurb');
@@ -322,7 +323,7 @@ export class StudioApp {
     $('#btn-next')?.addEventListener('click', () => this._step(1));
     $('#btn-reset')?.addEventListener('click', () => {
       this.spec = newSpec(this.def);
-      buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+      this._buildPanels();
       this.rebuild();
       toast('Reset to defaults', 'ok');
     });
@@ -447,7 +448,7 @@ export class StudioApp {
     this.stageTitle.textContent = def.title;
     this.idxEl.textContent = `${chartIndex(id) + 1} / ${CHARTS.length}`;
 
-    buildControls(this.controlsEl, def, this.spec, () => this._onEdit());
+    this._buildPanels(def);
     this._markActive();
     this.rebuild();
     // Opening a chart is not an edit of the last one: the history starts here.
@@ -531,7 +532,7 @@ export class StudioApp {
     if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
     // The controls are rebuilt, not just repainted: an undo can change how
     // many series exist, and a stale row would edit an index that has gone.
-    buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+    this._buildPanels();
     this.rebuild();
     this.lastCommitted = json;
     // Deliberately not `Date.now()`: an edit made straight after an undo is a
@@ -569,6 +570,16 @@ export class StudioApp {
     });
   }
 
+  /**
+   * Rebuild both control surfaces: the sidebar, and the stage-side small
+   * multiples / notes. They read one spec and one change callback, so a caller
+   * that rebuilds one always rebuilds the other.
+   */
+  _buildPanels(def = this.def) {
+    buildControls(this.controlsEl, def, this.spec, () => this._onEdit());
+    buildStageTools(this.stageToolsEl, def, this.spec, () => this._onEdit());
+  }
+
   _onEdit() {
     if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
     // The URL still carries the spec this session opened with; once it is
@@ -589,7 +600,7 @@ export class StudioApp {
     openDataDialog(this.def, this.spec, () => {
       if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
       // Rebuild the controls too: new data can mean a different number of series.
-      buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+      this._buildPanels();
       this.rebuild();
       // A table is one deliberate act however quickly it followed the last.
       this._commit({ step: true });
@@ -720,7 +731,7 @@ export class StudioApp {
 
     this.spec = { ...newSpec(this.def), ...inner };
     if (typeof this.def.onChange === 'function') this.def.onChange(this.spec);
-    buildControls(this.controlsEl, this.def, this.spec, () => this._onEdit());
+    this._buildPanels();
     this.rebuild();
     this._commit({ step: true });
     return { ok: true, message: 'Spec applied' };

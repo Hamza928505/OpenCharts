@@ -616,7 +616,10 @@ per category, and hands ~180px back to the chart. Three rules:
 
 **The controls column is as wide as the reader wants it.** It was a fixed
 300px — 262px once the padding is off — and that column now carries the data
-preview, the series editor, the palette, the facet control and the notes.
+preview, the series editor and the palette. (Small multiples and notes sit in
+a collapsible `.stage-tools` section under the plate instead — they are state
+laid over the finished chart, not knobs that shape it, so `buildControls`
+skips both types and `buildStageTools` renders them beside the chart.)
 Everything fits and nothing is comfortable. Picking a bigger number would have
 been the wrong shape of answer: the layout argument here is that chrome is
 spent *before* the subject of the page gets any, and a wider default spends
@@ -1490,8 +1493,8 @@ Three things it has to get right, each checked:
   `mousedown`/`click` handoff handlers, which would otherwise fire on the way
   past. `.card-shell` carries the hover lift for the same reason: a card that
   rose 3px while its own button stayed put would come apart on every hover.
-- **A matched table travels with it.** If the reader has pasted a table into
-  **Match my data**, `_copyPrompt` applies it before building — the same data
+- **A matched table travels with it.** If the reader has brought a table into
+  the gallery's upload panel, `_copyPrompt` applies it before building — the same data
   opening the tile would carry into the studio. The format *example* stays put
   either way: it illustrates the shape, and replacing it with the reader's own
   rows would leave the brief with no statement of the format at all.
@@ -1790,7 +1793,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `charts/_data.js` | **The literal data every chart opens with.** Generated; see `tools/` |
 | `engines.js` | Render + code generation for all five renderer kinds |
 | `serialize.js` | JS value → readable source, `srcFn`, `tickFormat` |
-| `ControlPanel.js` | Schema-driven controls |
+| `ControlPanel.js` | Schema-driven controls — `buildControls` for the sidebar, `buildStageTools` for the small-multiples / notes section under the plate |
 | `DataDialog.js` | The data editor: grid, place pickers, paste tab |
 | `DataGrid.js` | The editable table, with per-cell validation |
 | `DataMatch.js` | "I have this table — what draws it?" and the handoff to the studio |
@@ -2023,12 +2026,16 @@ Annotations need no step either, and for a stronger reason: they are laid over
 the plate rather than drawn by the renderer, so `registry.js` attaches the
 control and a new chart can be annotated before anyone has thought about it.
 The suite asserts that of every chart in the library, which is the check that
-keeps it true.
+keeps it true. The control renders under the plate (`buildStageTools`), not in
+the sidebar — `buildControls` skips the `annotations` type — but it is still a
+schema entry on `def.controls`, so the "every chart carries it, last" checks
+are unchanged.
 
 Small multiples need no step for the same reason and one more: a facet hands
 each panel a complete spec, so a new chart's own `draw` or `mount` draws a grid
 of itself without having heard of the feature. `registry.js` attaches the
-control to every chart that takes a table. The one thing a new chart *does*
+control to every chart that takes a table, and it too renders under the plate
+rather than in the sidebar. The one thing a new chart *does*
 owe it is a working `toText` — which step 3 already requires — because that is
 what `panelExtent` reads to put every panel on one axis.
 

@@ -126,16 +126,27 @@
   <div class="matchbar-head">
     <div class="matchbar-lead">
       <h2 class="matchbar-title">Have a table? Find the charts that can read it.</h2>
-      <p class="matchbar-sub">Paste it, or open a spreadsheet. Nothing is uploaded — the file is
-      read in this browser and never sent anywhere.</p>
+      <p class="matchbar-sub">Drop a file, paste rows, or fetch a link. Nothing is uploaded — the
+      data is read in this browser and never sent anywhere.</p>
     </div>
-    <button class="btn btn-sm btn-primary" id="match-toggle" type="button" aria-expanded="false"
-            aria-controls="match-body">Match my data</button>
   </div>
 
-  <div class="matchbar-body" id="match-body" hidden>
+  <div class="matchbar-body" id="match-body">
     <div class="match-col">
-      <label class="dlg-label" for="match-text">Your table</label>
+      <div class="match-drop" id="match-drop" tabindex="0" role="button"
+           aria-label="Choose a data file, or drop one here">
+        <span class="match-drop-icon" aria-hidden="true">⬆</span>
+        <span class="match-drop-lead"><b>Drop a file here</b>, or <span class="match-drop-link">browse</span></span>
+        <span class="match-drop-formats">CSV, TSV, plain text or Excel (.xlsx / .xlsm) — up to 10&nbsp;MB</span>
+      </div>
+
+      <div class="match-url">
+        <input id="match-url" type="url" class="match-url-input" spellcheck="false"
+               placeholder="https://…/data.csv — a link to a published CSV or spreadsheet">
+        <button class="btn btn-sm" id="match-url-go" type="button">Fetch</button>
+      </div>
+
+      <label class="dlg-label" for="match-text">…or paste your table</label>
       <textarea id="match-text" class="match-text" spellcheck="false"
                 placeholder="region,2023,2024&#10;North,520,680&#10;South,440,575"></textarea>
       <div class="match-tools">
@@ -149,7 +160,7 @@
     <div class="match-col">
       <label class="dlg-label">What was read</label>
       <div class="match-read" id="match-read">
-        <p class="dlg-note">Paste something on the left and the gallery below narrows to the
+        <p class="dlg-note">Bring a table and the gallery below narrows to the
         charts that can draw it.</p>
       </div>
     </div>

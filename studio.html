@@ -87,9 +87,6 @@
           <span class="idx tnum" id="chart-idx"></span>
           <button class="btn btn-sm btn-ghost" id="btn-next" type="button" aria-label="Next chart">→</button>
         </span>
-        <button class="btn btn-sm" id="btn-ai-config" type="button" title="Configure AI Analyst">
-          <span aria-hidden="true">🤖</span> AI Settings
-        </button>
         <span id="theme-mount"></span>
       </div>
     </header>
@@ -114,6 +111,9 @@
                       aria-pressed="false">
                 <span aria-hidden="true">⤢</span> Focus
               </button>
+              <button class="btn btn-sm" id="btn-ai-config" type="button" title="Configure AI Analyst">
+                <span aria-hidden="true">🤖</span> AI Settings
+              </button>
               <button class="btn btn-sm" id="btn-reset" type="button">Reset</button>
               <button class="btn btn-sm" id="btn-png" type="button">Export image</button>
               <button class="btn btn-sm" id="btn-prompt" type="button" title="Copy an AI prompt for this chart — paste it into any assistant along with your own spreadsheet">
@@ -134,6 +134,12 @@
                what a reader gets here and what they ship cannot disagree. -->
           <div class="stage-data" id="chart-data"></div>
         </section>
+
+        <!-- Small multiples and notes: state on the spec, laid over whatever the
+             chart turns out to be — so they sit beside the chart, not in the
+             controls column with the things that shape it. -->
+        <section class="stage-tools" id="stage-tools" data-open="true"
+                 aria-label="Small multiples and notes"></section>
 
         <!-- What this chart loads, and from where -->
         <section class="sources" id="sources" aria-label="Third-party sources this chart uses"></section>

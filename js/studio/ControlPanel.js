@@ -1156,7 +1156,11 @@ export function buildControls(container, def, spec, onChange) {
   panelScope = new AbortController();
 
   container.innerHTML = '';
-  const controls = def.controls || [];
+  // Small multiples and notes render beside the plate, not here — they are
+  // state laid over whatever the chart turned out to be, not knobs that shape
+  // it. `buildStageTools` picks them up from the same definition.
+  const controls = (def.controls || []).filter(
+    (c) => c.type !== 'facet' && c.type !== 'annotations');
 
   if (!controls.length) {
     const note = el('p', 'lede');
@@ -1201,4 +1205,57 @@ export function buildControls(container, def, spec, onChange) {
 
     container.appendChild(block);
   });
+}
+
+/**
+ * The stage-side tools: small multiples and notes.
+ *
+ * Rendered from the `facet` and `annotations` entries `registry.js` attaches to
+ * every chart that takes a table (facet) and to every chart at all (notes).
+ * They belong beside the plate rather than in the controls column because
+ * neither shapes the chart — a facet splits the finished spec into a grid, a
+ * note is laid over whatever the grid turned out to be. `buildControls` skips
+ * both for the same reason.
+ *
+ * The section is collapsible, and its open state lives on `container` (set in
+ * the markup) so a rebuild after a data edit does not force it back open.
+ */
+export function buildStageTools(container, def, spec, onChange) {
+  container.innerHTML = '';
+  const entries = (def.controls || []).filter(
+    (c) => c.type === 'facet' || c.type === 'annotations');
+  if (!entries.length) { container.hidden = true; return; }
+  container.hidden = false;
+
+  const open = container.dataset.open === 'true';
+  const head = el('button', 'stage-tools-head');
+  head.type = 'button';
+  head.setAttribute('aria-expanded', String(open));
+  head.innerHTML =
+    '<span class="stage-tools-caret" aria-hidden="true">'
+    + '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2l3.5 3-3.5 3"/></svg>'
+    + '</span>'
+    + '<span class="stage-tools-title">Small multiples &amp; notes</span>';
+  head.addEventListener('click', () => {
+    const next = container.dataset.open !== 'true';
+    container.dataset.open = String(next);
+    head.setAttribute('aria-expanded', String(next));
+  });
+
+  const body = el('div', 'stage-tools-body');
+  const inner = el('div', 'stage-tools-inner');
+  body.appendChild(inner);
+
+  entries.forEach((ctrl) => {
+    const make = WIDGETS[ctrl.type];
+    if (!make) return;
+    const cell = el('div', 'stage-tool');
+    if (ctrl.group) cell.appendChild(el('div', 'stage-tools-label', ctrl.group));
+    const node = make(ctrl, spec, onChange, def);
+    node._rebuildAll = () => buildStageTools(container, def, spec, onChange);
+    cell.appendChild(node);
+    inner.appendChild(cell);
+  });
+
+  container.append(head, body);
 }
