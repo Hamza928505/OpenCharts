@@ -608,11 +608,73 @@ await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' }
 await page.waitForTimeout(900);
 const carried = await page.evaluate(() => ({
   flows: JSON.stringify(window.openCharts.spec.flows),
-  spent: sessionStorage.getItem('opencharts.table'),
+  inSession: sessionStorage.getItem('opencharts.table'),
+  held: !!localStorage.getItem('opencharts.table'),
 }));
 check(/"Ad"/.test(carried.flows) && /"Buy"/.test(carried.flows),
   'the matched table opens in the chart the reader picked', carried.flows.slice(0, 80));
-check(carried.spent === null, 'and is taken once, not left for the next page load');
+check(carried.inSession === null && carried.held,
+  'and travels in localStorage, which a new tab can actually read');
+
+/* The bug this replaced: `sessionStorage` is scoped to one browsing context,
+ * so a tab with no opener — a pasted URL, a bookmark, a second window — starts
+ * with none of it. A reader who uploaded a spreadsheet and then opened a chart
+ * in a new tab got the library's example with nothing saying why, which reads
+ * as the upload having failed. A fresh Playwright context is exactly that tab:
+ * same browser, same storage origin, no opener. */
+const openerless = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const freshPage = await openerless.newPage();
+await freshPage.goto(`${base}/index.html`, { waitUntil: 'domcontentloaded' });
+await freshPage.evaluate((held) => localStorage.setItem('opencharts.table', held),
+  await page.evaluate(() => localStorage.getItem('opencharts.table')));
+await freshPage.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
+await freshPage.waitForTimeout(900);
+const newTab = await freshPage.evaluate(() => ({
+  flows: JSON.stringify(window.openCharts.spec.flows),
+  sessionEmpty: sessionStorage.getItem('opencharts.table') === null,
+}));
+await openerless.close();
+
+check(newTab.sessionEmpty, 'a tab with no opener genuinely has no session storage');
+check(/"Ad"/.test(newTab.flows) && /"Buy"/.test(newTab.flows),
+  'and the table still reaches a chart opened in one', newTab.flows.slice(0, 80));
+
+/* Expiry, and the deliberate way out. */
+const ttl = await page.evaluate(async () => {
+  const dm = await import('/js/studio/DataMatch.js');
+  const table = { headers: ['a', 'b'], rows: [['x', '1']] };
+
+  dm.handOff(table);
+  const fresh = !!dm.takeHandOff();
+
+  // Seven hours old, against a six-hour life.
+  const held = JSON.parse(localStorage.getItem('opencharts.table'));
+  held.at = Date.now() - 7 * 60 * 60 * 1000;
+  localStorage.setItem('opencharts.table', JSON.stringify(held));
+  const stale = !!dm.takeHandOff();
+  const swept = localStorage.getItem('opencharts.table') === null;
+
+  dm.handOff(table);
+  dm.clearHandOff();
+  const cleared = !!dm.takeHandOff();
+
+  // The request to *open* the matcher is one-shot even though the table is not.
+  dm.requestMatch(table);
+  const asked = dm.takeMatchRequest();
+  const askedTwice = dm.takeMatchRequest();
+  const tableSurvives = !!dm.takeHandOff();
+  dm.clearHandOff();
+
+  return { fresh, stale, swept, cleared, asked, askedTwice, tableSurvives };
+});
+
+check(ttl.fresh && !ttl.stale && ttl.swept,
+  'a table older than its life stops applying, and is swept up', JSON.stringify(ttl));
+check(!ttl.cleared, 'and Clear ends it everywhere rather than in one tab');
+check(ttl.asked && !ttl.askedTwice && ttl.tableSurvives,
+  'asking to be shown the matcher is answered once; the table is not consumed with it',
+  JSON.stringify(ttl));
+
 console.log(`  ${green('✓')} data match — ${match.flow.cards} charts read a flow table, ${match.yearsFixed.cards} read a plain one`);
 
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
@@ -666,9 +728,10 @@ console.log(`  ${green('✓')} studio — ${studio.controls} control groups, ${s
  * to ninety charts is for. Worse, the table was consumed even when the first
  * chart could not read it, so one bad first pick lost it for the whole visit.
  *
- * Storage is still read once: reloading the studio is a fresh start. */
+ * Storage is read once per page load and the table held on the instance after
+ * that, so the reads below are of one table rather than three. */
 await page.evaluate((table) => {
-  sessionStorage.setItem('opencharts.table', JSON.stringify(table));
+  localStorage.setItem('opencharts.table', JSON.stringify({ at: Date.now(), ...table }));
 }, {
   headers: ['region', 'q1', 'q2'],
   rows: [['Namek', '911', '412'], ['Vegeta', '733', '288'], ['Yardrat', '605', '199']],
@@ -696,7 +759,7 @@ const carriedOn = await page.evaluate(async () => {
     first: /Namek/.test(first),
     second: /Namek/.test(second),
     third: /Namek/.test(third),
-    consumed: !sessionStorage.getItem('opencharts.table'),
+    stillHeld: !!localStorage.getItem('opencharts.table'),
     toasts,
   };
 });
@@ -704,12 +767,16 @@ const carriedOn = await page.evaluate(async () => {
 check(carriedOn.first, 'a table handed over by the gallery reaches the first chart');
 check(carriedOn.second && carriedOn.third,
   'and every chart switched to after it', JSON.stringify(carriedOn));
-check(carriedOn.consumed, 'while storage is read once, so a reload is a fresh start');
+check(carriedOn.stillHeld,
+  'and is left in place, because the next tab has to be able to read it too');
 check(carriedOn.toasts <= 1, 'and the table is announced once, not per switch',
   String(carriedOn.toasts));
 
-// That check left the page on another chart holding somebody's table. The
-// suites below read the studio's own example, so put it back on a clean one.
+// That check left the page on another chart holding somebody's table — and the
+// table now outlives the tab, which is the whole point of it, so it outlives
+// this check too unless it is put away. Everything below reads the studio's own
+// example.
+await page.evaluate(() => localStorage.removeItem('opencharts.table'));
 await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(700);
 

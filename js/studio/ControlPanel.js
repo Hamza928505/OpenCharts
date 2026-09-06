@@ -12,6 +12,7 @@ import { paletteAt } from './palette.js';
 import { attachColourPicker } from './colorpicker.js';
 import { parseTable, applyData, expectedFormat, checkTableShape } from './dataio.js';
 import { chooseDataFile } from './fileimport.js';
+import { rankCharts, requestMatch } from './DataMatch.js';
 import { ask } from './confirm.js';
 import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
@@ -583,7 +584,18 @@ function widgetData(ctrl, spec, notify, def) {
     const table = parseTable(res.text, expectedFormat(def).columns);
     const fit = checkTableShape(def, table);
     if (!fit.ok) {
-      const open = await ask({
+      // How many *other* charts would take this file, so the offer below is a
+      // number rather than a hope. A real spreadsheet rarely fits whichever
+      // chart the reader happened to be looking at, and being told only "no"
+      // by the page that exists to draw their data reads as the upload having
+      // failed — which is exactly what was reported.
+      let elsewhere = 0;
+      try {
+        const ranked = rankCharts(table);
+        elsewhere = ranked.fits.length + ranked.partial.length;
+      } catch { /* the offer just goes unqualified */ }
+
+      const choice = await ask({
         title: `${res.name} does not match this chart`,
         text: fit.message,
         list: [
@@ -593,11 +605,20 @@ function widgetData(ctrl, spec, notify, def) {
         ].filter(Boolean),
         tone: 'stop',
         confirm: 'Open the editor',
+        alt: elsewhere ? `See ${elsewhere} charts that read this` : null,
         cancel: 'Cancel',
       });
+
+      if (choice === 'alt') {
+        // The same door a gallery tile uses, plus a note to open the matcher
+        // on arrival. The file is not lost by being refused here.
+        requestMatch(table);
+        location.href = 'index.html';
+        return;
+      }
       // The grid is where a near miss gets fixed — renaming a column or
       // deleting a stray one — rather than being refused outright.
-      if (open) openDataDialog(def, spec, afterApply, res.text);
+      if (choice) openDataDialog(def, spec, afterApply, res.text);
       return;
     }
 

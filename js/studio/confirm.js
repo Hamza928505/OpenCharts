@@ -24,8 +24,9 @@ const el = (tag, cls, text) => {
  * @param {string[]} [opts.list]     bullet points, e.g. the offending rows
  * @param {string} [opts.confirm]    confirm button label
  * @param {string} [opts.cancel]     cancel button label; omit for a plain alert
+ * @param {string} [opts.alt]        a third way out, resolving to the string 'alt'
  * @param {'ask'|'warn'|'stop'} [opts.tone]
- * @returns {Promise<boolean>} true if confirmed
+ * @returns {Promise<boolean|'alt'>} true if confirmed, 'alt' for the third button
  */
 export function ask(opts) {
   return new Promise((resolve) => {
@@ -56,6 +57,15 @@ export function ask(opts) {
       cancelBtn.type = 'button';
       foot.appendChild(cancelBtn);
     }
+    // A third way out, for the case where neither "do it" nor "never mind" is
+    // what the reader wants — an upload that fits no chart on this page has a
+    // real answer elsewhere, and a dialog that cannot offer it is a dead end.
+    let altBtn = null;
+    if (opts.alt) {
+      altBtn = el('button', 'btn', opts.alt);
+      altBtn.type = 'button';
+      foot.appendChild(altBtn);
+    }
     const okBtn = el('button', 'btn btn-primary' + (opts.tone === 'stop' ? ' btn-danger' : ''), opts.confirm || 'OK');
     okBtn.type = 'button';
     foot.appendChild(okBtn);
@@ -82,8 +92,8 @@ export function ask(opts) {
         e.stopPropagation();
         done(document.activeElement !== cancelBtn);
       } else if (e.key === 'Tab') {
-        // Keep Tab inside the dialog; there are only ever two buttons.
-        const focusables = [cancelBtn, okBtn].filter(Boolean);
+        // Keep Tab inside the dialog, over however many ways out it offers.
+        const focusables = [cancelBtn, altBtn, okBtn].filter(Boolean);
         if (focusables.length < 2) { e.preventDefault(); okBtn.focus(); return; }
         e.preventDefault();
         const i = focusables.indexOf(document.activeElement);
@@ -93,6 +103,7 @@ export function ask(opts) {
 
     okBtn.addEventListener('click', () => done(true));
     if (cancelBtn) cancelBtn.addEventListener('click', () => done(false));
+    if (altBtn) altBtn.addEventListener('click', () => done('alt'));
     scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) done(false); });
     // `keydown` in the capture phase so the host dialog's own Escape handler
     // does not close everything at once.
