@@ -52,7 +52,7 @@ const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 const toSrgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
 
-/** '#6C63D8' → [108, 99, 216], or null for anything that is not a plain hex. */
+/** '#2e8d44' → [46, 141, 68], or null for anything that is not a plain hex. */
 export function rgbOf(hex) {
   if (typeof hex !== 'string') return null;
   let h = hex.trim();

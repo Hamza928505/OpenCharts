@@ -242,7 +242,7 @@ export class Renderer {
     content,
     color     = '#888',
     size      = 12,
-    family    = "'DM Sans', sans-serif",
+    family    = "'IBM Plex Sans', sans-serif",
     weight    = '400',
     align     = 'left',    // 'left' | 'center' | 'right'
     baseline  = 'middle',  // 'top' | 'middle' | 'bottom' | 'alphabetic'
@@ -263,7 +263,7 @@ export class Renderer {
    * Measure a text string's rendered width (no draw).
    * @returns {number} pixel width
    */
-  measureText(content, size = 12, family = "'DM Sans', sans-serif", weight = '400') {
+  measureText(content, size = 12, family = "'IBM Plex Sans', sans-serif", weight = '400') {
     const ctx = this._ctx;
     ctx.save();
     ctx.font = `${weight} ${size}px ${family}`;

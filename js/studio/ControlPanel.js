@@ -25,10 +25,10 @@ import {
 import { flagIcon } from './flags.js';
 import { simulate, paletteOf } from './cvd.js';
 import { colourWarning } from './palette-ui.js';
-import { ANNOTATION_TYPES, newAnnotation, defaultArrow } from './annotate.js';
+import { ANNOTATION_TYPES, newAnnotation, defaultArrow, PANEL_ALL } from './annotate.js';
 import {
   isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
-  seriesKeyOf, scaleSharing, panelCount, panelColumns, facetNote,
+  seriesKeyOf, scaleSharing, panelCount, panelColumns, facetNote, panelNames,
 } from './facet.js';
 
 /* ── panel-scoped events ─────────────────────────────────────────────────── */
@@ -419,11 +419,15 @@ function widgetColors(ctrl, spec, notify) {
  * Adding is three buttons rather than a type dropdown plus an Add: picking
  * what to add *is* the action, and one click should do it.
  */
-function widgetAnnotations(ctrl, spec, notify) {
+function widgetAnnotations(ctrl, spec, notify, def) {
   const key = ctrl.key || 'annotations';
   const wrap = field(ctrl.label || 'Notes on the chart');
   const list = el('div', 'annot-list');
   const adder = el('div', 'annot-add');
+
+  // Which panels there are to pin something to. Empty unless the chart is
+  // split, and the picker is only offered when it is not.
+  const panels = isFaceted(spec) ? panelNames(def, spec) : [];
 
   /** The live array, created on first use so an unannotated spec stays clean. */
   const ensure = () => {
@@ -479,7 +483,7 @@ function widgetAnnotations(ctrl, spec, notify) {
     dot.style.background = a.color || 'transparent';
     if (!a.color) dot.classList.add('is-auto');
     dot.title = a.color || 'Default colour';
-    attachColourPicker(dot, () => a.color || '#6C63D8',
+    attachColourPicker(dot, () => a.color || '#15803d',
       (hex) => { a.color = hex; changed(true); },
       () => { delete a.color; changed(true); });
     node.appendChild(dot);
@@ -492,6 +496,41 @@ function widgetAnnotations(ctrl, spec, notify) {
       changed(true);
     });
     node.appendChild(del);
+
+    // Which plate this one is laid over. Only meaningful once the chart is
+    // split, so it is absent entirely on a single chart rather than present
+    // and saying "Whole grid" about a grid of one.
+    if (panels.length) {
+      const where = el('select', 'select annot-where');
+      const options = [
+        { value: '', label: 'Over the whole grid' },
+        { value: PANEL_ALL, label: 'On every panel' },
+        ...panels.map((n) => ({ value: n, label: `Only on ${n}` })),
+      ];
+      options.forEach((opt) => {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        where.appendChild(o);
+      });
+      // A note pinned to a panel that has since been renamed away is shown as
+      // what it is — an orphan — rather than silently reset to the grid.
+      const held = a.panel || '';
+      if (held && !options.some((o) => o.value === held)) {
+        const o = document.createElement('option');
+        o.value = held;
+        o.textContent = `Only on ${held} (no such panel)`;
+        where.appendChild(o);
+      }
+      where.value = held;
+      where.title = 'Which plate this is drawn on';
+      where.addEventListener('change', () => {
+        if (where.value) a.panel = where.value;
+        else delete a.panel;
+        changed(true);
+      });
+      node.appendChild(where);
+    }
 
     return node;
   }
@@ -508,7 +547,9 @@ function widgetAnnotations(ctrl, spec, notify) {
     hint.hidden = !items.length;
   }
 
-  const hint = el('p', 'annot-hint', 'Drag it on the chart to place it.');
+  const hint = el('p', 'annot-hint', panels.length
+    ? 'Drag it on the chart to place it. A rule or a band starts on every panel.'
+    : 'Drag it on the chart to place it.');
 
   ANNOTATION_TYPES.forEach((t) => {
     const add = el('button', 'btn btn-sm annot-new', `+ ${t.label}`);
@@ -516,7 +557,13 @@ function widgetAnnotations(ctrl, spec, notify) {
     add.title = t.hint;
     add.addEventListener('click', () => {
       const items = ensure();
-      items.push(newAnnotation(t.type, items.length));
+      const made = newAnnotation(t.type, items.length);
+      // On a split chart a rule and a band start on every panel, because that
+      // is what a reference value is — a target at 500 belongs on all twelve,
+      // not stretched across the gutters between them. A note keeps the grid:
+      // a remark about the comparison is about all of it at once.
+      if (panels.length && t.type !== 'note') made.panel = PANEL_ALL;
+      items.push(made);
       changed(true);
     });
     adder.appendChild(add);

@@ -123,7 +123,7 @@ export class TooltipSystem {
       border:        `1px solid ${this._opts.borderColor}`,
       boxShadow:     '0 4px 16px rgba(0,0,0,0.25)',
       backdropFilter:'blur(8px)',
-      fontFamily:    "'DM Sans', sans-serif",
+      fontFamily:    "'IBM Plex Sans', sans-serif",
       maxWidth:      '240px',
       transition:    'opacity 0.12s ease',
     });

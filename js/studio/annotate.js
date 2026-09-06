@@ -246,6 +246,34 @@ export function plateOf(root) {
 export const hasAnnotations = (spec) =>
   !!(spec && Array.isArray(spec.annotations) && spec.annotations.length);
 
+/* ── which plate a note belongs to ───────────────────────────────────────── */
+
+/**
+ * An annotation's `panel` field, and the two special values it can take.
+ *
+ * Absent means **the grid** — one remark laid over the whole set of small
+ * multiples, which is what a note usually is and what this feature did
+ * exclusively until now. `'*'` means **every panel**, which is what a shared
+ * reference is: a target line at 500 belongs on all twelve, not floating over
+ * the gaps between them. Anything else names one panel.
+ *
+ * Panels are addressed by *name* rather than index because a name is what the
+ * picker shows and what the export carries, and because re-ordering the series
+ * moves the indices while the names travel with their data. The cost is that
+ * renaming a series orphans its notes — they simply stop rendering, which is
+ * the same way a facet column that disappears behaves.
+ */
+export const PANEL_ALL = '*';
+
+const list = (v) => (Array.isArray(v) ? v : []);
+
+/** The notes that belong to the grid itself — the default for anything unset. */
+export const gridAnnotations = (all) => list(all).filter((a) => a && !a.panel);
+
+/** The notes that belong to the panel called `name`, plus the ones on all of them. */
+export const panelAnnotations = (all, name) =>
+  list(all).filter((a) => a && a.panel && (a.panel === PANEL_ALL || a.panel === name));
+
 /* ── styles the export carries ───────────────────────────────────────────── */
 
 /**
@@ -260,17 +288,17 @@ export const ANNOTATION_CSS = `.oc-annots {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
 }
 
 .oc-annot-leads { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.oc-annot-leads line { stroke: var(--oc-annot-color, #56544d); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.oc-annot-leads line { stroke: var(--oc-annot-color, #475569); stroke-width: 1.25; stroke-dasharray: 3 3; }
 
 .oc-annot-line { position: absolute; }
-.oc-annot-line.is-up { left: 0; right: 0; border-top: 1.5px dashed var(--oc-annot-color, #56544d); }
-.oc-annot-line.is-across { top: 0; bottom: 0; border-left: 1.5px dashed var(--oc-annot-color, #56544d); }
+.oc-annot-line.is-up { left: 0; right: 0; border-top: 1.5px dashed var(--oc-annot-color, #475569); }
+.oc-annot-line.is-across { top: 0; bottom: 0; border-left: 1.5px dashed var(--oc-annot-color, #475569); }
 
-.oc-annot-band { position: absolute; background: var(--oc-annot-color, #6C63D8); opacity: .09; }
+.oc-annot-band { position: absolute; background: var(--oc-annot-color, #15803d); opacity: .09; }
 .oc-annot-band.is-up { left: 0; right: 0; }
 .oc-annot-band.is-across { top: 0; bottom: 0; }
 
@@ -283,7 +311,7 @@ export const ANNOTATION_CSS = `.oc-annots {
   width: 7px; height: 7px;
   margin: -3.5px 0 0 -3.5px;
   border-radius: 50%;
-  background: var(--oc-annot-color, #56544d);
+  background: var(--oc-annot-color, #475569);
 }
 
 .oc-annot-label {
@@ -293,7 +321,7 @@ export const ANNOTATION_CSS = `.oc-annots {
   border-radius: 5px;
   font-size: 11.5px;
   line-height: 1.35;
-  color: var(--oc-annot-color, #171614);
+  color: var(--oc-annot-color, #0f172a);
   background: rgba(255, 255, 255, .82);
   white-space: pre-line;
 }
@@ -307,12 +335,12 @@ export const ANNOTATION_CSS = `.oc-annots {
 .oc-annot-label.on-band-up { left: 2px; transform: translateY(-50%); }
 
 @media (prefers-color-scheme: dark) {
-  .oc-annot-leads line { stroke: var(--oc-annot-color, #a3a09a); }
-  .oc-annot-line.is-up { border-top-color: var(--oc-annot-color, #a3a09a); }
-  .oc-annot-line.is-across { border-left-color: var(--oc-annot-color, #a3a09a); }
+  .oc-annot-leads line { stroke: var(--oc-annot-color, #cbd5e1); }
+  .oc-annot-line.is-up { border-top-color: var(--oc-annot-color, #cbd5e1); }
+  .oc-annot-line.is-across { border-left-color: var(--oc-annot-color, #cbd5e1); }
   .oc-annot-band { opacity: .16; }
-  .oc-annot-head { background: var(--oc-annot-color, #a3a09a); }
-  .oc-annot-label { color: var(--oc-annot-color, #eceae4); background: rgba(22, 22, 29, .8); }
+  .oc-annot-head { background: var(--oc-annot-color, #cbd5e1); }
+  .oc-annot-label { color: var(--oc-annot-color, #f8fafc); background: rgba(22, 22, 29, .8); }
 }`;
 
 /* ── the words, for a reader who cannot see any of it ────────────────────── */
@@ -331,23 +359,34 @@ function whereIs(x, y) {
 
 const asPct = (n) => Math.round(Math.max(0, Math.min(1, Number(n) || 0)) * 100) + '%';
 
+/**
+ * Which plate this one is on, said out loud — and only when that is not the
+ * default. A reader hearing "on every panel" about a chart with one panel would
+ * be told about a feature rather than about the chart.
+ */
+const onWhich = (a) => {
+  if (!a.panel) return '';
+  return a.panel === PANEL_ALL ? ', on every panel' : `, on the ${a.panel} panel`;
+};
+
 /** One annotation as a phrase. */
 export function describeAnnotation(a) {
   if (!a || !a.type) return '';
   const said = String(a.text || '').trim();
+  const scope = onWhich(a);
   if (a.type === 'note') {
-    return said ? `“${said}” ${whereIs(a.x, a.y)}` : `an unlabelled marker ${whereIs(a.x, a.y)}`;
+    return (said ? `“${said}” ${whereIs(a.x, a.y)}` : `an unlabelled marker ${whereIs(a.x, a.y)}`) + scope;
   }
   if (a.type === 'line') {
     const where = a.axis === 'x' ? `${asPct(a.at)} across` : `${asPct(1 - a.at)} up`;
-    return said ? `a line marked “${said}” ${where}` : `a line ${where}`;
+    return (said ? `a line marked “${said}” ${where}` : `a line ${where}`) + scope;
   }
   const lo = Math.min(a.from, a.to);
   const hi = Math.max(a.from, a.to);
   const where = a.axis === 'x'
     ? `from ${asPct(lo)} to ${asPct(hi)} across`
     : `from ${asPct(1 - hi)} to ${asPct(1 - lo)} up`;
-  return said ? `a band marked “${said}” ${where}` : `a shaded band ${where}`;
+  return (said ? `a band marked “${said}” ${where}` : `a shaded band ${where}`) + scope;
 }
 
 /**
@@ -398,6 +437,13 @@ export function attachAnnotationDrag(box, list, onCommit) {
   const onDown = (e) => {
     const node = e.target && e.target.closest ? e.target.closest('[data-annot]') : null;
     if (!node) return;
+    // A faceted chart nests plates inside the grid, so a press on a panel's note
+    // bubbles to the grid's handler as well as the panel's. `data-annot` is an
+    // index into whichever list painted that layer — so answering for a layer
+    // this box did not paint would drag the wrong annotation, against the wrong
+    // rectangle. Each handler takes only its own overlay.
+    const layer = node.closest('.oc-annots');
+    if (!layer || layer.parentElement !== box) return;
     const a = list[Number(node.dataset.annot)];
     if (!a) return;
     const part = node.dataset.part;
@@ -465,4 +511,36 @@ export function attachAnnotationDrag(box, list, onCommit) {
     box.classList.remove('is-annot-dragging');
     if (frame) { cancelAnimationFrame(frame); frame = 0; }
   };
+}
+
+/**
+ * Bind the drag everywhere this chart painted notes — one plate, or a grid and
+ * every panel in it.
+ *
+ * A faceted chart has as many overlays as it has scopes, and each one measures
+ * against its *own* box: a note two-thirds across a panel is not two-thirds
+ * across the grid. So there is a binding per plate rather than one on the grid,
+ * and each is handed the same slice of the array that painted it — the same
+ * objects, so a drag writes straight through to `spec.annotations`.
+ *
+ * @returns {Function} one tear-down for all of them
+ */
+export function attachAnnotationDrags(host, all, onCommit) {
+  const stops = [];
+  const grid = host && host.querySelector(':scope > .oc-facets');
+
+  if (!grid) {
+    stops.push(attachAnnotationDrag(plateOf(host), all || [], onCommit));
+  } else {
+    stops.push(attachAnnotationDrag(grid, gridAnnotations(all), onCommit));
+    grid.querySelectorAll(':scope > .oc-facet').forEach((facet) => {
+      const plate = facet.querySelector('.oc-facet-plate');
+      if (!plate) return;
+      const label = facet.querySelector('.oc-facet-name');
+      const mine = panelAnnotations(all, label ? label.textContent : '');
+      if (mine.length) stops.push(attachAnnotationDrag(plateOf(plate), mine, onCommit));
+    });
+  }
+
+  return () => stops.forEach((stop) => stop());
 }

@@ -4900,7 +4900,127 @@ check(editing.added > 0 && editing.added === editing.removed,
   'a drag gives back every listener it took, however often the chart is rebuilt',
   `${editing.added} added, ${editing.removed} removed`);
 check(editing.cleared && editing.left === 0, 'removing the last note takes the overlay with it');
-console.log(`  ${green('✓')} annotations — note, rule and band on all five engines`);
+
+/* A note on a grid of small multiples has to be able to say *which* plate it is
+ * about. Until this landed every annotation was laid over the whole grid, so a
+ * target line on one series was unreachable — and a rule stretched across the
+ * gutters between panels is rarely what anyone means by one. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1600);
+const scoped = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  const host = document.getElementById('chart-host');
+  const out = {};
+
+  const sel = document.querySelector('.facet-ctrl select');
+  sel.value = 'series';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(900);
+  out.panelNames = [...host.querySelectorAll('.oc-facet-name')].map((n) => n.textContent);
+
+  const add = (re) => [...document.querySelectorAll('.annot-new')].find((b) => re.test(b.textContent));
+  add(/Rule/).click();
+  await sleep(450);
+
+  // A reference value starts on every panel, not stretched over the grid.
+  out.defaultScope = app.spec.annotations[0].panel;
+  out.rulesEverywhere = [...host.querySelectorAll('.oc-facet')]
+    .map((f) => f.querySelectorAll('.oc-annot-line').length);
+
+  // And it can be pinned to one.
+  const where = document.querySelector('.annot-row .annot-where');
+  out.offered = [...where.options].map((o) => o.textContent);
+  where.value = out.panelNames[1];
+  where.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(800);
+  out.rulesPinned = [...host.querySelectorAll('.oc-facet')]
+    .map((f) => f.querySelectorAll('.oc-annot-line').length);
+  out.onGrid = host.querySelectorAll(':scope > .oc-facets > .oc-annots').length;
+
+  // Dragging it measures against its own panel, not the grid. The grid is
+  // roughly twice as tall here, so a drag read against the wrong box would
+  // move it half as far — which is exactly the bug nesting invites.
+  const plate = [...host.querySelectorAll('.oc-facet')][1].querySelector('.oc-facet-plate');
+  const rect = plate.getBoundingClientRect();
+  const node = plate.querySelector('[data-annot]');
+  out.grabbable = !!node;
+  if (node) {
+    const nb = node.getBoundingClientRect();
+    const from = { x: nb.left + nb.width / 2, y: nb.top + nb.height / 2 };
+    const before = app.spec.annotations[0].at;
+    node.dispatchEvent(new PointerEvent('pointerdown',
+      { bubbles: true, cancelable: true, clientX: from.x, clientY: from.y, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointermove',
+      { bubbles: true, clientX: from.x, clientY: from.y + rect.height * 0.25, pointerId: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup',
+      { bubbles: true, clientX: from.x, clientY: from.y + rect.height * 0.25, pointerId: 1 }));
+    await sleep(500);
+    out.dragDelta = app.spec.annotations[0].at - before;
+  }
+
+  // A note still belongs to the grid, which is the rule this feature refines
+  // rather than replaces.
+  add(/Note/).click();
+  await sleep(400);
+  out.noteScope = app.spec.annotations[1].panel;
+
+  const { chartSummary } = await import('/js/studio/a11y.js');
+  out.said = chartSummary(app.def, app.spec);
+  out.exportJs = app.codePanel.code.js;
+  out.standalone = app.codePanel.code.standalone;
+  return out;
+});
+
+check(scoped.defaultScope === '*',
+  'a rule added to a split chart starts on every panel, not across the gutters',
+  String(scoped.defaultScope));
+check(scoped.rulesEverywhere.join(',') === '1,1',
+  'so every panel draws it', scoped.rulesEverywhere.join(','));
+check(scoped.offered.length === scoped.panelNames.length + 2,
+  'the scope picker offers the grid, every panel, and each panel by name',
+  scoped.offered.join(' | '));
+check(scoped.rulesPinned.join(',') === '0,1' && scoped.onGrid === 0,
+  'pinning it to one panel draws it there and nowhere else',
+  `${scoped.rulesPinned.join(',')} / grid ${scoped.onGrid}`);
+check(scoped.grabbable && Math.abs(scoped.dragDelta - 0.25) < 0.06,
+  'and dragging it is measured against its own panel, not the grid',
+  `moved ${Number(scoped.dragDelta).toFixed(3)} for a quarter-panel drag`);
+check(scoped.noteScope === undefined,
+  'a note still belongs to the grid — it is a remark about the comparison',
+  String(scoped.noteScope));
+check(/on the .* panel/.test(scoped.said),
+  'the accessible description says which panel a note is on',
+  (scoped.said.match(/[^.]*panel[^.]*\./) || [''])[0].slice(0, 90));
+check(/panel\.notes/.test(scoped.exportJs),
+  'and the export carries the per-panel notes rather than only the grid ones');
+
+/* The export has to reproduce it, which is the whole promise. */
+const scopedExport = await (async () => {
+  const probe = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(e.message));
+  await probe.goto(`${base}/index.html`, { waitUntil: 'domcontentloaded' });
+  await probe.setContent(scoped.standalone, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(1200);
+  const shot = await probe.evaluate(() => ({
+    perPanel: [...document.querySelectorAll('.oc-facet')]
+      .map((f) => f.querySelectorAll('.oc-annot-line').length),
+    onGrid: document.querySelectorAll('.oc-facets > .oc-annots').length,
+    notes: document.querySelectorAll('.oc-annot-label').length,
+  }));
+  await probe.close();
+  return { ...shot, errs };
+})();
+check(!scopedExport.errs.length, 'a scoped export runs clean', scopedExport.errs[0] || '');
+check(scopedExport.perPanel.join(',') === '0,1',
+  'and puts the rule on the one panel it was pinned to',
+  scopedExport.perPanel.join(','));
+check(scopedExport.onGrid === 1 && scopedExport.notes >= 1,
+  'while the grid keeps the note that belongs to it',
+  `grid layers ${scopedExport.onGrid}, labels ${scopedExport.notes}`);
+
+console.log(`  ${green('✓')} annotations — note, rule and band on all five engines, scoped per panel`);
 
 /* Suite 26 — hover you can actually land on, and a gallery that stays awake. */
 

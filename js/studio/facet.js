@@ -66,6 +66,7 @@
  */
 
 import { applyData } from './dataio.js';
+import { panelAnnotations } from './annotate.js';
 
 /**
  * How many panels will be drawn, at most.
@@ -110,6 +111,15 @@ export const FACET_CONTROL = {
   label: 'Split into panels',
 };
 
+/**
+ * What each panel is called, in order — for anything that has to *address* a
+ * panel rather than draw one. Empty for a chart that is not faceted.
+ */
+export function panelNames(def, spec) {
+  const panels = panelSpecs(def, spec);
+  return panels ? panels.map((p) => p.name) : [];
+}
+
 /** Whether this spec is asking for a grid. */
 export const isFaceted = (spec) =>
   !!(spec && spec.facet && (spec.facet.kind === 'series' || spec.facet.kind === 'value'));
@@ -122,9 +132,10 @@ const clone = (v) => (typeof structuredClone === 'function'
  * The spec a panel starts from: everything the reader has set, minus the two
  * fields belonging to the grid rather than to any chart inside it.
  *
- * `annotations` is stripped for the same reason `specForCode` strips it — a
- * note is laid over the plate, and with a facet the plate is the whole grid.
- * Painting every note into every panel would multiply one remark by twelve.
+ * `annotations` is stripped here and put back per panel by `panelSpecs`, which
+ * knows each panel's name and can therefore ask which notes are addressed to
+ * it. Carrying the whole list through would paint every note into every panel
+ * and multiply one remark by twelve.
  */
 function baseSpec(spec) {
   const { facet, annotations, ...rest } = spec;
@@ -473,6 +484,22 @@ export function panelSpecs(def, spec) {
     }
   }
 
+  // Last, so a panel-scoped note survives the scale pass above untouched: that
+  // pass writes axis bounds into the spec and has no business reading notes.
+  //
+  // **Deliberately the same objects, not clones.** Everything else a panel
+  // holds is a copy, because a panel's data is derived and must not write back.
+  // A note is the opposite: it is edited by dragging it *in the panel*, and the
+  // thing the reader is dragging has to be the entry that lives in
+  // `spec.annotations` or the edit would be thrown away on the next rebuild.
+  const scoped = spec.annotations;
+  if (Array.isArray(scoped) && scoped.length) {
+    panels.forEach((p) => {
+      const mine = panelAnnotations(scoped, p.name);
+      if (mine.length) p.spec.annotations = mine;
+    });
+  }
+
   return panels;
 }
 
@@ -699,8 +726,8 @@ export const FACET_CSS = `.oc-facets {
   letter-spacing: .02em;
   margin: 0 0 6px;
   padding-bottom: 5px;
-  border-bottom: 1px solid #e3e0d7;
-  color: #56544d;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
   /* A panel title is a key, not a paragraph: one line, clipped, with the whole
      name on hover. A wrapped title would push one plate below its row and
      break the grid's baseline. */
@@ -719,5 +746,5 @@ export const FACET_CSS = `.oc-facets {
 }
 
 @media (prefers-color-scheme: dark) {
-  .oc-facet-name { color: #a3a09a; border-bottom-color: rgba(255,255,255,.09); }
+  .oc-facet-name { color: #cbd5e1; border-bottom-color: rgba(148,163,184,.16); }
 }`;

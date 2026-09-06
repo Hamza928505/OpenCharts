@@ -240,7 +240,7 @@ const SHARED = {
   labelGap:     4,
   labelSize:    11,
   labelColor:   '#888',
-  labelFamily:  "'DM Sans', sans-serif",
+  labelFamily:  "'IBM Plex Sans', sans-serif",
   gridColor:    'rgba(128,128,128,0.1)',
   gridDash:     [],
   titleColor:   '#aaa',

@@ -370,7 +370,7 @@ const BASE_DEFAULTS = {
     easing:   'easeOutCubic',
   },
   font: {
-    family: "'DM Sans', sans-serif",
+    family: "'IBM Plex Sans', sans-serif",
     size:   12,
     color:  '#888',
   },

@@ -24,7 +24,7 @@ import { applyData } from './dataio.js';
 import { initMotion, markChanged } from './motion.js';
 import { mountControlsResize } from './resize.js';
 import { tableMarkup } from './a11y.js';
-import { attachAnnotationDrag, plateOf } from './annotate.js';
+import { attachAnnotationDrags } from './annotate.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -676,8 +676,11 @@ export class StudioApp {
     // binding is re-made whenever the plate under it is. Torn down first:
     // four of the five renderers draw into the host itself, which outlives
     // the rebuild and would otherwise collect a listener per edit.
-    this._stopAnnotDrag = attachAnnotationDrag(
-      plateOf(this.host), this.spec.annotations || [], () => this._onEdit(),
+    //
+    // Plural, because a faceted chart paints an overlay per scope and each one
+    // has to be measured against its own box.
+    this._stopAnnotDrag = attachAnnotationDrags(
+      this.host, this.spec.annotations || [], () => this._onEdit(),
     );
 
     const items = this.def.legend ? this.def.legend(this.spec) : null;
@@ -784,7 +787,7 @@ export class StudioApp {
     const pad = 14;
     const style = getComputedStyle(document.body);
     const paper = style.getPropertyValue('--surface').trim() || '#ffffff';
-    const ink = style.getPropertyValue('--ink-soft').trim() || '#56544d';
+    const ink = style.getPropertyValue('--ink-soft').trim() || '#475569';
     const at = (r) => ({ x: r.left - box.left + pad, y: r.top - box.top + pad });
     const W = box.width + pad * 2;
     const H = box.height + pad * 2;

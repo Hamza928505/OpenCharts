@@ -85,7 +85,7 @@ export const SWATCHES = [
  * Returns the input untouched if it is not a plain #rrggbb value, so rgba()
  * strings and CSS variables pass through unharmed.
  *
- * @param {string} hex   e.g. '#6C63D8'
+ * @param {string} hex   e.g. '#2e8d44'
  * @param {number} alpha 0–1
  */
 export function withAlpha(hex, alpha) {

@@ -52,7 +52,7 @@ function attachTips(host) {
     node.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;opacity:0;'
       + 'z-index:20;max-width:240px;padding:.34rem .5rem;border-radius:6px;'
       + 'background:rgba(22,22,26,.94);color:#fff;white-space:pre-line;'
-      + 'font:12px/1.45 "DM Sans",system-ui,sans-serif;'
+      + 'font:12px/1.45 "IBM Plex Sans",system-ui,sans-serif;'
       + 'box-shadow:0 4px 14px rgba(0,0,0,.3);transition:opacity .1s';
     host.appendChild(node);
     host.__ocTip = node;
@@ -155,7 +155,7 @@ function attachCanvasTips(canvas, regions) {
     node.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;opacity:0;'
       + 'z-index:20;max-width:240px;padding:.34rem .5rem;border-radius:6px;'
       + 'background:rgba(22,22,26,.94);color:#fff;white-space:pre-line;'
-      + 'font:12px/1.45 "DM Sans",system-ui,sans-serif;'
+      + 'font:12px/1.45 "IBM Plex Sans",system-ui,sans-serif;'
       + 'box-shadow:0 4px 14px rgba(0,0,0,.3);transition:opacity .1s';
     host.appendChild(node);
     host.__ocCanvasTip = node;

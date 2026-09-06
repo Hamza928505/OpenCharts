@@ -216,15 +216,15 @@ export const A11Y_CSS = `.visually-hidden {
 .chart-data { margin-top: 14px; font-size: 13px; }
 .chart-data > summary {
   cursor: pointer;
-  color: #56544d;
+  color: #475569;
   padding: 4px 2px;
   border-radius: 4px;
 }
-.chart-data > summary:focus-visible { outline: 2px solid #6C63D8; outline-offset: 2px; }
+.chart-data > summary:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
 /* Wide tables scroll in their own box; the page must never scroll sideways. */
 .chart-data-scroll { overflow-x: auto; margin-top: 8px; }
 .chart-data table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
-.chart-data caption { text-align: left; padding-bottom: 6px; color: #8b8880; font-size: 12px; }
+.chart-data caption { text-align: left; padding-bottom: 6px; color: #5c6b80; font-size: 12px; }
 .chart-data th, .chart-data td {
   padding: 4px 10px 4px 0;
   text-align: left;
@@ -233,6 +233,6 @@ export const A11Y_CSS = `.visually-hidden {
 }
 .chart-data td { font-variant-numeric: tabular-nums; }
 @media (prefers-color-scheme: dark) {
-  .chart-data > summary { color: #a3a09a; }
+  .chart-data > summary { color: #cbd5e1; }
   .chart-data caption { color: #6f6d69; }
 }`;

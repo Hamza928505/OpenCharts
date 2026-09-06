@@ -1258,9 +1258,14 @@ Rules the implementation follows, each of them checked:
   axis labels, which is where a grid stops being a comparison and becomes a
   texture. `MAX_PANELS` is 24, and `facetNote` says out loud when the cap bit —
   only then, because a caveat that appears every time is one nobody reads.
-- **A note belongs to the grid, not to every panel.** `baseSpec` strips
-  `annotations` before splitting and `plateOf` returns `.oc-facets` first, so
-  one remark is laid over the whole grid rather than multiplied by twelve.
+- **An annotation names the plate it is on.** This began as "a note belongs to
+  the grid, not to every panel", which is right about a *note* — a remark about
+  the comparison is about all of it — and wrong about a rule or a band. A target
+  at 500 belongs on all twelve panels, not stretched across the gutters between
+  them, and a band marking one series' bad quarter belongs to that series. So
+  an annotation carries an optional `panel`: absent means the grid (the default,
+  and what every spec written before this still means), `'*'` means every panel,
+  and anything else names one. See "Which plate a note is on" below.
 - **Turning it off is a no-op, not an edit.** `facetByColumn` reads the whole
   table minus the facet column into the base spec as well as setting
   `spec.facet`, so the legend, the metrics row and `def.toText` describe the
@@ -1268,6 +1273,39 @@ Rules the implementation follows, each of them checked:
 - **A panel the chart cannot read is dropped, not drawn blank.** A spec half
   written before the read failed draws worse than nothing, and a blank plate in
   a grid of twelve says nothing about which one went wrong.
+
+#### Which plate a note is on
+
+`annotate.js` owns the answer and `facet.js` applies it. `gridAnnotations(list)`
+returns the ones with no `panel`; `panelAnnotations(list, name)` returns the
+ones addressed to that panel plus the ones on `'*'`. `panelSpecs` hands each
+panel its own slice, and from there **nothing else had to change to draw it**:
+`renderOne` already paints `spec.annotations` into whatever plate it was given,
+and it does not know that plate is a panel.
+
+Panels are addressed **by name**, because a name is what the picker shows, what
+the export carries, and what travels with the data when the series are
+re-ordered. The cost is that renaming a series orphans its notes; the picker
+shows an orphan as *"Only on Q3 (no such panel)"* rather than silently resetting
+it to the grid.
+
+Four things this had to get right, each checked:
+
+- **The panel gets the same objects, not clones.** Everything else a panel holds
+  is a copy, because a panel's data is derived and must not write back. A note
+  is the opposite: it is placed by dragging it *in the panel*, so the thing
+  under the pointer has to be the entry that lives in `spec.annotations`.
+- **A drag is measured against its own plate.** The grid here is twice the
+  height of a panel, so reading a panel drag against the grid moves the note
+  half as far as the pointer went. `attachAnnotationDrags` binds one drag per
+  plate rather than one on the grid.
+- **A nested overlay answers only for itself.** A press on a panel's note
+  bubbles to the grid's handler too, and `data-annot` is an index into whichever
+  list painted *that* layer — so the grid would have dragged an unrelated
+  annotation. Each handler now checks the layer's parent is its own box.
+- **The default depends on the kind.** On a split chart a new rule or band
+  starts on every panel; a note keeps the grid. That is the original rule kept
+  where it was right and dropped where it was not.
 
 Three surfaces had to learn about it, and each for a reason the split column
 creates:
