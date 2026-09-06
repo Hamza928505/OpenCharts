@@ -14,7 +14,7 @@ import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
 import { parseTable, applyData, toCSV } from './dataio.js';
-import { chooseDataFile } from './fileimport.js';
+import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
 import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
 } from './DataMatch.js';
@@ -71,8 +71,11 @@ export class GalleryApp {
     this._pumping = false;
 
     this._observer = new IntersectionObserver((entries) => this._onIntersect(entries), {
+      // Generous vertical margin so the first tiles mount on load even with the
+      // upload panel open above the grid, and the next screenful is ready
+      // before it is scrolled to.
       root: null,
-      rootMargin: '300px 0px',
+      rootMargin: '600px 0px',
       threshold: 0,
     });
 
@@ -125,12 +128,13 @@ export class GalleryApp {
     const bar = document.querySelector('#matchbar');
     if (!bar) return;
 
-    const toggle = bar.querySelector('#match-toggle');
-    const body = bar.querySelector('#match-body');
     const text = bar.querySelector('#match-text');
     const status = bar.querySelector('#match-status');
     const read = bar.querySelector('#match-read');
     const headerBox = bar.querySelector('#match-header');
+    const drop = bar.querySelector('#match-drop');
+    const urlInput = bar.querySelector('#match-url');
+    const urlGo = bar.querySelector('#match-url-go');
     this.matchStatus = status;
 
     // `region,2023,2024` over `North,520,680` cannot be settled by looking at
@@ -143,11 +147,21 @@ export class GalleryApp {
       status.className = 'match-status' + (tone ? ' ' + tone : '');
     };
 
-    const open = (on) => {
-      body.hidden = !on;
-      toggle.setAttribute('aria-expanded', String(on));
-      toggle.textContent = on ? 'Hide' : 'Match my data';
-      if (on) text.focus();
+    // The panel is always open now, so "reveal" only brings it into view and
+    // puts the cursor where the reader can start typing.
+    const reveal = () => {
+      bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      text.focus();
+    };
+
+    /** A block of CSV from a file or a URL, dropped into the textarea. */
+    const ingest = (res, label) => {
+      if (!res) { setStatus('Nothing to read there.'); return; }
+      if (!res.ok) { setStatus(res.message, 'bad'); return; }
+      text.value = res.text;
+      headerAnswered = false;
+      if (label) setStatus(`Read ${label}.`);
+      run();
     };
 
     let timer = null;
@@ -195,17 +209,47 @@ export class GalleryApp {
 
     headerBox.addEventListener('change', () => { headerAnswered = true; run(); });
 
-    toggle.addEventListener('click', () => open(body.hidden));
-
     bar.querySelector('#match-file').addEventListener('click', async () => {
       setStatus('Reading…');
       const res = await chooseDataFile();
       if (!res) { setStatus('No file chosen.'); return; }
-      if (!res.ok) { setStatus(res.message, 'bad'); return; }
-      text.value = res.text;
-      headerAnswered = false;
-      open(true);
-      run();
+      ingest(res, res.name);
+    });
+
+    // The drop zone: click or keyboard opens the file picker, a drag drops one.
+    const pickFile = async () => {
+      setStatus('Reading…');
+      ingest(await chooseDataFile());
+    };
+    drop.addEventListener('click', pickFile);
+    drop.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickFile(); }
+    });
+    drop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      drop.classList.add('is-over');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+    drop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      drop.classList.remove('is-over');
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) { setStatus('That was not a file.', 'bad'); return; }
+      setStatus(`Reading ${file.name}…`);
+      ingest(await readDataFile(file), file.name);
+    });
+
+    // Fetch a published CSV or spreadsheet by URL. One request, no credentials —
+    // readDataUrl enforces the rest.
+    const fetchUrl = async () => {
+      const href = urlInput.value.trim();
+      if (!href) { setStatus('Paste a link first.', 'bad'); return; }
+      setStatus('Fetching…');
+      ingest(await readDataUrl(href), 'the linked file');
+    };
+    urlGo.addEventListener('click', fetchUrl);
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); fetchUrl(); }
     });
 
     bar.querySelector('#match-clear').addEventListener('click', () => {
@@ -227,7 +271,7 @@ export class GalleryApp {
         text.value = toCSV(brought.headers, brought.rows);
         headerAnswered = true;
         headerBox.checked = true;
-        open(true);
+        reveal();
         run();
       }
     }

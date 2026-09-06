@@ -359,7 +359,7 @@ const match = await page.evaluate(async () => {
     };
   };
 
-  document.querySelector('#match-toggle').click();
+  // The match panel is always open now — no toggle to click.
   await sleep(150);
 
   const total = document.querySelectorAll('.card').length;
@@ -2152,7 +2152,7 @@ const embedded = await page.evaluate(() => {
   };
   const canvas = document.querySelector('#chart-host canvas, #chart-host svg');
   return {
-    chrome: ['.rail', '.page-head', '.controls', '.codepanel', '.help', '.stage-actions'].filter((s) => !gone(s)),
+    chrome: ['.rail', '.page-head', '.controls', '.codepanel', '.help', '.stage-tools', '.stage-actions'].filter((s) => !gone(s)),
     drawn: !!canvas && canvas.getBoundingClientRect().height > 80,
     title: (document.querySelector('#stage-title') || {}).textContent || '',
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -2401,7 +2401,6 @@ const galleryPrompt = await page.evaluate(async () => {
   // With a table matched, the tile hands the reader's own data to the studio —
   // so the prompt beside it has to carry the same table, not the example.
   copied = null;
-  document.querySelector('#match-toggle').click();
   await sleep(150);
   const box = document.querySelector('#match-text');
   box.value = 'from,to,value\nAlpha,Beta,1234\nBeta,Gamma,4321';
