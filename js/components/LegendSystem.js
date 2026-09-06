@@ -178,7 +178,7 @@ const DEFAULTS = {
   align:       'flex-start',   // 'flex-start' | 'center' | 'flex-end'
   gap:         '4px 16px',
   fontSize:    '12px',
-  fontFamily:  "'DM Sans', sans-serif",
+  fontFamily:  "'IBM Plex Sans', sans-serif",
   textColor:   '#aaa',
   hiddenColor: '#555',
   swatchSize:  '10px',

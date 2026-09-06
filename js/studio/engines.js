@@ -13,7 +13,9 @@ import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES }
 import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
-import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
+import {
+  drawAnnotations, plateOf, hasAnnotations, gridAnnotations, ANNOTATION_CSS,
+} from './annotate.js';
 import {
   panelSpecs, panelColumns, panelHeight, facetMarkup, FACET_CSS,
   sharedScaleBounds, applyScaleBounds,
@@ -185,8 +187,12 @@ function renderFacetGrid(def, host, spec, panels, opts) {
     });
   }).filter(Boolean);
 
+  // Only the notes addressed to the grid land here. The ones pinned to a panel
+  // travel in that panel's own spec and are painted by `renderOne`, which needs
+  // to know nothing about facets to do it.
+  const onGrid = gridAnnotations(spec.annotations);
   const insts = build();
-  drawAnnotations(grid, spec.annotations);
+  drawAnnotations(grid, onGrid);
 
   return {
     engine: 'facet',
@@ -197,7 +203,7 @@ function renderFacetGrid(def, host, spec, panels, opts) {
       // has its width once the grid has laid out — so a resize re-runs each
       // panel rather than the grid, which has not changed.
       insts.forEach((inst) => { if (inst && inst.redraw) inst.redraw(); });
-      drawAnnotations(grid, spec.annotations);
+      drawAnnotations(grid, onGrid);
     },
   };
 }
@@ -451,11 +457,11 @@ const BASE_CSS = `.chart-card {
      margin of 1em 40px that the card never wanted. */
   margin: 0;
   background: #ffffff;
-  border: 1px solid #e3e0d7;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 20px;
-  font-family: 'DM Sans', system-ui, sans-serif;
-  color: #171614;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #0f172a;
 }
 
 .chart-wrap {
@@ -482,7 +488,7 @@ const BASE_CSS = `.chart-card {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #56544d;
+  color: #475569;
   cursor: pointer;
   user-select: none;
   transition: opacity .2s;
@@ -500,8 +506,8 @@ const BASE_CSS = `.chart-card {
 .legend-swatch.line { width: 16px; height: 2px; border-radius: 1px; }
 
 @media (prefers-color-scheme: dark) {
-  .chart-card { background: #16161d; border-color: rgba(255,255,255,.09); color: #eceae4; }
-  .legend-item { color: #a3a09a; }
+  .chart-card { background: #0f172a; border-color: rgba(148,163,184,.16); color: #f8fafc; }
+  .legend-item { color: #cbd5e1; }
 }`;
 
 /**
@@ -717,28 +723,56 @@ function specForCode(spec) {
  * paints them. Empty for a chart nobody annotated, so nothing is added to the
  * 114 exports that do not want it.
  */
-function annotationDecl(spec) {
-  if (!hasAnnotations(spec)) return [];
+function annotationDecl(onGrid, anyOnPanels = false) {
+  if (!onGrid.length && !anyOnPanels) return [];
   return [
     '',
     `// Notes laid over the chart, positioned as a fraction of its box — so a`,
     `// resize moves them with it and nothing has to be redrawn.`,
-    `const annotations = ${serialize(spec.annotations, 0)};`,
-    '',
+    // A faceted chart whose notes are all pinned to panels needs the painter
+    // but no grid-level list, so the const is emitted only when it has content.
+    ...(onGrid.length ? [`const annotations = ${serialize(onGrid, 0)};`, ''] : []),
     toFunctionSource(drawAnnotations),
   ];
 }
 
-/** The call that paints them, or nothing. */
-const annotationCall = (spec, target) =>
-  (hasAnnotations(spec) ? [`drawAnnotations(${target}, annotations);`] : []);
+/** The call that paints the grid-level notes, or nothing. */
+const annotationCall = (onGrid, target) =>
+  (onGrid.length ? [`drawAnnotations(${target}, annotations);`] : []);
+
+/**
+ * The loop that paints the notes pinned to individual panels.
+ *
+ * One statement for all five engines, because by this point every faceted
+ * export already holds a `panels` array — what differs between engines is what
+ * is *inside* a panel, and a note is laid over the plate rather than drawn by
+ * the renderer. The plate is `panel-<i>`; `chart-<i>` is the mark inside it,
+ * and painting into that would put the overlay inside the canvas's own box.
+ */
+const panelAnnotationCall = (panels) =>
+  (panels.some((p) => hasAnnotations(p.spec))
+    ? [
+      '',
+      `// Notes pinned to one panel rather than to the grid.`,
+      `panels.forEach((panel, i) => {`,
+      `  if (!panel.notes || !panel.notes.length) return;`,
+      `  drawAnnotations(document.getElementById('panel-' + i), panel.notes);`,
+      `});`,
+    ]
+    : []);
+
+/** A panel as the export carries it: its name, its spec, and its own notes. */
+const panelEntry = (p, extra) => ({
+  name: p.name,
+  ...extra,
+  ...(hasAnnotations(p.spec) ? { notes: p.spec.annotations } : {}),
+});
 
 function buildJS(def, spec) {
   const engine = engineOf(def);
   const legend = def.legend ? def.legend(spec) : null;
   const hasLegend = !!(legend && legend.length);
   const header = dependencyHeader(def, dependenciesFor(def));
-  const annots = annotationDecl(spec);
 
   // A faceted export carries N complete specs and one loop. Nothing in any
   // renderer changes: the split happened in `panelSpecs`, which runs here, and
@@ -748,11 +782,18 @@ function buildJS(def, spec) {
   const cols = panels ? panelColumns(panels.length, spec.facet && spec.facet.cols) : 1;
   const h = panels ? panelHeight(heightFor(def, {}), cols) : heightFor(def, {});
   const panelWidth = Math.max(160, Math.round(800 / cols));
-  // The notes belong to the grid, not to a panel — so they hang off the
-  // container the panels sit in.
+
+  // Split once, here. Unfaceted, every note is a grid note by definition —
+  // there is one plate and it is the grid. Faceted, the ones addressed to a
+  // panel have already travelled into that panel's spec via `panelSpecs`.
+  const onGrid = panels ? gridAnnotations(spec.annotations) : (spec.annotations || []);
+  const onPanels = !!panels && panels.some((p) => hasAnnotations(p.spec));
+  const annots = annotationDecl(onGrid, onPanels);
+
+  // Grid-level notes hang off the container the panels sit in.
   const facetTarget = `document.querySelector('.oc-facets')`;
   const panelData = () => serialize(
-    panels.map((p) => ({ name: p.name, spec: specForCode(p.spec) })), 0,
+    panels.map((p) => panelEntry(p, { spec: specForCode(p.spec) })), 0,
   );
   // Faceted legends are never interactive: the toggle drives one `chart`, and
   // a grid has as many as it has panels.
@@ -762,8 +803,7 @@ function buildJS(def, spec) {
   if (engine === 'chartjs') {
     if (panels) {
       const bounds = sharedScaleBounds(def, panels, spec.facet);
-      const built = panels.map((p) => ({
-        name: p.name,
+      const built = panels.map((p) => panelEntry(p, {
         config: applyScaleBounds(
           def.chartjs.build(p.spec, { width: panelWidth, height: h }), bounds,
         ),
@@ -777,7 +817,8 @@ function buildJS(def, spec) {
         `const charts = panels.map((panel, i) =>`,
         `  new Chart(document.getElementById('chart-' + i), panel.config));`,
         ...annots,
-        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...(annots.length ? ['', ...annotationCall(onGrid, facetTarget)] : []),
+        ...panelAnnotationCall(panels),
         ...legendLines(true),
       ].join('\n'));
     }
@@ -790,7 +831,7 @@ function buildJS(def, spec) {
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
       ...annots,
-      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
+      ...(annots.length ? ['', ...annotationCall(onGrid, `document.querySelector('.chart-wrap')`)] : []),
     ];
     if (hasLegend) lines.push('', legendCode(legend, true));
     return tidy(lines.join('\n'));
@@ -798,9 +839,8 @@ function buildJS(def, spec) {
 
   if (engine === 'echarts') {
     if (panels) {
-      const built = panels.map((p) => ({
-        name: p.name,
-        config: def.echarts.build(p.spec, { width: panelWidth, height: h })
+      const built = panels.map((p) => panelEntry(p, {
+        config: def.echarts.build(p.spec, { width: panelWidth, height: h }),
       }));
       return tidy([
         ...header,
@@ -814,7 +854,8 @@ function buildJS(def, spec) {
         `});`,
         `window.addEventListener('resize', () => charts.forEach(c => c.resize()));`,
         ...annots,
-        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...(annots.length ? ['', ...annotationCall(onGrid, facetTarget)] : []),
+        ...panelAnnotationCall(panels),
         ...legendLines(true),
       ].join('\n'));
     }
@@ -829,7 +870,7 @@ function buildJS(def, spec) {
       `chart.setOption(config);`,
       `window.addEventListener('resize', () => chart.resize());`,
       ...annots,
-      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
+      ...(annots.length ? ['', ...annotationCall(onGrid, `document.querySelector('.chart-wrap')`)] : []),
     ];
     if (hasLegend) lines.push('', legendCode(legend, true));
     return tidy(lines.join('\n'));
@@ -880,7 +921,8 @@ function buildJS(def, spec) {
         `window.addEventListener('resize', render);`,
         // The grid itself is never emptied — only the canvases inside it are —
         // so the overlay is painted once and left to reflow.
-        ...annotationCall(spec, facetTarget),
+        ...annotationCall(onGrid, facetTarget),
+        ...panelAnnotationCall(panels),
         ...legendLines(false),
       ].join('\n'));
     }
@@ -924,7 +966,7 @@ function buildJS(def, spec) {
       `window.addEventListener('resize', render);`,
       // The wrap is never cleared — only the canvas inside it is — so the
       // overlay is painted once and left to reflow on its own.
-      ...annotationCall(spec, 'canvas.parentElement'),
+      ...annotationCall(onGrid, 'canvas.parentElement'),
       ...(hasLegend ? ['', legendCode(legend, false)] : []),
     ].join('\n'));
   }
@@ -959,7 +1001,8 @@ function buildJS(def, spec) {
         `window.addEventListener('resize', render);`,
         // A mount empties its own panel, never the grid, so the overlay is laid
         // over the grid once.
-        ...annotationCall(spec, facetTarget),
+        ...annotationCall(onGrid, facetTarget),
+        ...panelAnnotationCall(panels),
         ...legendLines(false),
       ].join('\n'));
     }
@@ -982,7 +1025,7 @@ function buildJS(def, spec) {
       `  attachTips(host);`,
       // The mount empties its host, so the overlay has to be laid back over it
       // every time rather than painted once.
-      ...annotationCall(spec, 'host').map((line) => '  ' + line),
+      ...annotationCall(onGrid, 'host').map((line) => '  ' + line),
       `}`,
       '',
       `render();`,
@@ -996,7 +1039,7 @@ function buildJS(def, spec) {
     if (panels) {
       const built = panels.map((p) => {
         const out = def.native.build(p.spec, { width: panelWidth, height: h });
-        return { name: p.name, data: out.data, config: out.config };
+        return panelEntry(p, { data: out.data, config: out.config });
       });
       return tidy([
         ...header,
@@ -1011,7 +1054,8 @@ function buildJS(def, spec) {
         `  return chart;`,
         `});`,
         ...annots,
-        ...(annots.length ? ['', ...annotationCall(spec, facetTarget)] : []),
+        ...(annots.length ? ['', ...annotationCall(onGrid, facetTarget)] : []),
+        ...panelAnnotationCall(panels),
         ...legendLines(false),
       ].join('\n'));
     }
@@ -1032,7 +1076,7 @@ function buildJS(def, spec) {
       // node, so the exported code must too or it throws on innerHTML.
       hasLegend ? `chart.enableLegend(document.getElementById('legend'));` : '',
       ...annots,
-      ...(annots.length ? ['', ...annotationCall(spec, `document.querySelector('.chart-wrap')`)] : []),
+      ...(annots.length ? ['', ...annotationCall(onGrid, `document.querySelector('.chart-wrap')`)] : []),
     ].join('\n'));
   }
 
@@ -1057,7 +1101,7 @@ function buildJS(def, spec) {
       `  mount(host, panel.spec);`,
       `  attachTips(host);`,
       `});`,
-      ...annotationCall(spec, facetTarget),
+      ...annotationCall(onGrid, facetTarget),
       ...legendLines(false),
     ].join('\n'));
   }
@@ -1076,7 +1120,7 @@ function buildJS(def, spec) {
     `const host = document.getElementById('chart');`,
     `mount(host, spec);`,
     `attachTips(host);`,
-    ...annotationCall(spec, 'host'),
+    ...annotationCall(onGrid, 'host'),
     ...(hasLegend ? ['', legendCode(legend, false)] : []),
   ].join('\n'));
 }
@@ -1170,13 +1214,13 @@ function buildStandalone(def, spec, html, css, js) {
     `  display: grid;`,
     `  place-items: center;`,
     `  padding: 32px;`,
-    `  background: #faf9f5;`,
-    `  font-family: 'DM Sans', system-ui, sans-serif;`,
+    `  background: #ffffff;`,
+    `  font-family: 'IBM Plex Sans', system-ui, sans-serif;`,
     `}`,
     ``,
     `.chart-card { width: 100%; max-width: 860px; }`,
     ``,
-    `@media (prefers-color-scheme: dark) { body { background: #0e0e13; } }`,
+    `@media (prefers-color-scheme: dark) { body { background: #0b1120; } }`,
     ``,
     indent(css, 0),
     `</style>`,

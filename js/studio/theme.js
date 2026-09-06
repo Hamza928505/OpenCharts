@@ -98,9 +98,9 @@ export function themeInk() {
   const cs = getComputedStyle(document.documentElement);
   const pick = (name, fallback) => (cs.getPropertyValue(name) || '').trim() || fallback;
   return {
-    ink:   pick('--ink', '#171614'),
-    soft:  pick('--ink-soft', '#56544d'),
-    faint: pick('--ink-faint', '#8b8880'),
+    ink:   pick('--ink', '#0f172a'),
+    soft:  pick('--ink-soft', '#475569'),
+    faint: pick('--ink-faint', '#5c6b80'),
     rule:  isDark() ? 'rgba(255,255,255,.12)' : 'rgba(23,22,20,.12)',
     grid:  isDark() ? 'rgba(255,255,255,.08)' : 'rgba(23,22,20,.08)',
     surface: pick('--surface', '#ffffff'),
