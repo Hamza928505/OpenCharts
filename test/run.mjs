@@ -162,6 +162,7 @@ const results = await page.evaluate(async (ids) => {
 
       // Renders from defaults.
       let inst = eng.renderChart(def, host, spec);
+      if (inst.whenReady) await inst.whenReady;
       if (inst.engine === 'error') {
         r.problems.push('render failed: ' + host.textContent.trim().slice(0, 70));
       } else {
@@ -187,6 +188,7 @@ const results = await page.evaluate(async (ids) => {
         else {
           if (typeof def.onChange === 'function') def.onChange(fresh);
           const inst2 = eng.renderChart(def, host, fresh);
+          if (inst2.whenReady) await inst2.whenReady;
           if (inst2.engine === 'error') r.problems.push('broke after pasting its own example');
           eng.destroyInstance(inst2);
 
@@ -1106,6 +1108,7 @@ const hover = await page.evaluate(async () => {
   for (const def of reg.CHARTS) {
     const spec = reg.newSpec(def);
     const inst = eng.renderChart(def, host, spec);
+    if (inst.whenReady) await inst.whenReady;
     const engine = inst.engine;
     out.engines[engine] = (out.engines[engine] || 0) + 1;
 
@@ -1183,6 +1186,7 @@ const hoverLives = await page.evaluate(async () => {
     const counts = [];
     for (let k = 0; k < 3; k++) {
       inst = eng.renderChart(def, host, reg.newSpec(def));
+      if (inst.whenReady) await inst.whenReady;
       for (let i = 0; i < 30 && !host.querySelector('[data-tip], canvas'); i++) await sleep(100);
       await sleep(220);
       counts.push(live().length);
@@ -1996,7 +2000,8 @@ const globeFocus = await page.evaluate(async () => {
     host.innerHTML = '';
     const spec = reg.newSpec(def);
     spec.opts.countries = country ? [country] : [];
-    eng.renderChart(def, host, spec);
+    const pending = eng.renderChart(def, host, spec);
+    if (pending.whenReady) await pending.whenReady;
     // The globe fetches boundaries, so wait for real paths rather than a fixed
     // delay that a slow network would outlast.
     for (let i = 0; i < 60; i++) {
@@ -2041,6 +2046,7 @@ const globeDrag = await page.evaluate(async () => {
     const spec = reg.newSpec(def);
     spec.opts.projection = 'globe';
     const inst = eng.renderChart(def, host, spec);
+    if (inst.whenReady) await inst.whenReady;
     for (let i = 0; i < 60; i++) {
       if (host.querySelectorAll('svg path').length > 5) break;
       await new Promise((r) => setTimeout(r, 200));
@@ -4983,6 +4989,7 @@ const slack = await page.evaluate(async () => {
     .some((t) => t.style.opacity !== '0' && t.textContent.trim());
 
   const inst = eng.renderChart(reg.getChart('barcode-plot'), host, reg.newSpec(reg.getChart('barcode-plot')));
+  if (inst.whenReady) await inst.whenReady;
   const canvas = host.querySelector('canvas');
   const regions = canvas.__ocRegions || [];
   const box = canvas.getBoundingClientRect();
@@ -5469,6 +5476,90 @@ check(facetExports.length === 5, 'every renderer has a faceted export that runs'
   facetExports.map((e) => e.engine + ':' + e.id).join(' '));
 
 console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetExportsOk}/${facetExports.length} exports run, ${facetScales.byControl + facetScales.byConfig} charts share an axis`);
+
+/* Suite 29 — libraries arrive when something needs them.
+ *
+ * The whole point is that a reader opening a bar chart does not pay for the
+ * map projections, the flow controller and the analytics engine first. So the
+ * checks are: the pages ship almost nothing, a cold library is fetched on
+ * demand and the chart appears after it, it is fetched once however many
+ * charts ask, and a library that cannot be had says so rather than leaving a
+ * chart pretending to load forever. */
+const eagerTags = await page.evaluate(async () => {
+  const grab = async (path) => (await fetch(path).then((r) => r.text()))
+    .match(/<script src="[^"]+"/g) || [];
+  return { index: await grab('/index.html'), studio: await grab('/studio.html') };
+});
+check(eagerTags.index.length <= 2 && eagerTags.studio.length <= 2,
+  'neither page ships more than the two vendored libraries most charts use',
+  JSON.stringify(eagerTags));
+check(!JSON.stringify(eagerTags).includes('unpkg') && !JSON.stringify(eagerTags).includes('jsdelivr'),
+  'and neither reaches the network before anything has been drawn',
+  JSON.stringify(eagerTags));
+
+// A genuinely cold page: its own context, stopped at DOMContentLoaded, and
+// rendered in the same task — so the idle prefetch has not had a turn yet.
+// Against the warm main page this check quietly passes for the wrong reason.
+const coldCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const cold = await coldCtx.newPage();
+await cold.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'domcontentloaded' });
+const lazy = await cold.evaluate(async () => {
+  const loader = await import('/js/studio/loader.js');
+  const eng = await import('/js/studio/engines.js');
+  const reg = await import('/js/studio/registry.js');
+
+  // Count what actually reaches the network for one key.
+  const tagsFor = (k) => document.querySelectorAll(`script[data-oc-lib="${k}"]`).length;
+
+  const before = loader.isLoaded('echarts');
+  const def = reg.getChart('echarts-heatmap');
+
+  const host = document.createElement('div');
+  host.style.cssText = 'width:600px;height:340px;position:fixed;left:-9999px';
+  document.body.appendChild(host);
+
+  const inst = eng.renderChart(def, host, reg.newSpec(def));
+  const whileWaiting = inst.engine;
+  const said = (host.textContent || '').trim();
+
+  await inst.whenReady;
+  const after = inst.engine;
+  const drew = !!host.querySelector('canvas');
+
+  // Three more charts on the same library must not fetch it again.
+  const hosts = [0, 1, 2].map(() => {
+    const h = document.createElement('div');
+    h.style.cssText = 'width:600px;height:340px;position:fixed;left:-9999px';
+    document.body.appendChild(h);
+    return h;
+  });
+  const more = hosts.map((h) => eng.renderChart(def, h, reg.newSpec(def)));
+  await Promise.all(more.map((i) => i.whenReady));
+  const tags = tagsFor('echarts');
+
+  [host, ...hosts].forEach((h) => h.remove());
+  more.forEach(eng.destroyInstance);
+  eng.destroyInstance(inst);
+
+  // A library that does not exist has to fail loudly rather than hang.
+  let refused = '';
+  try { await loader.loadLibrary('not-a-library'); } catch (e) { refused = e.message; }
+
+  return { before, whileWaiting, said, after, drew, tags, refused };
+});
+await coldCtx.close();
+
+check(!lazy.before && lazy.whileWaiting === 'loading',
+  'a chart whose library is cold does not block on it', JSON.stringify(lazy));
+check(/ECharts/.test(lazy.said),
+  'and says which library it is waiting for, not just "loading"', lazy.said);
+check(lazy.after === 'echarts' && lazy.drew,
+  'the real chart replaces the placeholder once the script lands', JSON.stringify(lazy));
+check(lazy.tags === 1,
+  'and four charts on one library produce one request', String(lazy.tags));
+check(/Unknown library/.test(lazy.refused),
+  'a library that cannot be had rejects rather than hanging', lazy.refused);
+console.log(`  ${green('✓')} loading — ${eagerTags.studio.length} eager tags, fetched on demand, once`);
 
 /* Suite 27 — nothing wrote to the console along the way. */
 // `oc-test-` URLs are the link suite's own stubs. It asks for a 404 on purpose

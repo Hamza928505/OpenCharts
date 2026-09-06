@@ -24,6 +24,7 @@ import { flagIcon } from './flags.js';
 import { applyOrigin } from './motion.js';
 import { ask } from './confirm.js';
 import { readDataFile, readDataUrl, ACCEPTED } from './fileimport.js';
+import { loadLibrary } from './loader.js';
 import {
   OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns,
 } from './transform.js';
@@ -435,6 +436,13 @@ export function openDataDialog(def, spec, onApply, seedText) {
   function buildShapeTab() {
     const wrap = el('div', 'pick shape');
     let steps = [];
+
+    // Arquero runs the pipeline where it is present and the built-in runners
+    // answer identically where it is not, so this is fetched for speed rather
+    // than for correctness — which is why nothing waits on it. Asked for when
+    // the tab is built rather than on the first step, so the first run of a
+    // long table already has it.
+    loadLibrary('arquero').catch(() => { /* the native runners are the truth */ });
 
     wrap.appendChild(el('p', 'dlg-note',
       'Group, filter, sort or bucket the rows before they reach the chart. '

@@ -9,6 +9,7 @@
 
 import { CHARTS, CATEGORIES, CATEGORY_ORDER, CHART_COUNT, searchCharts, newSpec, engineTally } from './registry.js';
 import { renderChart, destroyInstance, generateCode } from './engines.js';
+import { prefetchLibraries } from './loader.js';
 import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
@@ -91,6 +92,11 @@ export class GalleryApp {
     });
 
     this.render();
+
+    // The tiles above the fold are already being built; everything else can be
+    // fetched while the thread is free, so the first scroll onto a Chart.js
+    // plugin or a map does not pay for it.
+    prefetchLibraries();
   }
 
   _buildStats() {
