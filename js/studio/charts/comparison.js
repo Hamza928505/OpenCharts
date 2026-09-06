@@ -36,17 +36,17 @@ export const comparisonCharts = [
     tags: ['slope', 'before after', 'change', 'ranking', 'two periods'],
     spec: {
       items: [
-        { label: 'Outerwear',   from: 28, to: 35, color: C.teal   },
-        { label: 'Dresses',     from: 22, to: 18, color: C.coral  },
-        { label: 'Footwear',    from: 18, to: 21, color: C.blue   },
-        { label: 'Basics',      from: 16, to: 14, color: C.gray   },
-        { label: 'Accessories', from: 10, to: 7,  color: C.amber  },
-        { label: 'Living',      from: 6,  to: 5,  color: C.purple },
+        { label: 'Outerwear',   from: 28, to: 35, color: C.blue   },
+        { label: 'Dresses',     from: 22, to: 18, color: C.amber  },
+        { label: 'Footwear',    from: 18, to: 21, color: C.violet   },
+        { label: 'Basics',      from: 16, to: 14, color: C.slate   },
+        { label: 'Accessories', from: 10, to: 7,  color: C.cyan  },
+        { label: 'Living',      from: 6,  to: 5,  color: C.green },
       ],
       startLabel: '2022',
       endLabel: '2024',
-      upColor: C.teal,
-      downColor: C.coral,
+      upColor: C.blue,
+      downColor: C.amber,
       opts: { textColor: '#808080', dotRadius: 6, lineWidth: 2, gutter: 140, suffix: '%', showDelta: true },
     },
     controls: [
@@ -159,8 +159,8 @@ export const comparisonCharts = [
     tags: ['candlestick', 'ohlc', 'finance', 'stock', 'trading'],
     spec: {
       bars: [...OHLC_BARS],
-      upColor: C.teal,
-      downColor: C.coral,
+      upColor: C.blue,
+      downColor: C.amber,
       opts: { textColor: '#808080', barGap: 2, wickWidth: 1, prefix: '$' },
     },
     controls: [
@@ -248,9 +248,9 @@ export const comparisonCharts = [
       dims: ['Price', 'Rating', 'Reviews', 'Margin%', 'Returns%'],
       records: [...PARALLEL_RECORDS],
       groups: [
-        { label: 'Premium', color: C.purple },
-        { label: 'Mid',     color: C.teal   },
-        { label: 'Value',   color: C.coral  },
+        { label: 'Premium', color: C.green },
+        { label: 'Mid',     color: C.blue   },
+        { label: 'Value',   color: C.amber  },
       ],
       opts: { strokeWidth: 1.2, alpha: 0.45, showAxisLabels: true },
     },
@@ -325,12 +325,12 @@ export const comparisonCharts = [
     spec: {
       labels: [...MONTHS6],
       series: [
-        { label: 'Linen Blazer',  color: C.purple, data: [1, 1, 2, 2, 1, 1] },
-        { label: 'Silk Midi',     color: C.teal,   data: [2, 3, 1, 1, 2, 2] },
-        { label: 'Wool Coat',     color: C.coral,  data: [3, 2, 3, 4, 3, 3] },
-        { label: 'Canvas Tote',   color: C.blue,   data: [4, 4, 4, 3, 5, 4] },
-        { label: 'Cashmere Knit', color: C.amber,  data: [5, 5, 5, 5, 4, 5] },
-        { label: 'Leather Belt',  color: C.gray,   data: [6, 6, 6, 6, 6, 6] },
+        { label: 'Linen Blazer',  color: C.green, data: [1, 1, 2, 2, 1, 1] },
+        { label: 'Silk Midi',     color: C.blue,   data: [2, 3, 1, 1, 2, 2] },
+        { label: 'Wool Coat',     color: C.amber,  data: [3, 2, 3, 4, 3, 3] },
+        { label: 'Canvas Tote',   color: C.violet,   data: [4, 4, 4, 3, 5, 4] },
+        { label: 'Cashmere Knit', color: C.cyan,  data: [5, 5, 5, 5, 4, 5] },
+        { label: 'Leather Belt',  color: C.slate,   data: [6, 6, 6, 6, 6, 6] },
       ],
       opts: { tension: 0.4, pointRadius: 7, lineWidth: 2.5 },
     },
@@ -388,8 +388,8 @@ export const comparisonCharts = [
     tags: ['mixed', 'combo', 'dual axis', 'bar line', 'growth'],
     spec: {
       labels: [...QUARTERS],
-      bars: { label: 'Revenue', color: C.purple, data: [520, 680, 740, 910] },
-      line: { label: 'Growth',  color: C.coral,  data: [null, 31, 9, 23] },
+      bars: { label: 'Revenue', color: C.green, data: [520, 680, 740, 910] },
+      line: { label: 'Growth',  color: C.amber,  data: [null, 31, 9, 23] },
       opts: { radius: 5, thickness: 0.6, outline: true, tension: 0.3, pointRadius: 6, lineWidth: 2.5, leftPrefix: '$', leftSuffix: 'K', rightSuffix: '%' },
     },
     controls: [
@@ -467,12 +467,12 @@ export const comparisonCharts = [
     spec: {
       labels: [...QUARTERS],
       series: [
-        { label: 'Online',    color: C.purple, data: [0.52, 0.68, 0.74, 0.91] },
-        { label: 'In-store',  color: C.teal,   data: [0.31, 0.38, 0.42, 0.51] },
-        { label: 'Wholesale', color: C.coral,  data: [0.18, 0.22, 0.24, 0.29] },
+        { label: 'Online',    color: C.green, data: [0.52, 0.68, 0.74, 0.91] },
+        { label: 'In-store',  color: C.blue,   data: [0.31, 0.38, 0.42, 0.51] },
+        { label: 'Wholesale', color: C.amber,  data: [0.18, 0.22, 0.24, 0.29] },
       ],
       totalLabel: 'Total',
-      totalColor: C.pink,
+      totalColor: C.rose,
       opts: { outline: true, radius: 4, thickness: 0.62, tension: 0.3, pointRadius: 6, lineWidth: 2.5, prefix: '$', suffix: 'M', decimals: 2 },
     },
     controls: [

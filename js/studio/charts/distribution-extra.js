@@ -85,7 +85,7 @@ export const distributionExtraCharts = [
     blurb: 'A smoothed histogram. No bin-width argument, but the bandwidth choice is doing the same work.',
     tags: ['density', 'kde', 'distribution', 'smoothed', 'histogram', 'curve'],
     spec: {
-      groups: DENSITY_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      groups: DENSITY_GROUPS.map((g, i) => ({ ...g, color: [C.green, C.blue, C.amber, C.violet][i % 4] })),
       opts: { textColor: '#808080', min: 10, max: 100, bandwidth: 4, fillAlpha: 0.22, lineWidth: 2, showRug: true },
     },
     controls: [
@@ -187,7 +187,7 @@ export const distributionExtraCharts = [
     tags: ['ridgeline', 'joyplot', 'density', 'distribution', 'overlap', 'seasonal'],
     spec: {
       rows: RIDGELINE_ROWS.map((r, i) => ({
-        ...r, color: [C.blue, C.teal, C.olive, C.amber, C.coral, C.purple][i % 6],
+        ...r, color: [C.violet, C.blue, C.olive, C.cyan, C.amber, C.green][i % 6],
       })),
       opts: { textColor: '#808080', min: -6, max: 36, bandwidth: 1.6, overlap: 2.1, fillAlpha: 0.8, lineWidth: 1.2, labelWidth: 52 },
     },
@@ -275,7 +275,7 @@ export const distributionExtraCharts = [
     blurb: 'Every point answers "what share is below this value?" — no binning decision to argue about.',
     tags: ['ecdf', 'cumulative', 'distribution', 'percentile', 'quantile', 'step'],
     spec: {
-      groups: ECDF_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      groups: ECDF_GROUPS.map((g, i) => ({ ...g, color: [C.green, C.blue, C.amber, C.violet][i % 4] })),
       opts: { textColor: '#808080', min: 0, max: 900, lineWidth: 2, showMedian: true, suffix: 'ms' },
     },
     controls: [
@@ -375,7 +375,7 @@ export const distributionExtraCharts = [
     blurb: 'Every observation as its own dot, nudged aside so none hide. Honest about sample size.',
     tags: ['beeswarm', 'swarm', 'jitter', 'strip', 'distribution', 'raw data', 'dots'],
     spec: {
-      groups: BEESWARM_GROUPS.map((g, i) => ({ ...g, color: [C.purple, C.teal, C.coral, C.blue][i % 4] })),
+      groups: BEESWARM_GROUPS.map((g, i) => ({ ...g, color: [C.green, C.blue, C.amber, C.violet][i % 4] })),
       opts: { textColor: '#808080', min: 0, max: 110, radius: 4, alpha: 0.85, showMean: true, rowGap: 12 },
     },
     controls: [
@@ -471,7 +471,7 @@ export const distributionExtraCharts = [
     tags: ['barcode', 'strip plot', 'dot strip', 'distribution', 'ticks', 'compact'],
     spec: {
       rows: BARCODE_ROWS.map((r, i) => ({
-        ...r, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        ...r, color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
       })),
       opts: { textColor: '#808080', min: 0, max: 140, tickHeight: 22, alpha: 0.55, lineWidth: 1.4, showMedian: true, prefix: '$' },
     },
@@ -566,8 +566,8 @@ export const distributionExtraCharts = [
     spec: {
       labels: WIND_ROSE.map((d) => d.label),
       binCounts: WIND_ROSE.map((d) => d.value),
-      color: C.blue,
-      accent: C.coral,
+      color: C.violet,
+      accent: C.amber,
       opts: { textColor: '#808080', innerRadius: 26, showGrid: true, showLabels: true },
     },
     controls: [

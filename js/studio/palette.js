@@ -7,55 +7,77 @@
  */
 
 /**
- * The eight series colours, and the one hard constraint on them: **no two may
- * merge for a colour-blind reader.**
+ * The eight series colours, and the three hard constraints on them.
  *
- * The set this replaced had seven colliding pairs, and the first bit at four
- * series — purple against blue, ΔE 29 apart normally and 8.2 simulated under
- * deuteranopia, against a merge threshold of 11. Half the library inherited it,
- * so `cvd.js` warned on the data 46 charts shipped with: the check working
- * exactly as intended, on a palette that should never have needed it.
+ * 1. **No two may merge for a colour-blind reader.** `cvd.js` reports a pair
+ *    that a trichromat can separate and a dichromat cannot; this set produces
+ *    none, and its weakest pair sits at ΔE 13.2 against a threshold of 11.
+ * 2. **Every colour must be visible on both grounds.** `PALETTE` is one literal
+ *    set — it is serialised into exports that land in other people's pages, so
+ *    it cannot be theme-reactive the way the CSS tokens are. Each colour
+ *    therefore clears WCAG's 3:1 for a graphical object against white *and*
+ *    against the dark surface.
+ * 3. **They must read as one palette.** Chosen at a single perceived intensity
+ *    (CIELAB chroma ≈ 52) rather than at maximum saturation, so no series
+ *    shouts over the rest.
  *
- * Re-ordering could not fix it. The collision graph's largest independent set
- * was four, so no arrangement of these eight hues gets past a fourth series —
- * the values themselves had to move.
+ * Those pull against each other, which is the whole difficulty. Constraint 2
+ * forces every colour into a middle band of lightness — and lightness is
+ * exactly what constraint 1 relies on, because deuteranopia and protanopia
+ * collapse the red-green axis and leave lightness and the blue-yellow axis as
+ * the only separation left. The set was searched rather than picked, one colour
+ * per named hue family so the result stays nameable.
  *
- * They moved as little as would do it. Each colour keeps its hue family and
- * its name, and none is further than ΔE 9 from the colour it replaces, which
- * is a shift you can see side by side and not one that renames anything. What
- * changed is mostly *lightness*: deuteranopia and protanopia collapse the
- * red-green axis, so colours that differ only in hue along it merge, and
- * spacing them in lightness is what pulls them apart. Every pair is now at
- * least ΔE 12 apart under all three simulations, and the suite holds that.
+ * A worked example of the trap: lifting the olive to `#6E7A22` looks better in
+ * isolation and collides with the amber at ΔE 7.9 under protanopia. The colours
+ * here are the ones that survive all three rules at once.
+ *
+ * The green is the accent family. It is darker than the interface's
+ * `--accent-solid` (`#22c55e`) because that value is only 2.3:1 on white and a
+ * bar drawn in it would disappear in an export.
  */
 export const PALETTE = [
-  '#6C63D8', // purple — also --accent, and the one colour that did not move
-  '#0FA475', // teal
-  '#B23E17', // coral
-  '#5481C9', // blue
-  '#BC861D', // amber
-  '#AA375C', // pink
-  '#4C667E', // slate
-  '#6F9138', // olive
+  '#2e8d44', // green — the accent family, darkened to survive a white export
+  '#2167b9', // blue
+  '#b3852e', // amber
+  '#a381d8', // violet
+  '#289eb5', // cyan
+  '#b53c5e', // rose
+  '#676b89', // slate
+  '#646a00', // olive
 ];
 
+/**
+ * The named keys, one per palette position.
+ *
+ * The previous set was named purple / teal / coral / blue / amber / pink /
+ * gray / olive, and the chart definitions were rewritten onto these names *by
+ * position* rather than by hue: a chart that drew its first three series in
+ * `purple, teal, coral` now draws them in `green, blue, amber`, which is
+ * `PALETTE[0..2]` exactly as before. Mapping by hue instead would have sent
+ * both `coral` and `pink` to the same rose — two series in one chart with one
+ * colour, and `confusablePairs` would not have said a word about it, because
+ * colours that are identical to everyone are a palette choice rather than a
+ * colour-vision fault.
+ */
 export const C = {
-  purple: PALETTE[0],
-  teal:   PALETTE[1],
-  coral:  PALETTE[2],
-  blue:   PALETTE[3],
-  amber:  PALETTE[4],
-  pink:   PALETTE[5],
-  gray:   PALETTE[6],
+  green:  PALETTE[0],
+  blue:   PALETTE[1],
+  amber:  PALETTE[2],
+  violet: PALETTE[3],
+  cyan:   PALETTE[4],
+  rose:   PALETTE[5],
+  slate:  PALETTE[6],
   olive:  PALETTE[7],
-  red:    '#CE3B3B',
+  gray:   PALETTE[6],
+  red:    '#b91c1c',
 };
 
 /** Swatch options offered by every colour picker in the control panel. */
 export const SWATCHES = [
   ...PALETTE,
-  '#D64545', '#0E7C86', '#8E44AD', '#2D6A4F',
-  '#B5651D', '#37474F', '#00838F', '#AD1457',
+  '#166534', '#1e40af', '#92400e', '#6b21a8',
+  '#155e75', '#9f1239', '#334155', '#3f6212',
 ];
 
 /**

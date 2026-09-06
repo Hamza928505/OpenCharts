@@ -54,8 +54,8 @@ export const comparisonExtraCharts = [
       ],
       startLabel: '2015',
       endLabel: '2025',
-      startColor: C.gray,
-      endColor: C.purple,
+      startColor: C.slate,
+      endColor: C.green,
       opts: { textColor: '#808080', min: 0, max: 100, dotRadius: 7, barWidth: 3, labelWidth: 108, showDelta: true, sort: 'gap', suffix: '%' },
     },
     controls: [
@@ -176,8 +176,8 @@ export const comparisonExtraCharts = [
         { label: 'Payment failed',   value: 21 },
         { label: 'Other',           value: 14 },
       ],
-      barColor: C.blue,
-      lineColor: C.coral,
+      barColor: C.violet,
+      lineColor: C.amber,
       opts: { radius: 3, thickness: 0.7, threshold: 80, showThreshold: true, lineWidth: 2.5, pointRadius: 4 },
     },
     controls: [
@@ -285,8 +285,8 @@ export const comparisonExtraCharts = [
         { label: 'Cairo',     min: 12, max: 38 },
         { label: 'Dubai',     min: 18, max: 44 },
       ],
-      lowColor: C.blue,
-      highColor: C.coral,
+      lowColor: C.violet,
+      highColor: C.amber,
       opts: { textColor: '#808080', min: -10, max: 50, capHeight: 16, lineWidth: 3, labelWidth: 96, showValues: true, suffix: '°C' },
     },
     controls: [
@@ -397,11 +397,11 @@ export const comparisonExtraCharts = [
     tags: ['error bars', 'confidence interval', 'uncertainty', 'science', 'mean', 'std'],
     spec: {
       groups: [
-        { label: 'Control', color: C.gray,   mean: 42, error: 5 },
-        { label: 'Dose A',  color: C.blue,   mean: 51, error: 7 },
-        { label: 'Dose B',  color: C.teal,   mean: 63, error: 6 },
-        { label: 'Dose C',  color: C.purple, mean: 68, error: 11 },
-        { label: 'Dose D',  color: C.coral,  mean: 59, error: 9 },
+        { label: 'Control', color: C.slate,   mean: 42, error: 5 },
+        { label: 'Dose A',  color: C.violet,   mean: 51, error: 7 },
+        { label: 'Dose B',  color: C.blue,   mean: 63, error: 6 },
+        { label: 'Dose C',  color: C.green, mean: 68, error: 11 },
+        { label: 'Dose D',  color: C.amber,  mean: 59, error: 9 },
       ],
       opts: { textColor: '#808080', max: 90, barWidth: 0.6, radius: 3, capWidth: 14, errorWidth: 1.8, showValues: true, suffix: '' },
     },
@@ -509,12 +509,12 @@ export const comparisonExtraCharts = [
       series: [
         {
           label: 'United Kingdom',
-          color: C.purple,
+          color: C.green,
           points: [[78.2, 24], [78.9, 27], [79.5, 31], [80.1, 34], [80.6, 38], [81.0, 41], [81.3, 45], [81.5, 49], [81.6, 53], [81.9, 58]],
         },
         {
           label: 'Japan',
-          color: C.coral,
+          color: C.amber,
           points: [[81.9, 19], [82.3, 22], [82.7, 25], [83.0, 27], [83.4, 30], [83.7, 33], [84.0, 36], [84.2, 39], [84.4, 42], [84.6, 46]],
         },
       ],
@@ -583,12 +583,12 @@ export const comparisonExtraCharts = [
     tags: ['quadrant', 'matrix', 'magic quadrant', 'prioritisation', 'scatter', 'four box'],
     spec: {
       items: [
-        { label: 'Onboarding',   x: 82, y: 78, color: C.purple, r: 9 },
-        { label: 'Search',       x: 74, y: 34, color: C.teal,   r: 12 },
-        { label: 'Billing',      x: 31, y: 71, color: C.coral,  r: 7 },
-        { label: 'Reporting',    x: 24, y: 26, color: C.blue,   r: 10 },
-        { label: 'Notifications',x: 61, y: 58, color: C.amber,  r: 6 },
-        { label: 'Mobile app',   x: 44, y: 88, color: C.pink,   r: 11 },
+        { label: 'Onboarding',   x: 82, y: 78, color: C.green, r: 9 },
+        { label: 'Search',       x: 74, y: 34, color: C.blue,   r: 12 },
+        { label: 'Billing',      x: 31, y: 71, color: C.amber,  r: 7 },
+        { label: 'Reporting',    x: 24, y: 26, color: C.violet,   r: 10 },
+        { label: 'Notifications',x: 61, y: 58, color: C.cyan,  r: 6 },
+        { label: 'Mobile app',   x: 44, y: 88, color: C.rose,   r: 11 },
         { label: 'Integrations', x: 88, y: 52, color: C.olive,  r: 8 },
       ],
       quadrants: ['Maintain', 'Invest', 'Deprioritise', 'Fix first'],
@@ -708,13 +708,13 @@ export const comparisonExtraCharts = [
     tags: ['timeline', 'priestley', 'gantt', 'events', 'duration', 'history', 'roadmap'],
     spec: {
       events: [
-        { label: 'Discovery',      start: 0,  end: 3,  lane: 0, color: C.blue },
-        { label: 'Design system',  start: 2,  end: 7,  lane: 1, color: C.purple },
-        { label: 'Build — core',   start: 5,  end: 14, lane: 0, color: C.teal },
-        { label: 'Build — mobile', start: 9,  end: 17, lane: 1, color: C.teal },
-        { label: 'Private beta',   start: 13, end: 19, lane: 2, color: C.amber },
+        { label: 'Discovery',      start: 0,  end: 3,  lane: 0, color: C.violet },
+        { label: 'Design system',  start: 2,  end: 7,  lane: 1, color: C.green },
+        { label: 'Build — core',   start: 5,  end: 14, lane: 0, color: C.blue },
+        { label: 'Build — mobile', start: 9,  end: 17, lane: 1, color: C.blue },
+        { label: 'Private beta',   start: 13, end: 19, lane: 2, color: C.cyan },
         { label: 'Docs',           start: 15, end: 21, lane: 1, color: C.olive },
-        { label: 'Launch',         start: 20, end: 22, lane: 0, color: C.coral },
+        { label: 'Launch',         start: 20, end: 22, lane: 0, color: C.amber },
       ],
       axisLabel: 'Week',
       opts: { textColor: '#808080', min: 0, max: 24, laneHeight: 42, barHeight: 26, radius: 6, showLabels: true, tickStep: 4 },
@@ -811,7 +811,7 @@ export const comparisonExtraCharts = [
       dayValues: Object.fromEntries(CALENDAR_DAYS.map((v, i) => [
         new Date(Date.UTC(2025, 0, 1) + i * 86400000).toISOString().slice(0, 10), v,
       ])),
-      color: C.teal,
+      color: C.blue,
       opts: { textColor: '#808080', cell: 13, gap: 3, radius: 2, weekdayLabels: true, monthLabels: true, minAlpha: 0.08 },
     },
     controls: [

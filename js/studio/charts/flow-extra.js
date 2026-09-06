@@ -128,7 +128,7 @@ export const flowExtraCharts = [
     spec: {
       flows: ALLUVIAL_FLOWS.map((f) => ({ ...f })),
       nodes: ['Free trial', 'Activated', 'Lapsed', 'Paid', 'Still free', 'Renewed', 'Churned', 'Gone'],
-      colors: [C.purple, C.teal, C.amber, C.blue, C.pink, C.olive, C.coral, C.gray],
+      colors: [C.green, C.blue, C.cyan, C.violet, C.rose, C.olive, C.amber, C.slate],
       opts: {
         nodeWidth: 16,
         gap: 14,
@@ -244,7 +244,7 @@ export const flowExtraCharts = [
       nodes: MESH_NODES.map((id, i) => ({ id, group: Math.floor(i / 5) })),
       links: MESH_EDGES.map(([source, target]) => ({ source, target })),
       groups: ['Edge', 'Services', 'Commerce', 'Stores'],
-      colors: [C.purple, C.teal, C.coral, C.blue],
+      colors: [C.green, C.blue, C.amber, C.violet],
       opts: {
         bundle: 0.72,
         linkWidth: 1.2,

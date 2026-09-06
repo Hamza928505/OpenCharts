@@ -64,13 +64,13 @@ export const comparisonMoreCharts = [
       labels: MONTHS.slice(),
       series: CYCLE_YEARS.map((y, i) => ({
         label: y.label,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
         data: y.data.slice(),
       })),
       opts: {
         textColor: '#808080',
-        lineColor: C.purple,
-        meanColor: C.coral,
+        lineColor: C.green,
+        meanColor: C.amber,
         lineWidth: 1.8,
         showMeans: true,
         showDots: true,
@@ -219,7 +219,7 @@ export const comparisonMoreCharts = [
       labels: DOT_ROWS.labels.slice(),
       series: DOT_ROWS.series.map((s, i) => ({
         label: s.label,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
         data: s.data.slice(),
       })),
       opts: {
@@ -359,7 +359,7 @@ export const comparisonMoreCharts = [
       rows: TIMETABLE.rows.slice(),
       cols: TIMETABLE.cols.slice(),
       cells: TIMETABLE.cells.map(([y, x, v]) => ({ x, y, v })),
-      colors: [C.purple, C.teal, C.coral, C.blue, C.amber],
+      colors: [C.green, C.blue, C.amber, C.violet, C.cyan],
       opts: {
         textColor: '#808080',
         gap: 3,
@@ -367,7 +367,7 @@ export const comparisonMoreCharts = [
         showValues: true,
         scaleByValue: true,
         colorBy: 'row',
-        flat: C.purple,
+        flat: C.green,
         unit: '',
       },
       dataMode: 'cells',
@@ -458,7 +458,7 @@ export const comparisonMoreCharts = [
     },
     legend: (spec) => (spec.opts.colorBy === 'flat' ? null
       : (spec.rows || []).map((label, i) => ({
-        label, color: (spec.colors || [])[i % (spec.colors || [C.purple]).length],
+        label, color: (spec.colors || [])[i % (spec.colors || [C.green]).length],
       }))),
     metrics: (spec) => {
       const cells = spec.cells || [];

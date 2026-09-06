@@ -83,11 +83,11 @@ export const distributionCharts = [
     blurb: 'Counts per bucket. Bin width is a real editorial choice — change it and see.',
     tags: ['histogram', 'distribution', 'bins', 'frequency', 'ages'],
     spec: {
-      groups: [{ label: 'Customers', color: C.purple, values: [...HISTOGRAM_VALUES] }],
+      groups: [{ label: 'Customers', color: C.green, values: [...HISTOGRAM_VALUES] }],
       bins: 10,
       min: 18,
       max: 75,
-      color: C.purple,
+      color: C.green,
       opts: { radius: 2, alpha: 0.8 },
     },
     controls: [
@@ -155,7 +155,7 @@ export const distributionCharts = [
     tags: ['box plot', 'quartiles', 'median', 'outliers', 'distribution'],
     spec: {
       groups: BOX_GROUPS.map((g, i) => ({
-        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        ...g, color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
       })),
       opts: { alpha: 0.27, borderWidth: 1.5, outlierRadius: 3, prefix: '$' },
     },
@@ -210,7 +210,7 @@ export const distributionCharts = [
     tags: ['violin', 'kde', 'density', 'distribution', 'session length'],
     spec: {
       groups: VIOLIN_GROUPS.map((g, i) => ({
-        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        ...g, color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
       })),
       opts: { textColor: '#808080', min: 0, max: 18, bandwidth: 0.8, alpha: 0.22, showBox: true, suffix: 'm' },
     },
@@ -323,7 +323,7 @@ export const distributionCharts = [
       // Flat {x, y, v} is what the matrix controller reads, and what the data
       // editor's `matrix` shape writes — so pasted grids need no translation.
       cells: HEATMAP_CELLS.flatMap((row, y) => row.map((v, x) => ({ x, y, v }))),
-      color: C.purple,
+      color: C.green,
       opts: { gap: 2, minAlpha: 0.12 },
     },
     controls: [

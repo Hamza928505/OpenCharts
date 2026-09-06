@@ -49,7 +49,7 @@ export const financeCharts = [
     tags: ['ohlc', 'bar chart', 'finance', 'stock', 'trading', 'price'],
     spec: {
       bars: [...OHLC_BARS],
-      upColor: C.teal, downColor: C.coral,
+      upColor: C.blue, downColor: C.amber,
       opts: { textColor: '#808080', tickLength: 5, lineWidth: 1.6, prefix: '$' },
     },
     controls: [
@@ -134,7 +134,7 @@ export const financeCharts = [
     tags: ['renko', 'bricks', 'finance', 'price action', 'noise filter', 'trend'],
     spec: {
       bars: [...REVERSAL_BARS],
-      upColor: C.teal, downColor: C.coral,
+      upColor: C.blue, downColor: C.amber,
       opts: { textColor: '#808080', brickSize: 3, gap: 1, prefix: '$' },
     },
     controls: [
@@ -216,7 +216,7 @@ export const financeCharts = [
     tags: ['point and figure', 'pnf', 'x o', 'reversal', 'finance', 'price action'],
     spec: {
       bars: [...REVERSAL_BARS],
-      upColor: C.teal, downColor: C.coral,
+      upColor: C.blue, downColor: C.amber,
       opts: { textColor: '#808080', boxSize: 2, reversal: 3, markSize: 0.72, lineWidth: 1.8, prefix: '$' },
     },
     controls: [
@@ -341,7 +341,7 @@ export const financeCharts = [
     tags: ['kagi', 'finance', 'reversal', 'yin yang', 'price action', 'trend'],
     spec: {
       bars: [...REVERSAL_BARS],
-      upColor: C.teal, downColor: C.coral,
+      upColor: C.blue, downColor: C.amber,
       opts: { textColor: '#808080', reversal: 5, thickWidth: 3.6, thinWidth: 1.4, prefix: '$' },
     },
     controls: [

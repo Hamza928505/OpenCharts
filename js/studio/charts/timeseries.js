@@ -41,10 +41,10 @@ export const timeseriesCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Organic', color: C.purple, data: [4200, 4400, 4500, 4800, 5100, 5600, 5900, 6100, 6000, 6300, 6600, 7000] },
-        { label: 'Paid',    color: C.teal,   data: [2100, 2250, 2200, 2400, 2600, 2900, 3100, 3300, 3200, 3400, 3500, 3700] },
-        { label: 'Social',  color: C.coral,  data: [1200, 1300, 1350, 1450, 1600, 1700, 1750, 1900, 2000, 2100, 2150, 2300] },
-        { label: 'Email',   color: C.blue,   data: [800, 830, 860, 900, 950, 1000, 1050, 1100, 1120, 1180, 1220, 1300] },
+        { label: 'Organic', color: C.green, data: [4200, 4400, 4500, 4800, 5100, 5600, 5900, 6100, 6000, 6300, 6600, 7000] },
+        { label: 'Paid',    color: C.blue,   data: [2100, 2250, 2200, 2400, 2600, 2900, 3100, 3300, 3200, 3400, 3500, 3700] },
+        { label: 'Social',  color: C.amber,  data: [1200, 1300, 1350, 1450, 1600, 1700, 1750, 1900, 2000, 2100, 2150, 2300] },
+        { label: 'Email',   color: C.violet,   data: [800, 830, 860, 900, 950, 1000, 1050, 1100, 1120, 1180, 1220, 1300] },
       ],
       opts: { tension: 0.35, fillAlpha: 0.75, lineWidth: 1, points: false },
     },
@@ -101,8 +101,8 @@ export const timeseriesCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Provisioned seats', color: C.blue, data: [50, 50, 75, 75, 75, 100, 100, 100, 150, 150, 200, 200] },
-        { label: 'Seats in use',      color: C.teal, data: [42, 47, 58, 66, 71, 78, 88, 95, 112, 130, 158, 181] },
+        { label: 'Provisioned seats', color: C.violet, data: [50, 50, 75, 75, 75, 100, 100, 100, 150, 150, 200, 200] },
+        { label: 'Seats in use',      color: C.blue, data: [42, 47, 58, 66, 71, 78, 88, 95, 112, 130, 158, 181] },
       ],
       opts: { fillAlpha: 0.2, lineWidth: 2, stepMode: 'before', points: true, pointRadius: 3, suffix: '' },
     },
@@ -153,7 +153,7 @@ export const timeseriesCharts = [
       labels: ['2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026', '2027', '2028'],
       history: [2.1, 1.4, 2.8, 3.4, 2.9, 2.6],
       forecast: [2.7, 2.8, 3.0, 3.1],
-      color: C.purple,
+      color: C.green,
       bands: [
         { label: '90%', spread: 1.9, alpha: 0.12 },
         { label: '70%', spread: 1.2, alpha: 0.18 },
@@ -267,7 +267,7 @@ export const timeseriesCharts = [
     tags: ['horizon', 'dense', 'time series', 'bands', 'small multiples', 'compact'],
     spec: {
       series: HORIZON_ROWS.map((r, i) => ({
-        ...r, color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.olive][i % 6],
+        ...r, color: [C.green, C.blue, C.amber, C.violet, C.cyan, C.olive][i % 6],
       })),
       opts: { textColor: '#808080', bands: 3, rowHeight: 62, gap: 6, mirrorNegative: true },
     },
@@ -361,8 +361,8 @@ export const timeseriesCharts = [
       // How many points make one turn. This is a property of the data — 52
       // weeks, 12 months, 24 hours — so it stays a control.
       perCycle: 52,
-      color: C.purple,
-      accent: C.coral,
+      color: C.green,
+      accent: C.amber,
       opts: { textColor: '#808080', innerRadius: 34, thickness: 15, gap: 3, mode: 'bar', showTicks: true },
     },
     controls: [
@@ -473,10 +473,10 @@ export const timeseriesCharts = [
     tags: ['sparkline', 'micro', 'inline', 'tufte', 'trend', 'kpi', 'table'],
     spec: {
       rows: [
-        { label: 'Revenue',   color: C.teal,   data: [12, 14, 13, 17, 19, 18, 22, 25, 24, 27, 31, 34], unit: '$K' },
-        { label: 'Churn',     color: C.coral,  data: [5.2, 5.0, 5.4, 4.8, 4.6, 4.9, 4.2, 4.0, 4.3, 3.8, 3.6, 3.4], unit: '%' },
-        { label: 'Sessions',  color: C.purple, data: [820, 910, 880, 1020, 1080, 1150, 1120, 1240, 1310, 1290, 1400, 1520], unit: '' },
-        { label: 'NPS',       color: C.blue,   data: [31, 33, 30, 36, 38, 37, 41, 44, 42, 47, 49, 52], unit: '' },
+        { label: 'Revenue',   color: C.blue,   data: [12, 14, 13, 17, 19, 18, 22, 25, 24, 27, 31, 34], unit: '$K' },
+        { label: 'Churn',     color: C.amber,  data: [5.2, 5.0, 5.4, 4.8, 4.6, 4.9, 4.2, 4.0, 4.3, 3.8, 3.6, 3.4], unit: '%' },
+        { label: 'Sessions',  color: C.green, data: [820, 910, 880, 1020, 1080, 1150, 1120, 1240, 1310, 1290, 1400, 1520], unit: '' },
+        { label: 'NPS',       color: C.violet,   data: [31, 33, 30, 36, 38, 37, 41, 44, 42, 47, 49, 52], unit: '' },
       ],
       opts: { textColor: '#808080', rowHeight: 46, lineWidth: 2, fill: true, fillAlpha: 0.14, showBand: false, showEndDot: true, showMinMax: true, labelWidth: 96, valueWidth: 72 },
     },

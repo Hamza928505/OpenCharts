@@ -260,7 +260,7 @@ export const geoCharts = [
     spec: {
       regionValues: { ...REGION_VALUES },
       lowColor: '#EDE9FB',
-      highColor: C.purple,
+      highColor: C.green,
       opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', steps: 6, strokeWidth: 0.4, showGraticule: false, showLegend: true, noDataColor: '#E6E3DA', suffix: '%' },
     },
     controls: [
@@ -491,7 +491,7 @@ export const geoCharts = [
         { name: 'Karak',    lon: 35.70, lat: 31.18, value: 70 },
         { name: 'Maan',     lon: 35.73, lat: 30.19, value: 50 },
       ],
-      color: C.purple,
+      color: C.green,
       opts: {
         countries: ['Jordan'],
         clipToCountry: false,
@@ -620,7 +620,7 @@ export const geoCharts = [
         { name: 'Moscow',       lon: 37.6,  lat: 55.8, value: 13 },
         { name: 'Sydney',       lon: 151.2, lat: -33.9, value: 5 },
       ],
-      color: C.coral,
+      color: C.amber,
       opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxRadius: 26, alpha: 0.62, landColor: '#E8E5DC', showLabels: false, strokeWidth: 1.2, suffix: 'M' },
     },
     controls: [
@@ -714,7 +714,7 @@ export const geoCharts = [
       // it was copied from rather than reshuffling every load.
       seed: 17,
       regionValues: { ...REGION_VALUES },
-      color: C.teal,
+      color: C.blue,
       opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', dotsPerRegion: 26, radius: 1.5, alpha: 0.62, landColor: '#EFEDE5', maxAttempts: 220 },
     },
     controls: [
@@ -811,8 +811,8 @@ export const geoCharts = [
         { name: 'Tokyo',     lon: 139.7, lat: 35.7, value: 40 },
         { name: 'Lagos',     lon: 3.4,   lat: 6.5,  value: 25 },
       ],
-      color: C.purple,
-      hubColor: C.coral,
+      color: C.green,
+      hubColor: C.amber,
       opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', maxWidth: 6, alpha: 0.6, curve: 0.28, landColor: '#EFEDE5', showLabels: true, dotRadius: 3.5 },
     },
     controls: [
@@ -952,7 +952,7 @@ export const geoCharts = [
         { code: 'GRC', name: 'Greece',      row: 7, col: 5, value: 38 },
       ],
       lowColor: '#EAF3F0',
-      highColor: C.teal,
+      highColor: C.blue,
       opts: { gap: 5, radius: 5, steps: 5, showCodes: true, showValues: false, fontSize: 11, suffix: '%' },
     },
     controls: [
@@ -1041,7 +1041,7 @@ export const geoCharts = [
     tags: ['cartogram', 'map', 'geo', 'distortion', 'value by area', 'non-contiguous', 'd3'],
     spec: {
       regionValues: { ...REGION_VALUES },
-      color: C.purple,
+      color: C.green,
       opts: { countries: [], clipToCountry: true, neighbourColor: '#EDEBE4', rotate: [0, -15, 0], projection: 'naturalEarth', minScale: 0.15, ghost: true, ghostColor: '#E6E3DA', alpha: 0.85, strokeWidth: 0.5 },
     },
     controls: [

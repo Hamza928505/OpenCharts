@@ -68,8 +68,8 @@ export const barCharts = [
     spec: {
       labels: [...QUARTERS],
       series: [
-        { label: '2024', color: C.purple, data: [520, 680, 740, 910] },
-        { label: '2023', color: C.blue,   data: [440, 575, 625, 770] },
+        { label: '2024', color: C.green, data: [520, 680, 740, 910] },
+        { label: '2023', color: C.violet,   data: [440, 575, 625, 770] },
       ],
       opts: { radius: 5, thickness: 0.72, outline: false, prefix: '$', suffix: 'K', separator: false },
     },
@@ -104,9 +104,9 @@ export const barCharts = [
     spec: {
       labels: [...QUARTERS],
       series: [
-        { label: 'Online',    color: C.purple, data: [0.52, 0.68, 0.74, 0.91] },
-        { label: 'In-store',  color: C.teal,   data: [0.31, 0.38, 0.42, 0.51] },
-        { label: 'Wholesale', color: C.coral,  data: [0.18, 0.22, 0.24, 0.29] },
+        { label: 'Online',    color: C.green, data: [0.52, 0.68, 0.74, 0.91] },
+        { label: 'In-store',  color: C.blue,   data: [0.31, 0.38, 0.42, 0.51] },
+        { label: 'Wholesale', color: C.amber,  data: [0.18, 0.22, 0.24, 0.29] },
       ],
       opts: { radius: 5, thickness: 0.68, outline: false, prefix: '$', suffix: 'M', separator: false, decimals: 2 },
     },
@@ -140,7 +140,7 @@ export const barCharts = [
     spec: {
       labels: ['Linen Blazer', 'Silk Midi Dress', 'Wool Overcoat', 'Canvas Tote', 'Cashmere Knit', 'Leather Belt', 'Wide-Leg Trousers', 'Cotton Shirt'],
       values: [142, 128, 115, 98, 87, 74, 63, 55],
-      colors: [C.purple, C.purple, C.purple, C.teal, C.teal, C.coral, C.coral, C.coral],
+      colors: [C.green, C.green, C.green, C.blue, C.blue, C.amber, C.amber, C.amber],
       opts: { radius: 5, thickness: 0.78, prefix: '$', suffix: 'K', separator: false, label: 'Revenue' },
     },
     controls: [
@@ -187,10 +187,10 @@ export const barCharts = [
     spec: {
       labels: ['North', 'South', 'East', 'West'],
       series: [
-        { label: 'Brand A', color: C.purple, data: [40, 35, 45, 38] },
-        { label: 'Brand B', color: C.teal,   data: [25, 30, 22, 28] },
-        { label: 'Brand C', color: C.coral,  data: [20, 20, 18, 22] },
-        { label: 'Brand D', color: C.blue,   data: [15, 15, 15, 12] },
+        { label: 'Brand A', color: C.green, data: [40, 35, 45, 38] },
+        { label: 'Brand B', color: C.blue,   data: [25, 30, 22, 28] },
+        { label: 'Brand C', color: C.amber,  data: [20, 20, 18, 22] },
+        { label: 'Brand D', color: C.violet,   data: [15, 15, 15, 12] },
       ],
       opts: { radius: 5, thickness: 0.66 },
     },
@@ -241,8 +241,8 @@ export const barCharts = [
     spec: {
       labels: [...MONTHS],
       values: [12, -8, 20, -5, 15, -12, 18, 25, -6, 14, -9, 30],
-      posColor: C.teal,
-      negColor: C.coral,
+      posColor: C.blue,
+      negColor: C.amber,
       opts: { radius: 4, thickness: 0.7, prefix: '', suffix: 'K', showSign: true },
     },
     controls: [
@@ -299,7 +299,7 @@ export const barCharts = [
     spec: {
       labels: ['Discovery', 'Design', 'Development', 'QA Testing', 'Launch Prep', 'Go-Live'],
       ranges: [[1, 3], [2, 5], [4, 10], [8, 12], [11, 13], [13, 14]],
-      colors: [C.blue, C.purple, C.teal, C.amber, C.coral, C.pink],
+      colors: [C.violet, C.green, C.blue, C.cyan, C.amber, C.rose],
       opts: { radius: 5, thickness: 0.7, max: 15, unit: 'Wk ' },
     },
     controls: [
@@ -357,9 +357,9 @@ export const barCharts = [
         { label: 'FY2024',    delta: 0,    kind: 'base' },
       ],
       start: 8.2,
-      upColor: C.teal,
-      downColor: C.coral,
-      baseColor: C.gray,
+      upColor: C.blue,
+      downColor: C.amber,
+      baseColor: C.slate,
       opts: { radius: 4, thickness: 0.68, prefix: '$', suffix: 'M', decimals: 1 },
     },
     controls: [
@@ -423,8 +423,8 @@ export const barCharts = [
     tags: ['bar', 'butterfly', 'pyramid', 'population', 'demographics'],
     spec: {
       labels: ['18–24', '25–34', '35–44', '45–54', '55–64', '65+'],
-      left:  { label: 'Male',   color: C.blue, data: [8.2, 14.5, 13.8, 11.2, 8.4, 5.1] },
-      right: { label: 'Female', color: C.pink, data: [9.1, 15.8, 14.2, 12.0, 9.3, 6.4] },
+      left:  { label: 'Male',   color: C.violet, data: [8.2, 14.5, 13.8, 11.2, 8.4, 5.1] },
+      right: { label: 'Female', color: C.rose, data: [9.1, 15.8, 14.2, 12.0, 9.3, 6.4] },
       opts: { radius: 4, thickness: 0.78, suffix: '%' },
     },
     controls: [
@@ -474,14 +474,14 @@ export const barCharts = [
     tags: ['lollipop', 'ranking', 'dot plot', 'scores'],
     spec: {
       items: [
-        { label: 'Onboarding', value: 82, color: C.purple },
-        { label: 'Support',    value: 74, color: C.teal   },
-        { label: 'Sales',      value: 68, color: C.blue   },
-        { label: 'Billing',    value: 55, color: C.coral  },
-        { label: 'Delivery',   value: 79, color: C.teal   },
-        { label: 'Returns',    value: 48, color: C.amber  },
-        { label: 'Product',    value: 88, color: C.purple },
-        { label: 'Website',    value: 71, color: C.blue   },
+        { label: 'Onboarding', value: 82, color: C.green },
+        { label: 'Support',    value: 74, color: C.blue   },
+        { label: 'Sales',      value: 68, color: C.violet   },
+        { label: 'Billing',    value: 55, color: C.amber  },
+        { label: 'Delivery',   value: 79, color: C.blue   },
+        { label: 'Returns',    value: 48, color: C.cyan  },
+        { label: 'Product',    value: 88, color: C.green },
+        { label: 'Website',    value: 71, color: C.violet   },
       ],
       opts: { textColor: '#808080', max: 100, dotRadius: 7, stemWidth: 2, showValue: true, labelWidth: 110 },
     },

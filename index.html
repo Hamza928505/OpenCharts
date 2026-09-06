@@ -22,7 +22,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/studio.css">
 
 <!-- Rendering engines. Chart.js must load before any of its plugins. -->
@@ -33,40 +33,52 @@
   /* Page-level chrome that only the gallery uses. */
   .topbar {
     display: flex; align-items: center; gap: 1rem;
-    padding: 1rem 2.4rem;
+    padding: .85rem 2.4rem;
     border-bottom: 1px solid var(--rule);
     background: var(--surface);
   }
   .topbar .brand { padding: 0; }
-  .topbar nav { margin-left: auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .topbar nav { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
   .hero-kicker { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-  .hero-copy { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 2.5rem; align-items: end; }
+
+  /* Two columns divided by a hairline rather than by whitespace — the note is a
+     column of the grid, not a floating aside. */
+  .hero-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
+    padding-bottom: .4rem;
+  }
   .hero-note {
-    border-left: 2px solid var(--accent-line);
-    padding-left: 1.1rem;
-    font-size: 14px;
+    border-left: 1px solid var(--rule);
+    padding-left: 2rem;
+    font-size: 13.5px;
+    line-height: 1.62;
     color: var(--ink-soft);
+    align-self: stretch;
   }
   .hero-note strong { color: var(--ink); font-weight: 600; }
   .hero-note code {
-    font-family: var(--mono); font-size: 12.5px;
+    font-family: var(--mono); font-size: 12px;
     background: var(--surface-2); border: 1px solid var(--rule);
-    border-radius: 5px; padding: .05rem .3rem;
+    border-radius: var(--r-xs); padding: .05rem .32rem;
   }
   @media (max-width: 1024px) {
-    .hero-copy { grid-template-columns: 1fr; gap: 1.6rem; }
-    .hero-note { max-width: 62ch; }
+    .hero-copy { grid-template-columns: 1fr; gap: 1.5rem; }
+    .hero-note { max-width: 66ch; border-left: 0; padding-left: 0; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
   }
   @media (max-width: 900px) {
     .topbar { padding-left: 1.15rem; padding-right: 1.15rem; }
   }
   @media (max-width: 640px) {
-    .topbar { padding: .75rem 1.15rem; gap: .6rem; }
+    .topbar { padding: .7rem 1.15rem; gap: .6rem; }
     .topbar .brand-sub { display: none; }
     .topbar nav { gap: .35rem; }
     /* "Library" just scrolls to the grid, which is already the next thing. */
     .topbar nav a[href="#library"] { display: none; }
-    .hero-note { font-size: 13.5px; }
+    .hero-note { font-size: 13px; }
   }
   @media (max-width: 380px) {
     .topbar .brand-name { font-size: 13px; }

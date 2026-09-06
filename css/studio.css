@@ -1,5 +1,5 @@
 /* ============================================================================
-   OpenCharts — Editorial Studio design system
+   OpenCharts — Swiss design system
    One stylesheet for the gallery (index.html) and the studio (studio.html).
 
    Theme model
@@ -7,59 +7,84 @@
    The light palette lives on bare :root. Dark is redefined twice — once under
    prefers-color-scheme for the "system" default, once under [data-theme="dark"]
    so an explicit toggle wins in both directions.
+
+   Colour
+   ------
+   Slate for structure, one green for action. Everything is a semantic token; no
+   rule below this block names a raw colour, so re-theming the whole site is an
+   edit to these three blocks and nothing else.
+
+   Two rules the green follows, because a single "brand green" fails one of them
+   whichever value you pick:
+
+   - **Text green and fill green are different greens.** `#22c55e` on white is
+     2.3:1 — it cannot carry a link. `--accent` is therefore the darker,
+     text-safe green (5.0:1 light, 8.3:1 dark) and `--accent-solid` is the vivid
+     one, used only as a *fill*.
+   - **What sits on the fill is dark, not white.** White on `#22c55e` is 2.3:1;
+     near-black on it is 8.3:1. `--accent-ink` is that near-black, and it is why
+     the primary button reads as a button rather than a smudge.
    ========================================================================== */
 
 /* ── Tokens: light ───────────────────────────────────────────────────────── */
 :root {
-  /* paper & ink */
-  --paper:       #faf9f5;
-  --paper-deep:  #f2f0e9;
+  /* ground & ink */
+  --paper:       #ffffff;
+  --paper-deep:  #f1f5f9;
   --surface:     #ffffff;
-  --surface-2:   #f4f2ec;
-  --surface-3:   #eae7de;
-  --ink:         #171614;
-  --ink-soft:    #56544d;
-  --ink-faint:   #8b8880;
-  --rule:        #e3e0d7;
-  --rule-firm:   #cec9bd;
+  --surface-2:   #f8fafc;
+  --surface-3:   #f1f5f9;
+  --ink:         #0f172a;
+  --ink-soft:    #475569;
+  --ink-faint:   #5c6b80;
+  --rule:        #e2e8f0;
+  --rule-firm:   #cbd5e1;
 
-  /* accent spectrum — also the default chart palette */
-  --a-purple:    #6C63D8;
-  --a-teal:      #0FA475;
-  --a-coral:     #B23E17;
-  --a-blue:      #5481C9;
-  --a-amber:     #BC861D;
-  --a-pink:      #AA375C;
-  --accent:      var(--a-purple);
-  --accent-wash: rgba(108, 99, 216, .10);
-  --accent-line: rgba(108, 99, 216, .28);
+  /* The eight series colours, mirroring PALETTE in palette.js so a chip and the
+     chart it labels cannot disagree. See that file for why these values. */
+  --a-green:  #2e8d44;
+  --a-blue:   #2167b9;
+  --a-amber:  #b3852e;
+  --a-violet: #a381d8;
+  --a-cyan:   #289eb5;
+  --a-rose:   #b53c5e;
+  --a-slate:  #676b89;
+  --a-olive:  #646a00;
 
-  --ok:          #16916A;
-  --warn:        #A5720F;
-  --bad:         #CE3B3B;
+  --accent:       #15803d;
+  --accent-solid: #22c55e;
+  --accent-ink:   #052e16;
+  --accent-wash:  rgba(34, 197, 94, .11);
+  --accent-line:  rgba(21, 128, 61, .32);
+
+  --ok:          #15803d;
+  --warn:        #a16207;
+  --bad:         #b91c1c;
 
   /* code surface */
-  --code-bg:     #f7f5ef;
-  --code-ink:    #2b2924;
-  --code-gutter: #b3afa4;
-  --tok-key:     #8A4FBF;
-  --tok-str:     #16794F;
-  --tok-num:     #B0620F;
-  --tok-com:     #9b978c;
-  --tok-tag:     #2F76C9;
-  --tok-attr:    #A5720F;
-  --tok-punc:    #78756c;
+  --code-bg:     #f8fafc;
+  --code-ink:    #1e293b;
+  --code-gutter: #64748b;
+  --tok-key:     #7c3aed;
+  --tok-str:     #15803d;
+  --tok-num:     #b45309;
+  --tok-com:     #94a3b8;
+  --tok-tag:     #1d4ed8;
+  --tok-attr:    #a16207;
+  --tok-punc:    #64748b;
 
-  /* type */
-  --sans:  'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono:  'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  /* type — a grotesque for words, a mono for anything a machine wrote */
+  --sans:  'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --mono:  'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Kept as a name so nothing has to learn a new one: the display face is the
+     grotesque now, set tight and heavy rather than a serif. */
+  --serif: var(--sans);
 
-  /* geometry */
-  --r-xs: 4px; --r-sm: 7px; --r: 11px; --r-lg: 16px; --r-xl: 24px;
-  --shadow-sm: 0 1px 2px rgba(23,22,20,.05);
-  --shadow:    0 4px 18px rgba(23,22,20,.07), 0 1px 3px rgba(23,22,20,.04);
-  --shadow-lg: 0 22px 56px rgba(23,22,20,.13), 0 4px 12px rgba(23,22,20,.05);
+  /* geometry — Swiss keeps corners nearly square and leans on the hairline */
+  --r-xs: 2px; --r-sm: 4px; --r: 6px; --r-lg: 8px; --r-xl: 14px;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,.06);
+  --shadow:    0 1px 3px rgba(15,23,42,.07), 0 8px 24px -12px rgba(15,23,42,.12);
+  --shadow-lg: 0 2px 6px rgba(15,23,42,.06), 0 24px 48px -20px rgba(15,23,42,.22);
   --ease: cubic-bezier(.22,.61,.36,1);
   /* One motion scale for the whole site. `fast` is acknowledgement — a press,
      a tick; `base` is a state change you watch; `slow` is something arriving.
@@ -73,6 +98,10 @@
 
   --sidebar-w: 236px;
   --controls-w: 300px;
+  /* The page's horizontal inset. A token because the hero's ruled strip has to
+     bleed out to the page edge by exactly this much, and a hardcoded copy would
+     overhang the moment a breakpoint changed the padding under it. */
+  --gutter: 2.4rem;
 
   color-scheme: light;
 }
@@ -80,45 +109,52 @@
 /* ── Tokens: dark (system default) ───────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper:       #0e0e13;
-    --paper-deep:  #08080c;
-    --surface:     #16161d;
-    --surface-2:   #1d1d26;
-    --surface-3:   #262632;
-    --ink:         #eceae4;
-    --ink-soft:    #a3a09a;
-    --ink-faint:   #6f6d69;
-    --rule:        rgba(255,255,255,.09);
-    --rule-firm:   rgba(255,255,255,.17);
+    --paper:       #0b1120;
+    --paper-deep:  #060a14;
+    --surface:     #0f172a;
+    --surface-2:   #1e293b;
+    --surface-3:   #334155;
+    --ink:         #f8fafc;
+    --ink-soft:    #cbd5e1;
+    --ink-faint:   #94a3b8;
+    --rule:        rgba(148,163,184,.16);
+    --rule-firm:   rgba(148,163,184,.32);
 
-    --a-purple:    #8B83EE;
-    --a-teal:      #35B98C;
-    --a-coral:     #E8764A;
-    --a-blue:      #5A9BE8;
-    --a-amber:     #D2971F;
-    --a-pink:      #E4658D;
-    --accent:      var(--a-purple);
-    --accent-wash: rgba(139, 131, 238, .13);
-    --accent-line: rgba(139, 131, 238, .34);
+    --a-green:  #4ade80;
+    --a-blue:   #60a5fa;
+    --a-amber:  #e3b341;
+    --a-violet: #c4b5fd;
+    --a-cyan:   #5ac8de;
+    --a-rose:   #f87f9b;
+    --a-slate:  #a5adc9;
+    --a-olive:  #b6bd4a;
 
-    --ok:          #35B98C;
-    --warn:        #D2971F;
-    --bad:         #E95F5F;
+    /* On this ground the vivid green clears 8.3:1, so text and fill are one
+       colour here — the split only exists because white cannot hold it. */
+    --accent:       #22c55e;
+    --accent-solid: #22c55e;
+    --accent-ink:   #052e16;
+    --accent-wash:  rgba(34,197,94,.14);
+    --accent-line:  rgba(34,197,94,.36);
 
-    --code-bg:     #101017;
-    --code-ink:    #d7d5cf;
-    --code-gutter: #4a4852;
-    --tok-key:     #C08CF5;
-    --tok-str:     #6FD3A2;
-    --tok-num:     #E8A85C;
-    --tok-com:     #5e5c66;
-    --tok-tag:     #6FAEF0;
-    --tok-attr:    #E0B45C;
-    --tok-punc:    #8d8a95;
+    --ok:          #4ade80;
+    --warn:        #e3b341;
+    --bad:         #f87171;
 
-    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-    --shadow:    0 4px 18px rgba(0,0,0,.44), 0 1px 3px rgba(0,0,0,.3);
-    --shadow-lg: 0 22px 56px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.35);
+    --code-bg:     #060a14;
+    --code-ink:    #e2e8f0;
+    --code-gutter: #6b7c93;
+    --tok-key:     #c4b5fd;
+    --tok-str:     #86efac;
+    --tok-num:     #fbbf24;
+    --tok-com:     #64748b;
+    --tok-tag:     #7dd3fc;
+    --tok-attr:    #e3b341;
+    --tok-punc:    #94a3b8;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+    --shadow:    0 1px 3px rgba(0,0,0,.5), 0 8px 24px -12px rgba(0,0,0,.6);
+    --shadow-lg: 0 2px 6px rgba(0,0,0,.5), 0 24px 48px -20px rgba(0,0,0,.7);
 
     color-scheme: dark;
   }
@@ -126,45 +162,50 @@
 
 /* ── Tokens: dark (explicit toggle) ──────────────────────────────────────── */
 :root[data-theme="dark"] {
-  --paper:       #0e0e13;
-  --paper-deep:  #08080c;
-  --surface:     #16161d;
-  --surface-2:   #1d1d26;
-  --surface-3:   #262632;
-  --ink:         #eceae4;
-  --ink-soft:    #a3a09a;
-  --ink-faint:   #6f6d69;
-  --rule:        rgba(255,255,255,.09);
-  --rule-firm:   rgba(255,255,255,.17);
+  --paper:       #0b1120;
+  --paper-deep:  #060a14;
+  --surface:     #0f172a;
+  --surface-2:   #1e293b;
+  --surface-3:   #334155;
+  --ink:         #f8fafc;
+  --ink-soft:    #cbd5e1;
+  --ink-faint:   #94a3b8;
+  --rule:        rgba(148,163,184,.16);
+  --rule-firm:   rgba(148,163,184,.32);
 
-  --a-purple:    #8B83EE;
-  --a-teal:      #35B98C;
-  --a-coral:     #E8764A;
-  --a-blue:      #5A9BE8;
-  --a-amber:     #D2971F;
-  --a-pink:      #E4658D;
-  --accent:      var(--a-purple);
-  --accent-wash: rgba(139, 131, 238, .13);
-  --accent-line: rgba(139, 131, 238, .34);
+  --a-green:  #4ade80;
+  --a-blue:   #60a5fa;
+  --a-amber:  #e3b341;
+  --a-violet: #c4b5fd;
+  --a-cyan:   #5ac8de;
+  --a-rose:   #f87f9b;
+  --a-slate:  #a5adc9;
+  --a-olive:  #b6bd4a;
 
-  --ok:          #35B98C;
-  --warn:        #D2971F;
-  --bad:         #E95F5F;
+  --accent:       #22c55e;
+  --accent-solid: #22c55e;
+  --accent-ink:   #052e16;
+  --accent-wash:  rgba(34,197,94,.14);
+  --accent-line:  rgba(34,197,94,.36);
 
-  --code-bg:     #101017;
-  --code-ink:    #d7d5cf;
-  --code-gutter: #4a4852;
-  --tok-key:     #C08CF5;
-  --tok-str:     #6FD3A2;
-  --tok-num:     #E8A85C;
-  --tok-com:     #5e5c66;
-  --tok-tag:     #6FAEF0;
-  --tok-attr:    #E0B45C;
-  --tok-punc:    #8d8a95;
+  --ok:          #4ade80;
+  --warn:        #e3b341;
+  --bad:         #f87171;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
-  --shadow:    0 4px 18px rgba(0,0,0,.44), 0 1px 3px rgba(0,0,0,.3);
-  --shadow-lg: 0 22px 56px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.35);
+  --code-bg:     #060a14;
+  --code-ink:    #e2e8f0;
+  --code-gutter: #6b7c93;
+  --tok-key:     #c4b5fd;
+  --tok-str:     #86efac;
+  --tok-num:     #fbbf24;
+  --tok-com:     #64748b;
+  --tok-tag:     #7dd3fc;
+  --tok-attr:    #e3b341;
+  --tok-punc:    #94a3b8;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --shadow:    0 1px 3px rgba(0,0,0,.5), 0 8px 24px -12px rgba(0,0,0,.6);
+  --shadow-lg: 0 2px 6px rgba(0,0,0,.5), 0 24px 48px -20px rgba(0,0,0,.7);
 
   color-scheme: dark;
 }
@@ -191,18 +232,24 @@ img, canvas, svg { max-width: 100%; display: block; }
 ::selection { background: var(--accent-wash); }
 
 /* ── Typographic primitives ──────────────────────────────────────────────── */
+/* Swiss display: the grotesque, heavy, set tight. The old face was a serif in
+   italic for emphasis; here emphasis is weight and colour, which is what a
+   grotesque has instead of an italic worth using. */
 .display {
-  font-family: var(--serif);
-  font-weight: 400;
-  letter-spacing: -.012em;
-  line-height: 1.06;
+  font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: -.032em;
+  line-height: 1.04;
 }
-.display em { font-style: italic; color: var(--accent); }
+.display em { font-style: normal; color: var(--accent); }
 
+/* An eyebrow is a machine label — a category, a count, a breadcrumb — so it is
+   set in the mono face at small size with wide tracking. */
 .eyebrow {
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: .13em;
+  letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink-faint);
   display: flex;
@@ -212,7 +259,7 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .eyebrow .sep { opacity: .45; }
 
-.lede { color: var(--ink-soft); font-size: 14.5px; max-width: 62ch; }
+.lede { color: var(--ink-soft); font-size: 14.5px; line-height: 1.6; max-width: 68ch; }
 .tnum { font-variant-numeric: tabular-nums; }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -231,8 +278,15 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .btn:hover { background: var(--surface-2); border-color: var(--ink-faint); }
 .btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent); border-color: var(--accent); filter: brightness(1.08); }
+/* Dark ink on the vivid green, not white: white on it is 2.3:1 and near-black
+   is 8.3:1. This is the one place `--accent-solid` is allowed to be a fill. */
+.btn-primary {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--accent-solid); border-color: var(--accent-solid); filter: brightness(1.06); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-soft); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
 .btn-sm { padding: .34rem .62rem; font-size: 12px; }
@@ -243,7 +297,7 @@ img, canvas, svg { max-width: 100%; display: block; }
 .theme-toggle {
   display: inline-flex; align-items: center; gap: .4rem;
   padding: .38rem .7rem;
-  border: 1px solid var(--rule); border-radius: 999px;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
   background: var(--surface); color: var(--ink-soft);
   font-size: 12px; font-weight: 500; cursor: pointer;
   transition: color .16s var(--ease), border-color .16s var(--ease);
@@ -253,9 +307,10 @@ img, canvas, svg { max-width: 100%; display: block; }
 /* ── Pills & badges ──────────────────────────────────────────────────────── */
 .pill {
   display: inline-flex; align-items: center; gap: .35rem;
-  padding: .2rem .55rem;
-  border-radius: 999px;
-  font-size: 11px; font-weight: 500;
+  padding: .2rem .5rem;
+  border-radius: var(--r-xs);
+  font-family: var(--mono);
+  font-size: 10.5px; font-weight: 500; letter-spacing: .02em;
   background: var(--surface-2); color: var(--ink-soft);
   border: 1px solid var(--rule);
 }
@@ -263,11 +318,15 @@ img, canvas, svg { max-width: 100%; display: block; }
 
 /* engine provenance chips */
 .chip-engine { font-family: var(--mono); font-size: 10px; letter-spacing: .02em; }
-.chip-chartjs { color: var(--a-blue);   background: color-mix(in srgb, var(--a-blue) 12%, transparent);   border-color: color-mix(in srgb, var(--a-blue) 30%, transparent); }
-.chip-d3      { color: var(--a-coral);  background: color-mix(in srgb, var(--a-coral) 12%, transparent);  border-color: color-mix(in srgb, var(--a-coral) 30%, transparent); }
-.chip-canvas  { color: var(--a-teal);   background: color-mix(in srgb, var(--a-teal) 12%, transparent);   border-color: color-mix(in srgb, var(--a-teal) 30%, transparent); }
-.chip-native  { color: var(--a-purple); background: color-mix(in srgb, var(--a-purple) 12%, transparent); border-color: color-mix(in srgb, var(--a-purple) 30%, transparent); }
-.chip-dom     { color: var(--a-amber);  background: color-mix(in srgb, var(--a-amber) 12%, transparent);  border-color: color-mix(in srgb, var(--a-amber) 30%, transparent); }
+/* The label is pulled 40% toward the page's ink. Set to the raw series colour
+   it sat at 2.8:1 on its own wash at 10px — a chip nobody with ordinary sight
+   could read comfortably. Because `--ink` flips with the theme, one rule
+   darkens it on paper and lightens it on slate. */
+.chip-chartjs { color: color-mix(in srgb, var(--a-blue) 60%, var(--ink));   background: color-mix(in srgb, var(--a-blue) 12%, transparent);   border-color: color-mix(in srgb, var(--a-blue) 30%, transparent); }
+.chip-d3      { color: color-mix(in srgb, var(--a-rose) 60%, var(--ink));   background: color-mix(in srgb, var(--a-rose) 12%, transparent);   border-color: color-mix(in srgb, var(--a-rose) 30%, transparent); }
+.chip-canvas  { color: color-mix(in srgb, var(--a-cyan) 60%, var(--ink));   background: color-mix(in srgb, var(--a-cyan) 12%, transparent);   border-color: color-mix(in srgb, var(--a-cyan) 30%, transparent); }
+.chip-native  { color: color-mix(in srgb, var(--a-violet) 60%, var(--ink)); background: color-mix(in srgb, var(--a-violet) 12%, transparent); border-color: color-mix(in srgb, var(--a-violet) 30%, transparent); }
+.chip-dom     { color: color-mix(in srgb, var(--a-amber) 60%, var(--ink));  background: color-mix(in srgb, var(--a-amber) 12%, transparent);  border-color: color-mix(in srgb, var(--a-amber) 30%, transparent); }
 
 /* ── App shell ───────────────────────────────────────────────────────────── */
 .app { display: flex; min-height: 100vh; }
@@ -287,14 +346,16 @@ img, canvas, svg { max-width: 100%; display: block; }
 .rail::-webkit-scrollbar-thumb { background: var(--rule-firm); border-radius: 4px; }
 
 .brand { display: flex; align-items: center; gap: .6rem; padding: 0 .4rem 1.15rem; }
+/* A flat square, not a gradient chip: the mark is the one solid green on the
+   page, and a gradient would be the only one in a system with no others. */
 .brand-mark {
-  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 32px;
+  width: 30px; height: 30px; border-radius: var(--r-sm); flex: 0 0 30px;
   display: grid; place-items: center;
-  background: linear-gradient(140deg, var(--a-purple), var(--a-blue));
-  color: #fff;
+  background: var(--accent-solid);
+  color: var(--accent-ink);
 }
 .brand-mark svg { width: 17px; height: 17px; }
-.brand-name { font-size: 14px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; }
+.brand-name { font-size: 14px; font-weight: 600; letter-spacing: -.022em; line-height: 1.2; }
 .brand-sub  { font-size: 10.5px; color: var(--ink-faint); font-family: var(--mono); }
 
 .rail-label {
@@ -370,33 +431,62 @@ img, canvas, svg { max-width: 100%; display: block; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 /* ── Page header ─────────────────────────────────────────────────────────── */
+/* Slimmer than it was: the subject of this page is the chart, and every row of
+   chrome above it is a row the plate does not get. */
 .page-head {
-  padding: 2.1rem 2.4rem 1.5rem;
+  padding: 1.4rem 2.4rem 1.2rem;
   border-bottom: 1px solid var(--rule);
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: 1.5rem; flex-wrap: wrap;
 }
-.page-head h1 { font-size: clamp(1.9rem, 3.4vw, 2.7rem); margin: .5rem 0 .55rem; }
-.head-actions { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.page-head h1 { font-size: clamp(1.5rem, 2.6vw, 2rem); margin: .35rem 0 .35rem; }
+.page-head .lede { font-size: 13.5px; }
+.head-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 
 /* ── Gallery ─────────────────────────────────────────────────────────────── */
+/* Swiss: the grid is the design. Structure comes from hairlines and alignment,
+   so there are no soft glows behind the type — the two radial washes that used
+   to sit here were the only gradients in the system and read as decoration. */
 .gallery-hero {
-  padding: 3.2rem 2.4rem 2.2rem;
+  padding: 3.4rem var(--gutter) 0;
   border-bottom: 1px solid var(--rule);
   position: relative;
-  overflow: hidden;
 }
-.gallery-hero::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(720px 300px at 88% -10%, var(--accent-wash), transparent 68%),
-    radial-gradient(520px 240px at 8% 110%, color-mix(in srgb, var(--a-teal) 9%, transparent), transparent 70%);
+.gallery-hero h1 {
+  font-size: clamp(2.3rem, 5.6vw, 3.9rem);
+  margin: .85rem 0 1rem;
+  max-width: 26ch;
 }
-.gallery-hero > * { position: relative; z-index: 1; }
-.gallery-hero h1 { font-size: clamp(2.4rem, 6vw, 4.1rem); margin: .7rem 0 .8rem; max-width: 20ch; }
-.hero-stats { display: flex; gap: 2.2rem; flex-wrap: wrap; margin-top: 1.8rem; }
-.hero-stat .n { font-family: var(--serif); font-size: 2rem; line-height: 1; letter-spacing: -.02em; }
-.hero-stat .l { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-top: .35rem; }
+/* The second sentence is the promise, so it gets its own line rather than
+   wherever the measure happens to break. Scoped to the hero: the studio's own
+   `<em>` is a word inside a title and has to stay inline. */
+.gallery-hero h1 em { display: block; }
+
+/* The numbers are data, so they are set in the mono face and lined up in a
+   ruled strip rather than floating under the paragraph. */
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 2.4rem calc(-1 * var(--gutter)) 0;
+  border-top: 1px solid var(--rule);
+}
+.hero-stat {
+  padding: 1.05rem var(--gutter) 1.15rem;
+  border-right: 1px solid var(--rule);
+}
+.hero-stat:last-child { border-right: 0; }
+.hero-stat + .hero-stat { padding-left: 1.4rem; }
+.hero-stat .n {
+  font-family: var(--mono);
+  font-size: 1.7rem; font-weight: 500;
+  line-height: 1; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat .l {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint); margin-top: .5rem;
+}
 
 .toolbar {
   position: sticky; top: 0; z-index: 20;
@@ -410,7 +500,7 @@ img, canvas, svg { max-width: 100%; display: block; }
 .search {
   display: flex; align-items: center; gap: .5rem;
   padding: .42rem .75rem;
-  border: 1px solid var(--rule-firm); border-radius: 999px;
+  border: 1px solid var(--rule-firm); border-radius: var(--r-sm);
   background: var(--surface);
   min-width: 210px; flex: 1 1 210px; max-width: 330px;
   transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
@@ -421,16 +511,20 @@ img, canvas, svg { max-width: 100%; display: block; }
   font-family: var(--sans); font-size: 13px; width: 100%;
 }
 .search input::placeholder { color: var(--ink-faint); }
-.filters { display: flex; gap: .35rem; flex-wrap: wrap; }
+.filters { display: flex; gap: .3rem; flex-wrap: wrap; }
 .filter {
-  padding: .34rem .74rem; border-radius: 999px;
+  padding: .34rem .7rem; border-radius: var(--r-sm);
   border: 1px solid var(--rule); background: transparent;
   color: var(--ink-soft); font-size: 12.5px; cursor: pointer;
   transition: background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
 }
 .filter:hover { border-color: var(--rule-firm); color: var(--ink); }
-.filter.active { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 500; }
-.result-count { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
+.filter.active { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
+.result-count {
+  margin-left: auto; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .04em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
 
 .grid {
   display: grid;
@@ -444,9 +538,15 @@ img, canvas, svg { max-width: 100%; display: block; }
   padding: 1.5rem 0 .1rem;
 }
 .section-rule:first-child { padding-top: 0; }
-.section-rule h2 { font-family: var(--serif); font-size: 1.45rem; font-weight: 400; letter-spacing: -.01em; }
+.section-rule h2 {
+  font-family: var(--sans); font-size: 1.05rem; font-weight: 600;
+  letter-spacing: -.02em;
+}
 .section-rule .line { flex: 1; height: 1px; background: var(--rule); }
-.section-rule .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+.section-rule .n {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
 
 /* The tile is a link with a copy button beside it. The button cannot live
    inside the anchor, so the shell holds both — and the shell carries the hover
@@ -594,7 +694,12 @@ img, canvas, svg { max-width: 100%; display: block; }
   display: inline-flex; align-items: center; gap: .35rem;
   font-size: 12.5px; color: var(--ink-soft); cursor: pointer; user-select: none;
 }
-.match-check input { accent-color: var(--accent); }
+.match-check input {
+  accent-color: var(--accent-solid);
+  /* A 13px box is a target nobody can hit reliably. */
+  width: 16px; height: 16px; margin: 0; cursor: pointer;
+}
+.match-check { padding: .2rem 0; }
 .match-status { font-size: 12px; color: var(--ink-faint); }
 .match-status.bad { color: var(--bad); }
 .match-status.ok { color: var(--ok); }
@@ -607,14 +712,14 @@ img, canvas, svg { max-width: 100%; display: block; }
 .match-cols { display: flex; gap: .4rem; flex-wrap: wrap; }
 .match-col-chip {
   display: inline-flex; align-items: baseline; gap: .35rem;
-  border: 1px solid var(--rule); border-radius: 999px;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
   padding: .18rem .55rem; font-size: 12px; background: var(--surface-2);
   max-width: 100%; min-width: 0;
 }
 .match-col-chip b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .match-col-chip span { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
-.match-col-chip.words { border-color: color-mix(in srgb, var(--a-purple) 34%, transparent); }
-.match-col-chip.numbers { border-color: color-mix(in srgb, var(--a-teal) 34%, transparent); }
+.match-col-chip.words { border-color: color-mix(in srgb, var(--a-violet) 34%, transparent); }
+.match-col-chip.numbers { border-color: color-mix(in srgb, var(--a-cyan) 34%, transparent); }
 .match-verdict { margin-top: .7rem; font-size: 13px; }
 .match-verdict b { font-weight: 600; }
 
@@ -886,7 +991,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .series-name:focus { border-bottom-color: var(--accent-line); }
 .series-hex { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); }
-.series-del { background: none; border: 0; color: var(--ink-faint); cursor: pointer; padding: .1rem .2rem; border-radius: var(--r-xs); line-height: 1; }
+/* The glyph stays small; the *target* does not. 18x18 was below every
+   platform's floor for something you have to aim at. */
+.series-del {
+  background: none; border: 0; color: var(--ink-faint); cursor: pointer;
+  border-radius: var(--r-xs); line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; min-height: 26px; padding: 0; flex: 0 0 auto;
+}
 .series-del:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 
 /* data editor — the sidebar shows the data, the dialog edits it */
@@ -1227,7 +1339,7 @@ input[type="range"]::-moz-range-thumb {
   padding: 1.1rem 1.25rem .9rem;
   border-bottom: 1px solid var(--rule);
 }
-.dlg-title { font-family: var(--serif); font-size: 1.45rem; font-weight: 400; letter-spacing: -.01em; }
+.dlg-title { font-family: var(--serif); font-size: 1.22rem; font-weight: 600; letter-spacing: -.025em; }
 .dlg-sub { font-size: 13px; color: var(--ink-soft); margin-top: .2rem; max-width: 74ch; }
 .dlg-close {
   margin-left: auto; flex: 0 0 auto;
@@ -1588,7 +1700,7 @@ input[type="range"]::-moz-range-thumb {
   gap: .45rem;
   padding: .22rem .3rem .22rem .55rem;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   font-size: 12px;
   max-width: 100%;
@@ -1705,7 +1817,7 @@ input[type="range"]::-moz-range-thumb {
   gap: .3rem;
   padding: .16rem .25rem .16rem .45rem;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   font-size: 11.5px;
   max-width: 100%;
@@ -1809,7 +1921,8 @@ input[type="range"]::-moz-range-thumb {
   display: grid;
   place-items: center;
   font-family: var(--serif);
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1;
   background: var(--accent-wash);
   color: var(--accent);
@@ -1817,7 +1930,7 @@ input[type="range"]::-moz-range-thumb {
 .ask-warn .ask-icon { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
 .ask-stop .ask-icon { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
 .ask-main { flex: 1; min-width: 0; }
-.ask-title { font-family: var(--serif); font-size: 1.1rem; font-weight: 400; line-height: 1.25; }
+.ask-title { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
 .ask-text { font-size: 13px; color: var(--ink-soft); line-height: 1.5; margin-top: .35rem; }
 .ask-list {
   margin: .5rem 0 0;
@@ -1880,11 +1993,16 @@ input[type="range"]::-moz-range-thumb {
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Icon-only, so the target has to be bigger than the glyph. At 20x22 this was
+   the one control on the page you had to aim at. */
 .source-url button {
   flex: 0 0 auto;
   background: none; border: 0; cursor: pointer;
   color: var(--ink-faint); font-size: 12px;
-  padding: .1rem .25rem; border-radius: var(--r-xs);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; min-height: 26px; padding: 0;
+  margin: -.14rem -.24rem -.14rem 0;
+  border-radius: var(--r-xs);
   transition: color .15s var(--ease), background .15s var(--ease);
 }
 .source-url button:hover { color: var(--accent); background: var(--accent-wash); }
@@ -2049,8 +2167,9 @@ input[type="range"]::-moz-range-thumb {
 }
 .stage-title {
   font-family: var(--serif);
-  font-size: 1.05rem;
-  letter-spacing: -.01em;
+  font-size: .95rem;
+  font-weight: 600;
+  letter-spacing: -.022em;
   color: var(--ink);
 }
 .stage-body {
@@ -2510,11 +2629,17 @@ body[data-focus="1"] .stage-data { display: none; }
 .filter,
 .seg-btn,
 .prompt-mode,
-.dlg-tab,
-.card-prompt {
+.dlg-tab {
   position: relative;
   overflow: hidden;
 }
+/* The ripple needs a containing block and a clip. `.card-prompt` already has
+   the first — it is `position: absolute` over the tile — so it takes only the
+   clip. Listing it above instead reset it to `position: relative`, and because
+   that rule is later and equally specific it won, dropping the button out of
+   its corner and laying it out as a flex sibling *beside* every tile in the
+   gallery. Anything positioned belongs here, not up there. */
+.card-prompt { overflow: hidden; }
 .rippling::before {
   content: '';
   position: absolute;
@@ -2757,9 +2882,9 @@ body[data-focus="1"] .stage-data { display: none; }
 
 /* Laptop: the controls column stops earning its width. */
 @media (max-width: 1180px) {
-  :root { --controls-w: 264px; }
+  :root { --controls-w: 264px; --gutter: 1.6rem; }
   .page-head, .gallery-hero, .toolbar, .grid, .foot-inner, .foot-bar {
-    padding-left: 1.6rem; padding-right: 1.6rem;
+    padding-left: var(--gutter); padding-right: var(--gutter);
   }
   .stage, .codepanel, .sources { margin-left: 1.2rem; margin-right: 1.2rem; }
 }
@@ -2810,8 +2935,9 @@ body[data-focus="1"] .stage-data { display: none; }
   .rail-scrim.open { opacity: 1; pointer-events: auto; }
   .rail-toggle { display: inline-flex; order: -1; }
 
+  :root { --gutter: 1.15rem; }
   .page-head, .gallery-hero, .toolbar, .grid, .foot-inner, .foot-bar {
-    padding-left: 1.15rem; padding-right: 1.15rem;
+    padding-left: var(--gutter); padding-right: var(--gutter);
   }
   .stage, .codepanel, .sources { margin-left: 1.15rem; margin-right: 1.15rem; }
 
@@ -3158,7 +3284,7 @@ body[data-focus="1"] .stage-data { display: none; }
   line-height: 1.2;
   padding: .28rem .55rem;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink-soft);
   cursor: pointer;
