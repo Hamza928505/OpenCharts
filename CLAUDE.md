@@ -588,6 +588,52 @@ The gallery's matcher cannot know, so it *asks*: a **First row is a header**
 tick box, prefilled from the guess, with the parsed column names shown beside
 it so a wrong guess is visible rather than silent.
 
+### The design system
+
+Swiss minimalism: slate for structure, one green for action, a grotesque for
+words and a mono for anything a machine wrote. Everything is a semantic token
+in the three blocks at the top of `css/studio.css` — **no rule below them names
+a raw colour**, which is what made re-theming both pages an edit to three
+blocks rather than to three thousand lines.
+
+**One "brand green" cannot do the job, and that is the only surprising part.**
+`#22c55e` is 2.3:1 on white, so it cannot carry a link; white on it is also
+2.3:1, so it cannot carry a label either. So there are three tokens rather than
+one, and each has exactly one job:
+
+| token | value (light / dark) | used for |
+|---|---|---|
+| `--accent` | `#15803d` / `#22c55e` | text — links, emphasis, active state |
+| `--accent-solid` | `#22c55e` both | fills, and only fills |
+| `--accent-ink` | `#052e16` both | what sits *on* a fill (8.3:1) |
+
+The same split shows up in `palette.js`: the chart green is `#2e8d44`, darker
+than `--accent-solid`, because a bar drawn in `#22c55e` disappears in a white
+export. The interface green and the chart green are the same *family*, not the
+same value, and that is deliberate.
+
+Three smaller rules the redesign settled:
+
+- **`--gutter` is a token.** The hero's ruled stat strip bleeds out to the page
+  edge by exactly the page's horizontal inset, and the breakpoints change that
+  inset — so a hardcoded copy overhangs the moment one of them fires. The
+  media queries set the token and the padding rules read it.
+- **The mono face is a semantic choice, not a decoration.** Eyebrows, counts,
+  stat numbers, chips, column names and code are all set in JetBrains Mono
+  because they are all things a machine produced. Prose is IBM Plex Sans. If
+  you are unsure which a new label is, ask who wrote it.
+- **Anything positioned must not be listed in the ripple rule.** That rule sets
+  `position: relative` on a list of controls so the ripple has a containing
+  block. `.card-prompt` was in it *and* declared `position: absolute` earlier —
+  same specificity, later rule wins — so the Prompt button dropped out of its
+  corner and laid out as a flex sibling beside every tile in the gallery. It
+  takes `overflow: hidden` alone now.
+
+`tools/build-favicon.mjs` states the brand mark once and writes the SVG and both
+PNGs from it, so the tab icon cannot drift from the header's logo. It is a flat
+green tile with a near-black glyph — it was a two-stop gradient, which was the
+only gradient in a system that now has none.
+
 ### The studio layout
 
 The studio had two fixed columns before the chart — a 236px rail and a 300px
@@ -820,15 +866,35 @@ to avoid, so the answer was to fix the palette rather than quieten the check.
 
 Re-ordering could not do it. The collision graph's largest independent set was
 four, so no arrangement of those eight hues gets past a fourth series — the
-values had to move, and they moved as little as would work. Every colour keeps
-its hue family and its name, none is further than ΔE 9 from the one it
-replaced, and `--a-purple` did not move at all because it is `--accent`. What
-changed is mostly **lightness**: deuteranopia and protanopia collapse the
-red-green axis, so colours separated only along it merge, and spacing them in
-lightness is what pulls them apart. Every pair now clears ΔE 12 under all three
-simulations, **0 of 94 charts warn on their own data**, and the suite asserts
-the whole palette rather than its first three — which is what the old check
-measured, and why this went unseen.
+values had to move. What changed is mostly **lightness**: deuteranopia and
+protanopia collapse the red-green axis, so colours separated only along it
+merge, and spacing them in lightness is what pulls them apart. The suite
+asserts the whole palette rather than its first three — which is what the old
+check measured, and why this went unseen.
+
+**The Swiss redesign replaced the palette outright, and the constraint came
+with it.** The set is now green / blue / amber / violet / cyan / rose / slate /
+olive, anchored on the interface's green. It was *searched* rather than picked,
+against three rules at once — see the comment on `PALETTE` in `palette.js`:
+
+- no confusable pair (weakest is ΔE 13.2 against a threshold of 11, up from the
+  old set's 12.0),
+- every colour clears WCAG's 3:1 for a graphical object on **both** grounds,
+  because `PALETTE` is one literal set serialised into exports that land in
+  other people's pages and cannot be theme-reactive the way the tokens are,
+- and one perceived intensity across the set, so no series shouts.
+
+Those three pull against each other: the contrast rule forces every colour into
+a middle band of lightness, and lightness is what the colour-vision rule relies
+on. **0 of 94 charts warn on their own data**, as before.
+
+The chart definitions were moved onto the new names **by position**, not by
+hue: a chart that drew `purple, teal, coral` now draws `green, blue, amber`,
+which is `PALETTE[0..2]` exactly as it was. Mapping by hue instead would have
+sent both `coral` and `pink` to the same rose — two series in one chart with
+one colour, and `confusablePairs` says nothing about that by design, because
+colours identical to *everyone* are a palette choice rather than a
+colour-vision fault.
 
 The matrices are Machado et al. (2009) at severity 1.0 and operate on *linear*
 RGB, which is why `toLinear` runs first — applying them to gamma-encoded bytes
@@ -1991,7 +2057,7 @@ No npm install. The studio pages load:
 - Everything else through `loader.js`, on demand: the sankey plugin from
   `lib/`, and chartjs-chart-matrix, chartjs-chart-treemap,
   chartjs-chart-boxplot, topojson-client, Arquero and Apache ECharts from a CDN
-- Google Fonts: DM Sans, DM Mono, Instrument Serif
+- Google Fonts: IBM Plex Sans (words), JetBrains Mono (anything a machine wrote)
 
 Bootstrap and SweetAlert2 have been **removed from the project entirely** — the
 design system in `css/studio.css` and `js/studio/toast.js` replaced them.

@@ -64,7 +64,7 @@ export const hierarchyExtraCharts = [
     spec: {
       tree: JSON.parse(JSON.stringify(RETAIL_TREE)),
       groups: ['Women', 'Men', 'Living'],
-      colors: [C.purple, C.teal, C.coral],
+      colors: [C.green, C.blue, C.amber],
       opts: { orientation: 'horizontal', gap: 2, radius: 3, showLabels: true, minLabel: 26, fontSize: 11 },
     },
     controls: [
@@ -141,7 +141,7 @@ export const hierarchyExtraCharts = [
     spec: {
       tree: JSON.parse(JSON.stringify(RETAIL_TREE)),
       groups: ['Women', 'Men', 'Living'],
-      colors: [C.purple, C.teal, C.coral],
+      colors: [C.green, C.blue, C.amber],
       opts: { layout: 'tidy', orientation: 'horizontal', nodeRadius: 4, linkWidth: 1.4, showLabels: true, fontSize: 11, curved: true },
     },
     controls: [
@@ -241,7 +241,7 @@ export const hierarchyExtraCharts = [
         { label: 'Depot SW', x: 34, y: 88, group: 2 },
       ],
       groups: ['Region A', 'Region B', 'Region C', 'Region D'],
-      colors: [C.purple, C.teal, C.coral, C.blue],
+      colors: [C.green, C.blue, C.amber, C.violet],
       opts: { alpha: 0.35, showSeeds: true, showLabels: true, seedRadius: 4, strokeWidth: 1.5, showDelaunay: false },
     },
     controls: [
@@ -316,10 +316,10 @@ export const hierarchyExtraCharts = [
     tags: ['proportional area', 'nested', 'magnitude', 'ratio', 'squares', 'circles'],
     spec: {
       items: [
-        { label: 'Global', value: 8100, color: C.purple },
-        { label: 'Europe', value: 4400, color: C.teal },
-        { label: 'UK',     value: 1250, color: C.coral },
-        { label: 'London', value: 420,  color: C.amber },
+        { label: 'Global', value: 8100, color: C.green },
+        { label: 'Europe', value: 4400, color: C.blue },
+        { label: 'UK',     value: 1250, color: C.amber },
+        { label: 'London', value: 420,  color: C.cyan },
       ],
       opts: { textColor: '#808080', shape: 'circle', mode: 'nested', alpha: 0.85, showValues: true, labelSize: 11, suffix: 'K' },
     },

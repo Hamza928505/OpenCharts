@@ -41,8 +41,8 @@ export const deviationCharts = [
       labels: [...MONTHS],
       values: [-2.1, -1.4, 0.6, 1.8, 2.4, 1.1, -0.8, -2.6, -1.2, 0.9, 2.2, 3.4],
       baseline: 0,
-      upColor: C.teal,
-      downColor: C.coral,
+      upColor: C.blue,
+      downColor: C.amber,
       opts: { textColor: '#808080', lineWidth: 2.2, fillAlpha: 0.28, showBaseline: true, showPoints: true, pointRadius: 3, suffix: 'M', prefix: '$' },
     },
     controls: [
@@ -289,8 +289,8 @@ export const deviationCharts = [
       ],
       leftLabel: 'Desktop',
       rightLabel: 'Mobile',
-      leftColor: C.blue,
-      rightColor: C.coral,
+      leftColor: C.violet,
+      rightColor: C.amber,
       opts: { textColor: '#808080', gutter: 96, barHeight: 0.62, radius: 3, showValues: true, max: 100 },
     },
     controls: [

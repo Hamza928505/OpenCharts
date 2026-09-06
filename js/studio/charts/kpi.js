@@ -35,10 +35,10 @@ export const kpiCharts = [
     tags: ['bullet', 'kpi', 'target', 'dashboard', 'gauge replacement', 'few'],
     spec: {
       rows: [
-        { label: 'Revenue',      value: 268, target: 250, max: 320, color: C.purple, unit: 'K' },
-        { label: 'New signups',  value: 1180, target: 1400, max: 1800, color: C.teal, unit: '' },
-        { label: 'Churn',        value: 3.1, target: 4.0, max: 8, color: C.coral, unit: '%' },
-        { label: 'NPS',          value: 52, target: 45, max: 80, color: C.blue, unit: '' },
+        { label: 'Revenue',      value: 268, target: 250, max: 320, color: C.green, unit: 'K' },
+        { label: 'New signups',  value: 1180, target: 1400, max: 1800, color: C.blue, unit: '' },
+        { label: 'Churn',        value: 3.1, target: 4.0, max: 8, color: C.amber, unit: '%' },
+        { label: 'NPS',          value: 52, target: 45, max: 80, color: C.violet, unit: '' },
         { label: 'Uptime',       value: 99.94, target: 99.9, max: 100, color: C.olive, unit: '%' },
       ],
       opts: { textColor: '#808080', rowHeight: 52, barHeight: 14, labelWidth: 116, bands: 3, showTarget: true, showValue: true, bandTint: 0.1 },
@@ -140,11 +140,11 @@ export const kpiCharts = [
     tags: ['radial bar', 'circular', 'progress', 'rings', 'arcs', 'kpi'],
     spec: {
       items: [
-        { label: 'Mobile',  value: 82, color: C.purple },
-        { label: 'Desktop', value: 68, color: C.teal },
-        { label: 'Tablet',  value: 45, color: C.coral },
-        { label: 'Watch',   value: 27, color: C.blue },
-        { label: 'TV',      value: 14, color: C.amber },
+        { label: 'Mobile',  value: 82, color: C.green },
+        { label: 'Desktop', value: 68, color: C.blue },
+        { label: 'Tablet',  value: 45, color: C.amber },
+        { label: 'Watch',   value: 27, color: C.violet },
+        { label: 'TV',      value: 14, color: C.cyan },
       ],
       opts: { textColor: '#808080', max: 100, innerRadius: 42, thickness: 20, gap: 7, startAngle: -90, sweep: 300, rounded: true, trackAlpha: 0.12, showLabels: true, showValues: true },
     },
@@ -237,10 +237,10 @@ export const kpiCharts = [
     tags: ['pictogram', 'isotype', 'icon array', 'unit chart', 'people', 'counting'],
     spec: {
       rows: [
-        { label: 'Cycle',       value: 34, color: C.teal,   icon: 'person' },
-        { label: 'Public transit', value: 28, color: C.purple, icon: 'person' },
-        { label: 'Drive',       value: 24, color: C.coral,  icon: 'person' },
-        { label: 'Walk',        value: 14, color: C.amber,  icon: 'person' },
+        { label: 'Cycle',       value: 34, color: C.blue,   icon: 'person' },
+        { label: 'Public transit', value: 28, color: C.green, icon: 'person' },
+        { label: 'Drive',       value: 24, color: C.amber,  icon: 'person' },
+        { label: 'Walk',        value: 14, color: C.cyan,  icon: 'person' },
       ],
       opts: { textColor: '#808080', unit: 2, iconSize: 20, gap: 5, perRow: 20, labelWidth: 130, showValues: true, shape: 'person' },
     },

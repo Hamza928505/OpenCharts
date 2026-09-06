@@ -55,7 +55,7 @@ export const radarCharts = [
     tags: ['radar', 'spider', 'profile', 'scorecard'],
     spec: {
       labels: ['Quality', 'Speed', 'Value', 'Support', 'UX', 'Reliability'],
-      series: [{ label: 'Score', color: C.purple, data: [82, 74, 68, 90, 78, 85] }],
+      series: [{ label: 'Score', color: C.green, data: [82, 74, 68, 90, 78, 85] }],
       opts: { fill: true, fillAlpha: 0.18, lineWidth: 2, pointRadius: 5, max: 100 },
     },
     controls: radarControls,
@@ -72,9 +72,9 @@ export const radarCharts = [
     spec: {
       labels: ['Quality', 'Speed', 'Price', 'Support', 'UX', 'Reliability'],
       series: [
-        { label: 'Our product',  color: C.purple, data: [82, 74, 68, 90, 78, 85] },
-        { label: 'Competitor A', color: C.coral,  data: [70, 80, 75, 65, 82, 72] },
-        { label: 'Competitor B', color: C.teal,   data: [65, 70, 85, 70, 68, 78] },
+        { label: 'Our product',  color: C.green, data: [82, 74, 68, 90, 78, 85] },
+        { label: 'Competitor A', color: C.amber,  data: [70, 80, 75, 65, 82, 72] },
+        { label: 'Competitor B', color: C.blue,   data: [65, 70, 85, 70, 68, 78] },
       ],
       opts: { fill: true, fillAlpha: 0.12, lineWidth: 2, pointRadius: 4, max: 100 },
     },
@@ -91,7 +91,7 @@ export const radarCharts = [
     tags: ['radar', 'filled', 'skills', 'team'],
     spec: {
       labels: ['Frontend', 'Backend', 'DevOps', 'Data', 'Security', 'Testing'],
-      series: [{ label: 'Team average', color: C.teal, data: [85, 78, 62, 70, 55, 80] }],
+      series: [{ label: 'Team average', color: C.blue, data: [85, 78, 62, 70, 55, 80] }],
       opts: { fill: true, fillAlpha: 0.38, lineWidth: 2.5, pointRadius: 5, max: 100 },
     },
     controls: radarControls,
@@ -137,7 +137,7 @@ export const scatterCharts = [
     spec: {
       points: [...SCATTER_POINTS],
       label: 'Product',
-      color: C.purple,
+      color: C.green,
       opts: { pointRadius: 5, alpha: 0.55, xMin: 0, xMax: 260, yMin: 2, yMax: 5.2, xTitle: 'Price ($)', yTitle: 'Rating', xPrefix: '$', ySuffix: '' },
     },
     controls: [
@@ -184,7 +184,7 @@ export const scatterCharts = [
     tags: ['scatter', 'clusters', 'segments', 'customers'],
     spec: {
       groups: SCATTER_CLUSTERS.map((g, i) => ({
-        ...g, color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        ...g, color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
       })),
       opts: { pointRadius: 6, alpha: 0.65, xMin: 0, xMax: 100, yMin: 0, yMax: 100, xTitle: 'Avg order value ($)', yTitle: 'Purchase frequency' },
     },
@@ -232,9 +232,9 @@ export const scatterCharts = [
     tags: ['bubble', 'scatter', 'three variables', 'margin'],
     spec: {
       groups: [
-        { label: 'Women',  color: C.purple, points: [{ x: 68, y: 42, r: 22 }, { x: 45, y: 55, r: 14 }, { x: 80, y: 35, r: 10 }] },
-        { label: 'Men',    color: C.teal,   points: [{ x: 52, y: 38, r: 18 }, { x: 30, y: 60, r: 12 }, { x: 70, y: 48, r: 8 }] },
-        { label: 'Living', color: C.coral,  points: [{ x: 38, y: 65, r: 9 },  { x: 60, y: 30, r: 15 }, { x: 20, y: 50, r: 7 }] },
+        { label: 'Women',  color: C.green, points: [{ x: 68, y: 42, r: 22 }, { x: 45, y: 55, r: 14 }, { x: 80, y: 35, r: 10 }] },
+        { label: 'Men',    color: C.blue,   points: [{ x: 52, y: 38, r: 18 }, { x: 30, y: 60, r: 12 }, { x: 70, y: 48, r: 8 }] },
+        { label: 'Living', color: C.amber,  points: [{ x: 38, y: 65, r: 9 },  { x: 60, y: 30, r: 15 }, { x: 20, y: 50, r: 7 }] },
       ],
       opts: { alpha: 0.62, scale: 1, xMin: 0, xMax: 100, yMin: 0, yMax: 100, xTitle: 'Revenue contribution (%)', yTitle: 'Gross margin (%)' },
     },

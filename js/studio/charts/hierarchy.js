@@ -35,7 +35,7 @@ export const hierarchyCharts = [
         { g: 'Living', label: 'Lighting',    value: 115 },
       ],
       groups: [...RETAIL_GROUPS],
-      colors: [C.purple, C.teal, C.coral],
+      colors: [C.green, C.blue, C.amber],
       opts: { alpha: 0.78, showLabels: true, borderWidth: 1, fontSize: 11 },
     },
     controls: [
@@ -129,7 +129,7 @@ export const hierarchyCharts = [
         ],
       },
       groups: [...RETAIL_GROUPS],
-      colors: [C.purple, C.teal, C.coral],
+      colors: [C.green, C.blue, C.amber],
       opts: { padAngle: 0.004, ringGap: 2, showLabels: true, minAngle: 0.15, fontSize: 10 },
     },
     controls: [
@@ -227,7 +227,7 @@ export const hierarchyCharts = [
         { name: 'Direct',     channel: 'Organic', v: 240 },
       ],
       groups: ['Email', 'Social', 'Paid', 'Organic'],
-      colors: [C.purple, C.teal, C.coral, C.blue],
+      colors: [C.green, C.blue, C.amber, C.violet],
       opts: { padding: 6, alpha: 0.6, showLabels: true, minRadius: 20, fontScale: 0.38 },
     },
     controls: [

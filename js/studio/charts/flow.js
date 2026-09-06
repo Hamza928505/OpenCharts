@@ -64,7 +64,7 @@ export const flowCharts = [
         { from: 'Checkout', to: 'Abandon',  flow: 900  },
       ],
       nodes: ['Organic', 'Paid', 'Social', 'Email', 'Visit', 'Checkout', 'Purchase', 'Bounce', 'Abandon'],
-      colors: [C.teal, C.coral, C.purple, C.blue, C.amber, C.amber, C.teal, C.gray, C.gray],
+      colors: [C.blue, C.amber, C.green, C.violet, C.cyan, C.cyan, C.blue, C.slate, C.slate],
       opts: { colorMode: 'gradient', nodeWidth: 12, borderWidth: 0 },
     },
     controls: [
@@ -119,7 +119,7 @@ export const flowCharts = [
     tags: ['chord', 'network', 'relationship', 'matrix', 'd3'],
     spec: {
       names: ['Women', 'Men', 'Living', 'Accessories', 'Footwear'],
-      colors: [C.purple, C.teal, C.coral, C.blue, C.amber],
+      colors: [C.green, C.blue, C.amber, C.violet, C.cyan],
       matrix: [
         [0, 1200, 800, 1500, 600],
         [1200, 0, 500, 900, 1100],
@@ -193,13 +193,13 @@ export const flowCharts = [
     tags: ['funnel', 'conversion', 'stages', 'drop off', 'ecommerce'],
     spec: {
       stages: [
-        { label: 'Visited site',     value: 24800, color: C.purple },
-        { label: 'Viewed product',   value: 14200, color: C.blue   },
-        { label: 'Added to cart',    value: 5800,  color: C.teal   },
-        { label: 'Started checkout', value: 3200,  color: C.amber  },
-        { label: 'Purchased',        value: 1950,  color: C.coral  },
+        { label: 'Visited site',     value: 24800, color: C.green },
+        { label: 'Viewed product',   value: 14200, color: C.violet   },
+        { label: 'Added to cart',    value: 5800,  color: C.blue   },
+        { label: 'Started checkout', value: 3200,  color: C.cyan  },
+        { label: 'Purchased',        value: 1950,  color: C.amber  },
       ],
-      opts: { textColor: '#808080', alpha: 0.82, gap: 6, showStats: true, statsWidth: 170, dropColor: C.coral },
+      opts: { textColor: '#808080', alpha: 0.82, gap: 6, showStats: true, statsWidth: 170, dropColor: C.amber },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'stages', data: false, max: 8, min: 2 },
@@ -297,9 +297,9 @@ export const flowCharts = [
     tags: ['marimekko', 'mekko', 'mosaic', 'market share', 'two dimensions'],
     spec: {
       columns: [
-        { name: 'Women',  share: 0.42, color: C.purple, segments: [{ name: 'Premium', pct: 0.45 }, { name: 'Mid', pct: 0.35 }, { name: 'Value', pct: 0.20 }] },
-        { name: 'Men',    share: 0.33, color: C.teal,   segments: [{ name: 'Premium', pct: 0.38 }, { name: 'Mid', pct: 0.40 }, { name: 'Value', pct: 0.22 }] },
-        { name: 'Living', share: 0.25, color: C.coral,  segments: [{ name: 'Premium', pct: 0.55 }, { name: 'Mid', pct: 0.30 }, { name: 'Value', pct: 0.15 }] },
+        { name: 'Women',  share: 0.42, color: C.green, segments: [{ name: 'Premium', pct: 0.45 }, { name: 'Mid', pct: 0.35 }, { name: 'Value', pct: 0.20 }] },
+        { name: 'Men',    share: 0.33, color: C.blue,   segments: [{ name: 'Premium', pct: 0.38 }, { name: 'Mid', pct: 0.40 }, { name: 'Value', pct: 0.22 }] },
+        { name: 'Living', share: 0.25, color: C.amber,  segments: [{ name: 'Premium', pct: 0.55 }, { name: 'Mid', pct: 0.30 }, { name: 'Value', pct: 0.15 }] },
       ],
       opts: { textColor: '#808080', gap: 2, showLabels: true, minLabelHeight: 22, radius: 3 },
     },
@@ -390,10 +390,10 @@ export const flowCharts = [
     spec: {
       periods: ['2020', '2021', '2022', '2023', '2024'],
       series: [
-        { label: 'Women',  color: C.purple, data: [420, 480, 520, 580, 640] },
-        { label: 'Men',    color: C.teal,   data: [310, 340, 380, 410, 450] },
-        { label: 'Living', color: C.coral,  data: [180, 220, 260, 290, 320] },
-        { label: 'Sale',   color: C.blue,   data: [120, 145, 130, 160, 175] },
+        { label: 'Women',  color: C.green, data: [420, 480, 520, 580, 640] },
+        { label: 'Men',    color: C.blue,   data: [310, 340, 380, 410, 450] },
+        { label: 'Living', color: C.amber,  data: [180, 220, 260, 290, 320] },
+        { label: 'Sale',   color: C.violet,   data: [120, 145, 130, 160, 175] },
       ],
       opts: { alpha: 0.82, offset: 'wiggle', curve: 'catmull', strokeWidth: 0.5 },
     },

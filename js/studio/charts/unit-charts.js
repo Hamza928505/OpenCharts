@@ -112,7 +112,7 @@ export const unitCharts = [
       words: CLOUD_WORDS.map(([label, weight], i) => ({
         label,
         weight,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.pink][i % 6],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan, C.rose][i % 6],
       })),
       opts: {
         textColor: '#808080',
@@ -120,7 +120,7 @@ export const unitCharts = [
         maxSize: 52,
         padding: 3,
         colorBy: 'rank',
-        flat: C.purple,
+        flat: C.green,
       },
     },
     controls: [
@@ -192,7 +192,7 @@ export const unitCharts = [
       items: MATRIX_ITEMS.map(([label, value], i) => ({
         label,
         value,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.pink][i % 6],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan, C.rose][i % 6],
       })),
       opts: {
         textColor: '#808080',
@@ -294,7 +294,7 @@ export const unitCharts = [
       items: TALLY_ITEMS.map(([label, value], i) => ({
         label,
         value,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.pink][i % 6],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan, C.rose][i % 6],
       })),
       opts: {
         textColor: '#808080',
@@ -396,7 +396,7 @@ export const unitCharts = [
     spec: {
       groups: [{
         label: 'Customer age',
-        color: C.purple,
+        color: C.green,
         values: HISTOGRAM_VALUES.slice(),
       }],
       opts: {

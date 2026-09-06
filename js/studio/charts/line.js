@@ -88,7 +88,7 @@ export const lineCharts = [
     tags: ['line', 'trend', 'time series', 'revenue'],
     spec: {
       labels: [...MONTHS],
-      series: [{ label: 'Revenue', color: C.purple, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] }],
+      series: [{ label: 'Revenue', color: C.green, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] }],
       opts: { curve: 'smooth', tension: 0.4, fill: false, fillAlpha: 0.15, points: true, pointRadius: 4, lineWidth: 2.5, prefix: '$', suffix: 'K', separator: false, maxLabels: 12 },
     },
     controls: lineControls(),
@@ -105,9 +105,9 @@ export const lineCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Direct',   color: C.purple, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] },
-        { label: 'Referral', color: C.teal,   data: [120, 135, 150, 145, 175, 190, 205, 195, 220, 240, 235, 265] },
-        { label: 'Paid',     color: C.coral,  data: [90, 105, 98, 130, 142, 128, 160, 175, 155, 180, 195, 210] },
+        { label: 'Direct',   color: C.green, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] },
+        { label: 'Referral', color: C.blue,   data: [120, 135, 150, 145, 175, 190, 205, 195, 220, 240, 235, 265] },
+        { label: 'Paid',     color: C.amber,  data: [90, 105, 98, 130, 142, 128, 160, 175, 155, 180, 195, 210] },
       ],
       opts: { curve: 'smooth', tension: 0.4, fill: false, fillAlpha: 0.12, points: true, pointRadius: 3, lineWidth: 2.5, prefix: '$', suffix: 'K', separator: false, maxLabels: 12 },
     },
@@ -124,7 +124,7 @@ export const lineCharts = [
     tags: ['line', 'stepped', 'pricing', 'tiers'],
     spec: {
       labels: [...MONTHS],
-      series: [{ label: 'List price', color: C.blue, data: [29, 29, 29, 39, 39, 39, 49, 49, 59, 59, 79, 79] }],
+      series: [{ label: 'List price', color: C.violet, data: [29, 29, 29, 39, 39, 39, 49, 49, 59, 59, 79, 79] }],
       opts: { curve: 'stepped', tension: 0, fill: true, fillAlpha: 0.12, points: true, pointRadius: 4, lineWidth: 2.5, prefix: '$', suffix: '', separator: false, maxLabels: 12 },
     },
     controls: lineControls(),
@@ -141,9 +141,9 @@ export const lineCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Starter', color: C.blue,   data: [29, 29, 29, 39, 39, 39, 49, 49, 59, 59, 79, 79] },
-        { label: 'Pro',     color: C.purple, data: [79, 79, 89, 89, 89, 99, 99, 119, 119, 129, 129, 149] },
-        { label: 'Team',    color: C.teal,   data: [149, 149, 149, 179, 179, 199, 199, 199, 229, 229, 259, 259] },
+        { label: 'Starter', color: C.violet,   data: [29, 29, 29, 39, 39, 39, 49, 49, 59, 59, 79, 79] },
+        { label: 'Pro',     color: C.green, data: [79, 79, 89, 89, 89, 99, 99, 119, 119, 129, 129, 149] },
+        { label: 'Team',    color: C.blue,   data: [149, 149, 149, 179, 179, 199, 199, 199, 229, 229, 259, 259] },
       ],
       opts: { curve: 'stepped', tension: 0, fill: false, fillAlpha: 0.1, points: true, pointRadius: 3, lineWidth: 2.5, prefix: '$', suffix: '', separator: false, maxLabels: 12 },
     },
@@ -161,7 +161,7 @@ export const lineCharts = [
     spec: {
       labels: Array.from({ length: 30 }, (_, i) => 'D' + (i + 1)),
       series: [{
-        label: 'Daily active users', color: C.teal,
+        label: 'Daily active users', color: C.blue,
         data: [820, 860, 910, 890, 950, 1020, 1080, 1060, 1120, 1090, 1150, 1200, 1180, 1240, 1300,
                1280, 1350, 1410, 1390, 1460, 1520, 1500, 1560, 1620, 1600, 1670, 1730, 1710, 1780, 1840],
       }],
@@ -181,10 +181,10 @@ export const lineCharts = [
     spec: {
       labels: [...MONTHS6],
       series: [
-        { label: 'Organic', color: C.purple, data: [4200, 4800, 4500, 5200, 5600, 6100] },
-        { label: 'Paid',    color: C.teal,   data: [2100, 2400, 2200, 2600, 2900, 3300] },
-        { label: 'Social',  color: C.coral,  data: [1200, 1400, 1300, 1600, 1700, 1900] },
-        { label: 'Email',   color: C.blue,   data: [800, 900, 850, 1000, 1100, 1200] },
+        { label: 'Organic', color: C.green, data: [4200, 4800, 4500, 5200, 5600, 6100] },
+        { label: 'Paid',    color: C.blue,   data: [2100, 2400, 2200, 2600, 2900, 3300] },
+        { label: 'Social',  color: C.amber,  data: [1200, 1400, 1300, 1600, 1700, 1900] },
+        { label: 'Email',   color: C.violet,   data: [800, 900, 850, 1000, 1100, 1200] },
       ],
       opts: { curve: 'smooth', tension: 0.35, fill: true, fillAlpha: 0.5, points: true, pointRadius: 3, lineWidth: 1.5, prefix: '', suffix: '', separator: true, maxLabels: 12 },
     },
@@ -203,7 +203,7 @@ export const lineCharts = [
       labels: Array.from({ length: 14 }, (_, i) => 'Day ' + (i + 1)),
       mean: [18, 19, 21, 22, 20, 19, 23, 25, 24, 22, 21, 23, 26, 25],
       spread: 3,
-      color: C.purple,
+      color: C.green,
       meanLabel: 'Mean',
       opts: { bandAlpha: 0.18, tension: 0.4, pointRadius: 4, lineWidth: 2.5, suffix: '°C' },
     },

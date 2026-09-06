@@ -29,8 +29,8 @@ export const engineCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Revenue', color: C.purple, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] },
-        { label: 'Costs',   color: C.teal,   data: [140, 152, 149, 168, 180, 195, 188, 205, 190, 210, 220, 246] },
+        { label: 'Revenue', color: C.green, data: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410] },
+        { label: 'Costs',   color: C.blue,   data: [140, 152, 149, 168, 180, 195, 188, 205, 190, 210, 220, 246] },
       ],
       opts: { smooth: true, tension: 0.4, stepped: false, showArea: false, areaAlpha: 0.15, pointRadius: 4, lineWidth: 2.5, animate: true, yTicks: 5, prefix: '$', suffix: 'K' },
     },
@@ -85,8 +85,8 @@ export const engineCharts = [
     spec: {
       labels: [...MONTHS],
       series: [
-        { label: 'Sessions', color: C.teal,   data: [820, 910, 950, 1080, 1120, 1200, 1240, 1300, 1350, 1410, 1460, 1560] },
-        { label: 'Signups',  color: C.purple, data: [310, 340, 360, 410, 430, 470, 490, 520, 540, 580, 610, 660] },
+        { label: 'Sessions', color: C.blue,   data: [820, 910, 950, 1080, 1120, 1200, 1240, 1300, 1350, 1410, 1460, 1560] },
+        { label: 'Signups',  color: C.green, data: [310, 340, 360, 410, 430, 470, 490, 520, 540, 580, 610, 660] },
       ],
       opts: { smooth: true, tension: 0.4, stepped: false, showArea: true, areaAlpha: 0.22, pointRadius: 0, lineWidth: 2, animate: true, yTicks: 5, prefix: '', suffix: '' },
     },
@@ -130,8 +130,8 @@ export const engineCharts = [
     spec: {
       labels: [...QUARTERS],
       series: [
-        { label: '2024', color: C.purple, data: [520, 680, 740, 910] },
-        { label: '2023', color: C.blue,   data: [440, 575, 625, 770] },
+        { label: '2024', color: C.green, data: [520, 680, 740, 910] },
+        { label: '2023', color: C.violet,   data: [440, 575, 625, 770] },
       ],
       opts: { mode: 'grouped', radius: 5, barPadding: 0.22, groupPadding: 0.12, showValues: false, animate: true, yTicks: 5, prefix: '$', suffix: 'K' },
     },
@@ -178,11 +178,11 @@ export const engineCharts = [
     spec: {
       labels: ['Organic', 'Paid', 'Social', 'Direct', 'Referral'],
       series: [
-        { label: 'Organic',  color: C.purple, data: [40] },
-        { label: 'Paid',     color: C.teal,   data: [27] },
-        { label: 'Social',   color: C.coral,  data: [15] },
-        { label: 'Direct',   color: C.blue,   data: [11] },
-        { label: 'Referral', color: C.amber,  data: [7]  },
+        { label: 'Organic',  color: C.green, data: [40] },
+        { label: 'Paid',     color: C.blue,   data: [27] },
+        { label: 'Social',   color: C.amber,  data: [15] },
+        { label: 'Direct',   color: C.violet,   data: [11] },
+        { label: 'Referral', color: C.cyan,  data: [7]  },
       ],
       opts: { mode: 'doughnut', cutout: 0.58, showLabels: true, explodeHover: true, explodeAmount: 12, centreText: '100%', centreSubtext: 'of traffic', animate: true },
     },
@@ -229,9 +229,9 @@ export const engineCharts = [
     tags: ['custom engine', 'scatter', 'regression', 'no dependency'],
     spec: {
       series: [
-        { label: 'High-value', color: C.purple, points: [[75, 82], [80, 78], [68, 88], [72, 74], [85, 90], [78, 69], [90, 84], [65, 79]] },
-        { label: 'Regular',    color: C.teal,   points: [[45, 48], [50, 42], [38, 55], [42, 39], [55, 52], [48, 61], [35, 44], [52, 46]] },
-        { label: 'Occasional', color: C.coral,  points: [[20, 25], [25, 18], [15, 30], [22, 22], [28, 27], [18, 14], [12, 21], [30, 19]] },
+        { label: 'High-value', color: C.green, points: [[75, 82], [80, 78], [68, 88], [72, 74], [85, 90], [78, 69], [90, 84], [65, 79]] },
+        { label: 'Regular',    color: C.blue,   points: [[45, 48], [50, 42], [38, 55], [42, 39], [55, 52], [48, 61], [35, 44], [52, 46]] },
+        { label: 'Occasional', color: C.amber,  points: [[20, 25], [25, 18], [15, 30], [22, 22], [28, 27], [18, 14], [12, 21], [30, 19]] },
       ],
       opts: { mode: 'scatter', pointRadius: 6, showRegression: false, showQuadrants: false, animate: true, xTitle: 'Order value', yTitle: 'Frequency' },
     },

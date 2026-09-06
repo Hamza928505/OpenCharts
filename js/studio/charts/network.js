@@ -64,7 +64,7 @@ export const networkCharts = [
       nodes: NODES.map((n) => ({ ...n })),
       links: LINKS.map(([source, target]) => ({ source, target })),
       groups: ['Edge', 'Clients', 'Storage', 'Services'],
-      colors: [C.purple, C.blue, C.teal, C.amber],
+      colors: [C.green, C.violet, C.blue, C.cyan],
       opts: { charge: -240, linkDistance: 62, radius: 9, ticks: 320, showLabels: true, linkOpacity: 0.28, sizeByDegree: true },
     },
     controls: [
@@ -158,7 +158,7 @@ export const networkCharts = [
       nodes: NODES.map((n) => ({ ...n })),
       links: LINKS.map(([source, target]) => ({ source, target })),
       groups: ['Edge', 'Clients', 'Storage', 'Services'],
-      colors: [C.purple, C.blue, C.teal, C.amber],
+      colors: [C.green, C.violet, C.blue, C.cyan],
       opts: { radius: 6, arcOpacity: 0.35, arcWidth: 1.5, sizeByDegree: true, sort: 'group', labelAngle: 40 },
     },
     controls: [
@@ -253,7 +253,7 @@ export const networkCharts = [
       nodes: NODES.map((n) => ({ ...n })),
       links: LINKS.map(([source, target]) => ({ source, target })),
       groups: ['Edge', 'Clients', 'Storage', 'Services'],
-      colors: [C.purple, C.blue, C.teal, C.amber],
+      colors: [C.green, C.violet, C.blue, C.cyan],
       opts: { gap: 2, radius: 2, sort: 'group', showGrid: true, labelSize: 10, symmetric: true },
     },
     controls: [
@@ -370,7 +370,7 @@ export const networkCharts = [
         { Channel: 'Email',   Device: 'Desktop', Outcome: 'Bounce',   value: 70 },
       ],
       colorBy: 'Channel',
-      colors: [C.teal, C.coral, C.purple, C.blue, C.amber, C.pink],
+      colors: [C.blue, C.amber, C.green, C.violet, C.cyan, C.rose],
       opts: { textColor: '#808080', barWidth: 14, gap: 8, ribbonAlpha: 0.42, showLabels: true, curve: 0.5 },
     },
     controls: [
@@ -505,9 +505,9 @@ export const networkCharts = [
     tags: ['venn', 'euler', 'sets', 'overlap', 'intersection', 'membership'],
     spec: {
       sets: [
-        { label: 'Trial users', size: 620, color: C.purple },
-        { label: 'Active',      size: 480, color: C.teal },
-        { label: 'Paying',      size: 300, color: C.coral },
+        { label: 'Trial users', size: 620, color: C.green },
+        { label: 'Active',      size: 480, color: C.blue },
+        { label: 'Paying',      size: 300, color: C.amber },
       ],
       overlaps: { '01': 260, '02': 140, '12': 190, '012': 95 },
       opts: { mode: 'three', alpha: 0.42, radius: 96, spread: 0.62, showCounts: true, showLabels: true, strokeWidth: 2 },

@@ -83,7 +83,7 @@ export const radialExtraCharts = [
       labels: MONTHS.slice(),
       series: RADIAL_SERIES.map((s, i) => ({
         label: s.label,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber][i % 5],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan][i % 5],
         data: s.data.slice(),
       })),
       opts: {
@@ -223,7 +223,7 @@ export const radialExtraCharts = [
       labels: RADIAL_COLUMNS.map((r) => r[0]),
       values: RADIAL_COLUMNS.map((r) => r[1]),
       colors: RADIAL_COLUMNS.map((_, i) =>
-        [C.purple, C.teal, C.coral, C.blue, C.amber, C.pink][i % 6]),
+        [C.green, C.blue, C.amber, C.violet, C.cyan, C.rose][i % 6]),
       opts: {
         textColor: '#808080',
         innerRadius: 0.28,
@@ -283,7 +283,7 @@ export const radialExtraCharts = [
           ctx.arc(cx, cy, inner, a0, a1);
           ctx.arc(cx, cy, r1, a1, a0, true);
           ctx.closePath();
-          ctx.fillStyle = (spec.colors || [])[i % (spec.colors || [C.purple]).length] || C.purple;
+          ctx.fillStyle = (spec.colors || [])[i % (spec.colors || [C.green]).length] || C.green;
           ctx.fill();
 
           // A wedge, not a box: a bounding box here covers most of the circle
@@ -331,7 +331,7 @@ export const radialExtraCharts = [
       items: NESTED_ITEMS.map(([label, value], i) => ({
         label,
         value,
-        color: [C.purple, C.teal, C.coral, C.blue, C.amber, C.pink][i % 6],
+        color: [C.green, C.blue, C.amber, C.violet, C.cyan, C.rose][i % 6],
       })),
       opts: {
         textColor: '#808080',
@@ -437,7 +437,7 @@ export const radialExtraCharts = [
     spec: {
       tree: JSON.parse(JSON.stringify(CATALOGUE_TREE)),
       groups: ['Women', 'Men', 'Living'],
-      colors: [C.purple, C.teal, C.coral],
+      colors: [C.green, C.blue, C.amber],
       opts: {
         layout: 'cluster',
         nodeRadius: 3.5,

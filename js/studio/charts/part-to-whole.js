@@ -45,7 +45,7 @@ export const partToWholeCharts = [
     spec: {
       labels: ['Women', 'Men', 'Living', 'Accessories'],
       values: [48, 31, 13, 8],
-      colors: [C.purple, C.teal, C.coral, C.blue],
+      colors: [C.green, C.blue, C.amber, C.violet],
       opts: { borderWidth: 0, hoverOffset: 10, suffix: '%' },
     },
     controls: [
@@ -85,7 +85,7 @@ export const partToWholeCharts = [
     spec: {
       labels: ['Organic', 'Paid', 'Social', 'Direct', 'Referral'],
       values: [40, 27, 15, 11, 7],
-      colors: [C.purple, C.teal, C.coral, C.blue, C.amber],
+      colors: [C.green, C.blue, C.amber, C.violet, C.cyan],
       opts: { cutout: 68, borderWidth: 0, hoverOffset: 10 },
     },
     controls: [
@@ -126,7 +126,7 @@ export const partToWholeCharts = [
     spec: {
       score: 72,
       label: 'Health score',
-      color: C.purple,
+      color: C.green,
       opts: { cutout: 75, thicknessPad: 20 },
     },
     controls: [
@@ -171,7 +171,7 @@ export const partToWholeCharts = [
     spec: {
       labels: [...MONTHS],
       values: [850, 920, 880, 1050, 1140, 1260, 1310, 1280, 1120, 1090, 1190, 1420],
-      colors: [C.purple, C.purple, C.teal, C.teal, C.teal, C.coral, C.coral, C.coral, C.blue, C.blue, C.amber, C.amber],
+      colors: [C.green, C.green, C.blue, C.blue, C.blue, C.amber, C.amber, C.amber, C.violet, C.violet, C.cyan, C.cyan],
       opts: { alpha: 0.72 },
     },
     controls: [
@@ -209,7 +209,7 @@ export const partToWholeCharts = [
     spec: {
       labels: [...MONTHS],
       values: [185, 210, 198, 240, 275, 310, 295, 330, 285, 320, 355, 410],
-      colors: [C.purple, C.purple, C.teal, C.teal, C.teal, C.coral, C.coral, C.coral, C.blue, C.blue, C.amber, C.amber],
+      colors: [C.green, C.green, C.blue, C.blue, C.blue, C.amber, C.amber, C.amber, C.violet, C.violet, C.cyan, C.cyan],
       opts: { textColor: '#808080', alpha: 0.75, rings: true, sqrtScale: true, gap: 0.02 },
     },
     controls: [
@@ -292,11 +292,11 @@ export const partToWholeCharts = [
     tags: ['waffle', 'unit chart', 'share', 'percentage', 'browsers'],
     spec: {
       segments: [
-        { label: 'Chrome',  value: 65, color: C.blue   },
-        { label: 'Safari',  value: 19, color: C.teal   },
-        { label: 'Firefox', value: 8,  color: C.coral  },
-        { label: 'Edge',    value: 5,  color: C.purple },
-        { label: 'Other',   value: 3,  color: C.gray   },
+        { label: 'Chrome',  value: 65, color: C.violet   },
+        { label: 'Safari',  value: 19, color: C.blue   },
+        { label: 'Firefox', value: 8,  color: C.amber  },
+        { label: 'Edge',    value: 5,  color: C.green },
+        { label: 'Other',   value: 3,  color: C.slate   },
       ],
       opts: { columns: 10, gap: 3, radius: 2 },
     },
