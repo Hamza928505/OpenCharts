@@ -9,7 +9,8 @@
  */
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
-import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe } from './cdn.js';
+import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES } from './cdn.js';
+import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 import { drawAnnotations, plateOf, hasAnnotations, ANNOTATION_CSS } from './annotate.js';
@@ -83,6 +84,16 @@ function heightFor(def, opts) {
  * @returns {object} instance handle for destroyInstance()
  */
 export function renderChart(def, host, spec, opts = {}) {
+  // Libraries arrive when a chart that needs them is first drawn, so the one
+  // door every render passes through is where the wait goes.
+  //
+  // It stays *synchronous*. The gallery builds tiles inside a frame budget and
+  // the suite renders 115 charts in a loop; making this return a promise would
+  // rewrite both. So a chart whose library is still coming gets a placeholder
+  // now and the real thing when the script lands — which is also the honest
+  // thing to put on screen, since that is exactly what is happening.
+  if (!ready(def)) return renderPending(def, host, spec, opts);
+
   // A faceted spec is still one chart definition; it is drawn once per panel.
   // The split happens here rather than inside each renderer because not one of
   // the five has ever heard of a facet — see facet.js.
@@ -90,6 +101,55 @@ export function renderChart(def, host, spec, opts = {}) {
   if (panels) return renderFacetGrid(def, host, spec, panels, opts);
   return renderOne(def, host, spec, opts);
 }
+
+/**
+ * A chart waiting for its library.
+ *
+ * The instance it returns is a real one as far as every caller is concerned —
+ * `destroyInstance` and `redraw` both work — because the alternative is every
+ * call site learning about loading. `cancelled` is what stops a slow script
+ * landing in a host that has since been given to another chart: `renderChart`
+ * empties the host, so the token written on it is how a resolved load knows
+ * whether it is still wanted.
+ */
+function renderPending(def, host, spec, opts) {
+  host.innerHTML = '';
+  host.setAttribute('role', 'img');
+  host.setAttribute('aria-label', opts.label || chartLabel(def, spec));
+
+  const token = {};
+  host.__ocPending = token;
+
+  const note = document.createElement('div');
+  note.className = 'chart-loading';
+  note.textContent = `Loading ${librariesFor(def).map((k) => libraryName(k)).join(' + ')}…`;
+  host.appendChild(note);
+
+  const inst = { engine: 'loading', host, cancelled: false, redraw: () => {} };
+
+  // For callers that need the finished chart rather than the placeholder —
+  // a test asserting on pixels, an export, anything measuring. Present only
+  // while a load is outstanding, so `await inst.whenReady` is correct for
+  // every instance and costs nothing on the ones that were ready already.
+  inst.whenReady = ensureLibraries(def).then(() => {
+    // Still the same chart in the same host? `renderChart` clears the host and
+    // writes a new token, so a stale load finds one that is not its own.
+    if (inst.cancelled || host.__ocPending !== token) return;
+    host.__ocPending = null;
+    const live = renderChart(def, host, spec, opts);
+    // Hand the caller's instance the real one, so a redraw after the wait
+    // reaches the chart rather than the placeholder it replaced.
+    Object.assign(inst, live, { engine: live.engine });
+  }).catch((err) => {
+    if (inst.cancelled || host.__ocPending !== token) return;
+    host.__ocPending = null;
+    failure(host, err.message);
+  });
+
+  return inst;
+}
+
+const libraryName = (key) => (LIBRARIES[key] && LIBRARIES[key].name) || key;
 
 /**
  * The grid of small multiples.
@@ -309,6 +369,14 @@ function drawError(ctx, w, h, message) {
 /** Tear down whatever renderChart() produced. */
 export function destroyInstance(inst) {
   if (!inst) return;
+  // A chart still waiting for its library has no instance to tear down, but it
+  // does have a load in flight that must not paint into a host somebody else
+  // now owns.
+  if (inst.engine === 'loading') {
+    inst.cancelled = true;
+    if (inst.host) inst.host.__ocPending = null;
+    return;
+  }
   // A grid owns one instance per panel, and a Chart.js instance that is not
   // destroyed keeps its canvas and its resize listener alive — twelve of those
   // per rebuild is the leak this branch exists to prevent.

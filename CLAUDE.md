@@ -80,6 +80,55 @@ renderer code may be written:
   gallery previews; use it to drop labels that cannot fit. It is absent in
   exported code, so a plain falsy check gives full output there.
 
+### Libraries arrive when something needs them
+
+`loader.js` fetches a library the first time a chart wants it. Both pages used
+to carry a `<script>` tag per library, which was fine at four and stops being
+fine immediately: a reader opening a bar chart paid for the map projections,
+the flow controller and the analytics engine first. Two tags are left —
+Chart.js and D3, vendored in `lib/` and used by 60 of the 115 charts, where
+lazy loading buys no request and costs a placeholder on most tiles. Everything
+that costs a **network request** is now fetched on demand.
+
+Five rules:
+
+- **`cdn.js` is still the only place a URL lives.** The loader looks a key up
+  there, so the Sources panel, the export's script tags, the credits and the
+  fetch cannot disagree about what a chart depends on. `librariesFor(def)`
+  reads the same renderer blocks `dependenciesFor` reads. Each entry gained a
+  `global` — the name the script defines — so a library that arrived some
+  other way is never fetched twice.
+- **The vendored copy wins.** An entry with a `local` path loads from `lib/`,
+  so the offline promise survives for everything the repository ships.
+- **`renderChart` stays synchronous.** The gallery builds tiles inside a frame
+  budget and the suite renders 115 charts in a loop; returning a promise would
+  rewrite both. A chart whose library is still coming gets a placeholder naming
+  it — "Loading Apache ECharts…", because *loading* alone is indistinguishable
+  from broken — and the real chart when the script lands. `inst.whenReady` is
+  there for callers that must have the finished thing.
+- **A stale load must not paint into somebody else's host.** `renderChart`
+  empties the host, so a token is written on it and a resolved load that finds
+  a different one drops out. `destroyInstance` cancels a pending instance,
+  which is the leak a gallery scrolling past a hundred tiles would otherwise
+  make.
+- **A failed load is not memoised.** A connection that dropped for a moment
+  should get another go rather than bricking the page for the session.
+
+**Idle prefetch is not an optimisation, it is the other half of the fix.**
+Executing a script blocks the main thread whenever it happens, so lazy loading
+does not remove that cost — it moves it, and left alone it lands in the worst
+frame available: the scroll that first reveals a chart needing it. Measured,
+that took the gallery from **0ms blocked while scrolling to 77ms**, trading a
+cost nobody noticed at load for a stutter under the reader's finger.
+`prefetchLibraries()` runs the rest through `requestIdleCallback`, one library
+per callback so a long queue never holds a frame the reader wanted. Back to
+**0ms**, and the suite prints that number so it cannot quietly rot.
+
+The suite's cold-path check runs in **its own browser context stopped at
+`DOMContentLoaded`**, because against the warm main page the prefetch has
+already run and "a cold library is fetched on demand" passes for the wrong
+reason.
+
 ### Dependency disclosure
 
 `js/studio/cdn.js` holds every third-party library with its version, licence,
@@ -1771,6 +1820,7 @@ itself over whatever chart you opened next; the suite checks exactly that.
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
 | `chart-help.js` | The `read` and `watch` line per chart, with a category fallback |
 | `HelpPanel.js` | Those two lines, rendered beside the chart |
+| `loader.js` | Fetches a third-party library the first time a chart needs it |
 | `share.js` | The spec compressed into a link, and read back out of one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |
@@ -1805,7 +1855,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **671 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
+The suite is **678 checks**. Twenty-nine suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -1933,10 +1983,11 @@ This project does not use formal build tools, test runners, or linters. All deve
 ## Dependencies
 
 No npm install. The studio pages load:
-- Chart.js 4.4.1 + the sankey plugin from `lib/`
-- D3 v7 from `lib/`
-- chartjs-chart-matrix, chartjs-chart-treemap and chartjs-chart-boxplot from unpkg
-  (not vendored — these three are the only reason the studio needs a network)
+- Chart.js 4.4.1 and D3 v7 from `lib/`, eagerly — the only two script tags in
+  either page
+- Everything else through `loader.js`, on demand: the sankey plugin from
+  `lib/`, and chartjs-chart-matrix, chartjs-chart-treemap,
+  chartjs-chart-boxplot, topojson-client, Arquero and Apache ECharts from a CDN
 - Google Fonts: DM Sans, DM Mono, Instrument Serif
 
 Bootstrap and SweetAlert2 have been **removed from the project entirely** — the

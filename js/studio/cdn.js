@@ -22,6 +22,7 @@ export const LIBRARIES = {
     homepage: 'https://www.chartjs.org/',
     url: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
     local: 'lib/chart.umd.min.js',
+    global: 'Chart',
     role: 'Canvas charting library',
   },
 
@@ -35,6 +36,7 @@ export const LIBRARIES = {
     homepage: 'https://d3js.org/',
     url: 'https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js',
     local: 'lib/d3.min.js',
+    global: 'd3',
     role: 'SVG data-visualisation toolkit',
   },
 
@@ -90,6 +92,7 @@ export const LIBRARIES = {
     url: 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js',
     local: null,
     kind: 'script',
+    global: 'topojson',
     role: 'Converts TopoJSON boundaries to GeoJSON for D3',
   },
 
@@ -131,6 +134,7 @@ export const LIBRARIES = {
     homepage: 'https://uwdata.github.io/arquero/',
     url: 'https://cdn.jsdelivr.net/npm/arquero@5.4.1/dist/arquero.min.js',
     local: null,
+    global: 'aq',
     role: 'Tabular data wrangling and aggregation',
   },
 
@@ -144,6 +148,7 @@ export const LIBRARIES = {
     homepage: 'https://echarts.apache.org/',
     url: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js',
     local: null,
+    global: 'echarts',
     role: 'Advanced canvas charting library',
   },
 };

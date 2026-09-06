@@ -15,6 +15,7 @@ import { renderHelp } from './HelpPanel.js';
 import { buildPrompt } from './prompt.js';
 import { openDataDialog } from './DataDialog.js';
 import { openAiConfigDialog } from './ai-config.js';
+import { prefetchLibraries } from './loader.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
@@ -100,6 +101,11 @@ export class StudioApp {
     const shared = token ? await decodeSpec(token) : null;
     if (token && !shared) toast('That shared link could not be read — showing the default', 'bad');
     this.load(id, { push: false, shared });
+
+    // Switching chart is the second most common thing anyone does here, and
+    // the rail reaches all 115 — so the libraries the next one might want are
+    // fetched while the thread is idle rather than when it is clicked.
+    prefetchLibraries();
   }
 
   _cacheDom() {
