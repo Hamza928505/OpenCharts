@@ -12,9 +12,11 @@ import { renderChart, destroyInstance, generateCode } from './engines.js';
 import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
-import { parseTable, applyData } from './dataio.js';
+import { parseTable, applyData, toCSV } from './dataio.js';
 import { chooseDataFile } from './fileimport.js';
-import { rankCharts, expectedColumnsFor, handOff } from './DataMatch.js';
+import {
+  rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
+} from './DataMatch.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
 
@@ -203,9 +205,26 @@ export class GalleryApp {
     bar.querySelector('#match-clear').addEventListener('click', () => {
       text.value = '';
       headerAnswered = false;
+      // The table outlives this tab now, so clearing it here has to end it
+      // everywhere rather than leaving it to reappear on the next chart opened.
+      clearHandOff();
       run();
       text.focus();
     });
+
+    // Arriving from the studio's "See which charts read this". The table came
+    // through the same door a click on a tile uses; this only says to open the
+    // panel on it, and is taken once so a later visit is not hijacked by it.
+    if (takeMatchRequest()) {
+      const brought = takeHandOff();
+      if (brought && brought.rows.length) {
+        text.value = toCSV(brought.headers, brought.rows);
+        headerAnswered = true;
+        headerBox.checked = true;
+        open(true);
+        run();
+      }
+    }
   }
 
   /** What the parser saw, and what it means — shown before any chart list. */

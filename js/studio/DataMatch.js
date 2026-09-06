@@ -311,10 +311,38 @@ export function expectedColumnsFor(def) {
   return expectedFormat(def).columns;
 }
 
-/** Hand a table to the studio, which is a page load away. */
+/**
+ * How long a handed-over table keeps applying itself, in ms.
+ *
+ * It has to outlive a working session — somebody uploads a spreadsheet and
+ * walks the library for an hour — without outliving their interest in it.
+ * Coming back tomorrow to browse the charts and finding last night's numbers
+ * on all of them is the failure at the other end.
+ */
+const HANDOFF_TTL = 6 * 60 * 60 * 1000;
+
+/** Set beside the table when the reader asked to be *shown* the matcher. */
+const MATCH_REQUEST_KEY = 'opencharts.match-request';
+
+/**
+ * Hand a table to the studio, which is a page load away.
+ *
+ * **`localStorage`, not `sessionStorage`.** Session storage is scoped to one
+ * browsing context, so a tab with no opener — a pasted URL, a bookmark, a
+ * second window, "open link in new tab" — begins with none of it and the table
+ * can never arrive. That is not a subtle case: a reader who uploads a
+ * spreadsheet and then opens a chart in a new tab got the library's example
+ * data with nothing saying why, which reads as the upload having failed.
+ *
+ * The cost of the wider scope is that a table now outlives the tab it was
+ * pasted into, so it carries a timestamp and stops applying after
+ * `HANDOFF_TTL`. `clearHandOff` is the deliberate way out, and the gallery's
+ * own Clear button calls it.
+ */
 export function handOff(table) {
   try {
-    sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify({
+      at: Date.now(),
       headers: table.headers,
       rows: table.rows,
     }));
@@ -326,15 +354,61 @@ export function handOff(table) {
   }
 }
 
-/** Take the table the gallery left, once. */
+/**
+ * The table the reader brought, or null.
+ *
+ * **This does not consume it.** It used to, which was right when the table
+ * lived in one tab and wrong the moment it had to reach a second one — and it
+ * also meant the first chart that could not read the table threw it away for
+ * every chart after it. `StudioApp` reads once per page load and holds it;
+ * expiry and `clearHandOff` are what end it.
+ */
 export function takeHandOff() {
   try {
-    const raw = sessionStorage.getItem(HANDOFF_KEY);
+    const raw = localStorage.getItem(HANDOFF_KEY);
     if (!raw) return null;
-    sessionStorage.removeItem(HANDOFF_KEY);
-    const table = JSON.parse(raw);
-    return table && Array.isArray(table.rows) && table.rows.length ? table : null;
+    const held = JSON.parse(raw);
+    if (!held || !Array.isArray(held.rows) || !held.rows.length) return null;
+    if (!(held.at > Date.now() - HANDOFF_TTL)) { clearHandOff(); return null; }
+    return { headers: held.headers, rows: held.rows };
   } catch {
     return null;
+  }
+}
+
+/** Stop the table following the reader around. */
+export function clearHandOff() {
+  try {
+    localStorage.removeItem(HANDOFF_KEY);
+    localStorage.removeItem(MATCH_REQUEST_KEY);
+  } catch { /* nothing to clear */ }
+}
+
+/**
+ * Ask the gallery to open its matcher on the table, once.
+ *
+ * Separate from the table itself because the two mean different things: the
+ * table is "what this reader is working on" and persists, while this is "and
+ * please show me what reads it", which is answered by being shown and must not
+ * fire again on the next visit.
+ */
+export function requestMatch(table) {
+  if (!handOff(table)) return false;
+  try {
+    localStorage.setItem(MATCH_REQUEST_KEY, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the reader arrived here asking to be shown the matcher. Taken once. */
+export function takeMatchRequest() {
+  try {
+    if (!localStorage.getItem(MATCH_REQUEST_KEY)) return false;
+    localStorage.removeItem(MATCH_REQUEST_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }

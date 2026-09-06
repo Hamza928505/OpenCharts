@@ -449,26 +449,53 @@ data looks like. Two rules, both checked:
 `studio.html` exposes `window.openCharts`, so the suite can ask the page what
 a tile is drawing instead of guessing from its pixels.
 
-The table reaches the studio through `sessionStorage` (`handOff` /
-`takeHandOff`), because a table does not fit in a URL. `StudioApp.load` applies
-it before the first render, so the chart never draws its example and then
-jump-cuts.
+The table reaches the studio through `localStorage` (`handOff` / `takeHandOff`),
+because a table does not fit in a URL. `StudioApp.load` applies it before the
+first render, so the chart never draws its example and then jump-cuts.
 
-**Read from storage once, kept in memory for the visit.** Those are two
-different "once" and conflating them cost the feature most of its value.
-Reading storage once is what makes a *reload* a fresh start rather than a
-repeat of somebody's paste, and that rule stands. But `load` also runs on every
-rail click and every ←/→, and consuming the table there meant the chart
-somebody clicked drew their data and every chart they looked at next drew the
-example — when walking the charts that matched your table is the entire point
-of having matched it. The table is taken from storage on the first `load` and
-held on the instance (`this.brought`) after that. It is held even when the
-first chart cannot read it, because the old code removed it before checking
-`res.ok`, so one unlucky first pick lost the table for the whole visit. It
-survives an in-studio data edit too: switching chart rebuilds the spec from
-`newSpec` regardless, so carrying the table somebody arrived with loses nothing
-that was not already going. The toast is said once, on arrival — announcing it
-on every switch is noise.
+**`localStorage`, not `sessionStorage`, and that is the second half of one
+bug.** Session storage is scoped to a single browsing context, so a tab with no
+opener — a pasted URL, a bookmark, a second window — begins with none of it.
+A reader who uploaded a spreadsheet and then opened a chart in a new tab got
+the library's own example with nothing saying why, which reads as the upload
+having failed. Reproduced on the deployed site: the fresh tab drew
+`Jan,185,120,90` while the gallery held `Namek,911,412`.
+
+The price of the wider scope is that the table outlives the tab it was pasted
+into, so it carries a timestamp and stops applying after `HANDOFF_TTL` (six
+hours — long enough to outlast an afternoon's work, short enough that
+yesterday's numbers are not silently on today's charts). `clearHandOff()` is
+the deliberate end, and the gallery's own Clear button calls it, because
+clearing the table in one tab has to end it everywhere rather than leaving it
+to reappear on the next chart opened.
+
+**Read from storage once per page, kept in memory for the visit.** `load` runs
+on every rail click and every ←/→, and consuming the table there meant the
+chart somebody clicked drew their data and every chart they looked at next drew
+the example — when walking the charts that matched your table is the entire
+point of having matched it. `takeHandOff` no longer removes anything; the
+studio reads it on the first `load` and holds it on the instance
+(`this.brought`). It is held even when the first chart cannot read it: the old
+code removed it before checking `res.ok`, so one unlucky first pick lost the
+table for the whole visit. It survives an in-studio data edit too, since
+switching chart rebuilds the spec from `newSpec` regardless. The toast is said
+once, on arrival — announcing it on every switch is noise.
+
+**Asking to be shown the matcher is a separate, one-shot thing.**
+`requestMatch` / `takeMatchRequest` sit beside the table rather than in it,
+because they mean different things: the table is *what this reader is working
+on* and persists, while the request is *and show me what reads it*, which is
+answered by being shown and must not fire again on the next visit. It is what
+the studio's "See which charts read this" uses.
+
+**An upload that does not fit is not a dead end.** `ControlPanel.uploadFile`
+checks a file against the chart the reader happens to be on, and a real
+spreadsheet usually does not fit that one — so being told only "no" by the page
+whose job is to draw your data reads as the upload having failed, which is what
+was reported. It now asks `rankCharts` how many charts *would* take the file
+and offers that as a third button (`ask({ alt })`), handing the table over
+through the same door a gallery tile uses. The offer is a number, not a hope:
+if nothing reads it, the button is not there.
 
 ### Certainty about the header row
 
@@ -1778,7 +1805,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **666 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
+The suite is **671 checks**. Twenty-eight suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
