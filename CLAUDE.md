@@ -427,6 +427,15 @@ only because of what replaces it:
   "5 values in `region` and one measure — bars put them on a common baseline".
   A score with no sentence is exactly what the old rule protected against, and
   none is shown.
+- **A reason is two halves, and only one of them is shared.** A rule names three
+  charts and holds one sentence about the encoding — written about the first of
+  them. Handed to all three, it told the reader a radar chart "puts them on a
+  common baseline", a treemap that horizontal bars give it a readable row, and a
+  bar chart that a pie stays readable. So a rule now carries `why` (the
+  evidence, about the reader's columns, true of every chart it names) and
+  `encodes` (the claim about the lead chart). An alternative takes its encoding
+  from its own `read` line in `chart-help.js` — the same table the caution below
+  comes from. The suite checks that no non-bar suggestion claims a baseline.
 - **Every suggestion carries its own caution**, taken from the `watch` line in
   `chart-help.js`. A recommender that cannot say what is wrong with its own
   suggestion is advertising.

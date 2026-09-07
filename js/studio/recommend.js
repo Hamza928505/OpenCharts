@@ -53,8 +53,11 @@ const RULES = [
     weight: 100,
     why: (p) => `"${p.dates[0].name}" orders the rows in time and `
       + (p.numbers.length > 1
-        ? `${p.numbers.length} columns measure something — a line per measure shows how each moved.`
-        : `"${p.numbers[0].name}" measures something — a line shows how it moved.`),
+        ? `${p.numbers.length} columns measure something`
+        : `"${p.numbers[0].name}" measures something`),
+    encodes: (p) => (p.numbers.length > 1
+      ? 'a line per measure shows how each moved.'
+      : 'a line shows how it moved.'),
   },
   {
     id: 'few-categories',
@@ -65,8 +68,8 @@ const RULES = [
       : ['bar-vertical', 'bar-horizontal', 'bar-lollipop']),
     weight: 90,
     why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" and `
-      + `${p.numbers.length === 1 ? 'one measure' : `${p.numbers.length} measures`} — `
-      + 'bars put them on a common baseline, which is what makes lengths comparable.',
+      + `${p.numbers.length === 1 ? 'one measure' : `${p.numbers.length} measures`}`,
+    encodes: () => 'bars put them on a common baseline, which is what makes lengths comparable.',
   },
   {
     id: 'many-categories',
@@ -74,8 +77,9 @@ const RULES = [
       && p.categories[0].distinct > 12 && p.categories[0].distinct <= 60,
     charts: () => ['bar-horizontal', 'treemap', 'bar-lollipop'],
     weight: 80,
-    why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" is too many for `
-      + 'vertical bars to label — horizontal bars give each one a readable row.',
+    why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" is too many `
+      + 'for vertical bars to label',
+    encodes: () => 'horizontal bars give each one a readable row.',
   },
   {
     id: 'correlation',
@@ -85,9 +89,9 @@ const RULES = [
     why: (p) => {
       const c = p.correlations[0];
       const strength = Math.abs(c.r) >= 0.8 ? 'strongly' : 'noticeably';
-      return `"${c.a}" and "${c.b}" move together ${strength} (r = ${c.r}) — `
-        + 'a scatter shows whether that holds across every row or comes from a few.';
+      return `"${c.a}" and "${c.b}" move together ${strength} (r = ${c.r})`;
     },
+    encodes: () => 'a scatter shows whether that holds across every row or comes from a few.',
   },
   {
     id: 'separation',
@@ -96,17 +100,19 @@ const RULES = [
     weight: 75,
     why: (p) => {
       const s = p.separators[0];
-      return `"${s.by}" splits "${s.measure}" into ${s.groups} groups whose averages differ `
-        + 'markedly — a box plot shows whether the spreads differ too, or only the middles.';
+      return `"${s.by}" splits "${s.measure}" into ${s.groups} groups whose averages `
+        + 'differ markedly';
     },
+    encodes: () => 'a box plot shows whether the spreads differ too, or only the middles.',
   },
   {
     id: 'distribution',
     when: (p) => p.numbers.length >= 1 && p.rows >= 30 && !p.categories.length,
     charts: () => ['histogram', 'box-plot', 'density-plot'],
     weight: 70,
-    why: (p) => `${p.rows} rows and no column naming them — the interesting question about `
-      + `"${p.numbers[0].name}" is its shape, not any single value.`,
+    why: (p) => `${p.rows} rows and no column naming them, so the interesting question `
+      + `about "${p.numbers[0].name}" is its shape`,
+    encodes: () => 'a histogram shows that shape rather than any single value.',
   },
   {
     id: 'part-to-whole',
@@ -114,16 +120,17 @@ const RULES = [
       && p.categories[0].distinct >= 2 && p.categories[0].distinct <= 5,
     charts: () => ['pie', 'doughnut', 'bar-vertical'],
     weight: 60,
-    why: (p) => `Only ${p.categories[0].distinct} values in "${p.categories[0].name}" — `
-      + 'few enough that a pie stays readable, if these really are parts of one whole.',
+    why: (p) => `Only ${p.categories[0].distinct} values in "${p.categories[0].name}"`,
+    encodes: () => 'few enough that a pie stays readable, if these really are parts of one whole.',
   },
   {
     id: 'flow',
     when: (p) => p.categories.length >= 2 && p.numbers.length >= 1,
     charts: () => ['sankey', 'chord', 'parallel-sets'],
     weight: 65,
-    why: (p) => `"${p.categories[0].name}" and "${p.categories[1].name}" both name things, with a `
-      + 'measure beside them — that is a flow from one to the other.',
+    why: (p) => `"${p.categories[0].name}" and "${p.categories[1].name}" both name things, `
+      + 'with a measure beside them',
+    encodes: () => 'that is a flow from one to the other.',
   },
   {
     id: 'two-way-table',
@@ -132,15 +139,16 @@ const RULES = [
     charts: () => ['heatmap', 'echarts-heatmap'],
     weight: 55,
     why: (p) => `${p.categories[0].distinct} × ${p.categories[1].distinct} combinations of `
-      + `"${p.categories[0].name}" and "${p.categories[1].name}" — a grid shows the whole cross-section at once.`,
+      + `"${p.categories[0].name}" and "${p.categories[1].name}"`,
+    encodes: () => 'a grid shows the whole cross-section at once.',
   },
   {
     id: 'many-measures',
     when: (p) => p.numbers.length >= 4,
     charts: () => ['parallel-coords', 'radar-multi', 'heatmap'],
     weight: 50,
-    why: (p) => `${p.numbers.length} measures per row — parallel axes compare their shapes `
-      + 'without pretending they share a scale.',
+    why: (p) => `${p.numbers.length} measures per row, starting with "${p.numbers[0].name}"`,
+    encodes: () => 'parallel axes compare their shapes without pretending they share a scale.',
   },
 ];
 
@@ -194,9 +202,11 @@ export function recommendCharts(profile, readable, limit = 6) {
     try { fires = !!rule.when(profile); } catch { fires = false; }
     if (!fires) continue;
 
-    let why;
-    try { why = rule.why(profile); } catch { continue; }
-    reasons.push(why);
+    let evidence;
+    let encodes = '';
+    try { evidence = rule.why(profile); } catch { continue; }
+    try { encodes = rule.encodes(profile); } catch { encodes = ''; }
+    reasons.push(encodes ? `${evidence} — ${encodes}` : evidence);
 
     const ids = rule.charts(profile);
     ids.forEach((id, i) => {
@@ -207,7 +217,7 @@ export function recommendCharts(profile, readable, limit = 6) {
       const score = rule.weight - i * 4;
       const held = picked.get(id);
       if (!held || held.score < score) {
-        picked.set(id, { id, score, why, rule: rule.id, lead: i === 0 });
+        picked.set(id, { id, score, evidence, encodes, rule: rule.id, lead: i === 0 });
       }
     });
   }
@@ -218,10 +228,22 @@ export function recommendCharts(profile, readable, limit = 6) {
     .map((s) => {
       const def = byId.get(s.id);
       const help = typeof helpFor === 'function' ? helpFor(def) : (CHART_HELP[s.id] || {});
+      // **The evidence is the rule's; the encoding is the chart's.**
+      //
+      // A rule names three charts and used to hand all three the same
+      // sentence — which was written about the first. So a radar was told
+      // "bars put them on a common baseline", a treemap that horizontal bars
+      // give it a readable row, and a bar chart that a pie stays readable.
+      // The evidence half is about the reader's columns and is true of every
+      // chart the rule named; only the encoding half belongs to one of them.
+      // Alternatives take their own from `chart-help`, which is the table that
+      // already describes how each chart encodes — the same place the caution
+      // below comes from.
+      const encoding = s.lead ? s.encodes : ((help && help.read) || s.encodes);
       return {
         def,
         id: s.id,
-        why: s.why,
+        why: encoding ? `${s.evidence} — ${encoding}` : s.evidence,
         // What is wrong with this suggestion, from the table that already
         // names how each chart type misleads.
         caution: (help && help.watch) || null,

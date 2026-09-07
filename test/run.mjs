@@ -5655,6 +5655,15 @@ const report = await page.evaluate(async () => {
     allCautioned: plain.rec.suggestions.every((s) => !!s.caution),
     namesColumns: plain.rec.suggestions.every((s) => /region|revenue/.test(s.why)),
 
+    // A rule names three charts and has one sentence about the encoding — and
+    // that sentence is about the first of them. Handing it to all three told
+    // the reader a radar puts values "on a common baseline". The evidence half
+    // is shared because it is about their columns; the encoding half is not.
+    whys: plain.rec.suggestions.map((s) => ({ id: s.id, why: s.why })),
+    noBorrowedEncoding: plain.rec.suggestions
+      .filter((s) => !/^bar-/.test(s.id))
+      .every((s) => !/bars put them on a common baseline/.test(s.why)),
+
     // A column that is mostly-but-not-quite numbers is the finding that
     // matters most, and it fell through every other branch.
     messyNamesBadCells: /revenue" is 60% numbers/.test(q(messy)) && /N\/A/.test(q(messy)),
@@ -5682,6 +5691,9 @@ check(report.allExplained && report.namesColumns,
   'every suggestion states a reason naming the reader’s own columns');
 check(report.allCautioned,
   'and carries the caution chart-help holds about how that chart misleads');
+check(report.noBorrowedEncoding,
+  'an alternative describes its own encoding, not the lead chart\'s',
+  (report.whys.find((w) => !/^bar-/.test(w.id) && /common baseline/.test(w.why)) || {}).id || '');
 check(report.messyNamesBadCells,
   'a column that is mostly numbers names the cells stopping it being a measure');
 check(report.messyFindsDupes, 'and duplicated rows are reported');
@@ -5689,7 +5701,7 @@ check(report.noiseSilent,
   'a table with no signal in it gets no suggestion rather than a guess');
 
 const reportUi = await page.evaluate(async () => {
-  document.querySelector('#match-toggle').click();
+  // The upload panel is always open now — there is no toggle to click.
   await new Promise((r) => setTimeout(r, 150));
   const t = document.querySelector('#match-text');
   t.value = 'region,revenue\nNorth,520\nSouth,410\nEast,300\nWest,270\nCentral,180';
