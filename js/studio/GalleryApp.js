@@ -18,6 +18,8 @@ import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
 import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
 } from './DataMatch.js';
+import { profileTable } from './profile.js';
+import { recommendCharts } from './recommend.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
 
@@ -278,6 +280,80 @@ export class GalleryApp {
   }
 
   /** What the parser saw, and what it means — shown before any chart list. */
+  /**
+   * The report: what is in the table, what is wrong with it, and what to draw.
+   *
+   * `rankCharts` answers what is *possible* and that list is 98 charts long,
+   * ordered by category — true, and almost useless to somebody who came here
+   * holding a spreadsheet and wanting to know which one to open. This is the
+   * opinion, and every part of it names its evidence: a suggestion states the
+   * reader's own columns back, a warning counts the offending cells, and each
+   * suggestion carries the caution `chart-help.js` already holds about how
+   * that chart type misleads.
+   *
+   * It cannot narrow the grid, and nothing here hides a chart.
+   */
+  _reportMarkup(table, ranked) {
+    let profile;
+    let picked;
+    try {
+      profile = profileTable(table);
+      picked = recommendCharts(profile, this.fit || new Set());
+    } catch {
+      return '';                      // a report is a bonus, never the point
+    }
+
+    const esc = escapeHtml;
+    const parts = [];
+
+    if (picked.suggestions.length) {
+      parts.push('<div class="report-block"><h4>What to draw</h4>'
+        + picked.suggestions.map((s) => `<a class="report-pick" href="studio.html?chart=${
+          encodeURIComponent(s.id)}"><span class="report-pick-name">${esc(s.def.title)}</span>`
+          + `<span class="report-why">${esc(s.why)}</span>`
+          + (s.caution ? `<span class="report-caution">Watch out — ${esc(s.caution)}</span>` : '')
+          + '</a>').join('')
+        + '</div>');
+    } else {
+      // Silence would read as "no opinion"; this is "no rule fired", which is
+      // a different and more useful thing to be told.
+      parts.push('<div class="report-block"><h4>What to draw</h4>'
+        + '<p class="dlg-note">Nothing in this table suggests one chart over another — '
+        + 'no dates to order it, no column naming groups, no pair of measures that move '
+        + 'together. Any of the charts below will read it.</p></div>');
+    }
+
+    if (profile.quality.length) {
+      parts.push('<div class="report-block"><h4>Before you draw it</h4><ul class="report-list">'
+        + profile.quality.slice(0, 6).map((q) =>
+          `<li class="q-${q.level}">${esc(q.text)}</li>`).join('')
+        + (profile.quality.length > 6
+          ? `<li class="q-info">…and ${profile.quality.length - 6} more.</li>` : '')
+        + '</ul></div>');
+    }
+
+    const rel = [
+      ...profile.correlations.map((c) =>
+        `"${c.a}" and "${c.b}" move together (r = ${c.r}).`),
+      ...profile.separators.map((s) =>
+        `"${s.by}" separates "${s.measure}" across ${s.groups} groups.`),
+    ];
+    if (rel.length) {
+      parts.push('<div class="report-block"><h4>Worth plotting against each other</h4>'
+        + `<ul class="report-list">${rel.map((r) => `<li>${esc(r)}</li>`).join('')}</ul></div>`);
+    }
+
+    parts.push('<details class="report-block"><summary>Every column</summary>'
+      + '<table class="report-table"><thead><tr><th>Column</th><th>Holds</th>'
+      + '<th>Distinct</th><th>Missing</th><th>Range</th></tr></thead><tbody>'
+      + profile.columns.map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.type)}</td>`
+        + `<td class="tnum">${c.distinct}</td><td class="tnum">${c.missing || ''}</td>`
+        + `<td class="tnum">${c.type === 'number' ? `${c.min} – ${c.max}` : ''}</td></tr>`).join('')
+      + '</tbody></table></details>');
+
+    return `<div class="report">${parts.join('')}</div>`;
+  }
+
   _renderReading(host, table, ranked) {
     const chips = table.headers.map((h, i) => {
       const role = ranked.shape.roles[i] || 'numbers';
@@ -316,6 +392,7 @@ export class GalleryApp {
       + `<div class="match-cols">${chips}</div>`
       + verdict
       + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
+      + this._reportMarkup(table, ranked)
       // Dropping rows in silence would be worse than not dropping them: a
       // reader who cannot find their first row should be told where it went.
       + (table.skipped

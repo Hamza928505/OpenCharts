@@ -5596,6 +5596,135 @@ check(facetExports.length === 5, 'every renderer has a faceted export that runs'
 
 console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, ${facetExportsOk}/${facetExports.length} exports run, ${facetScales.byControl + facetScales.byConfig} charts share an axis`);
 
+/* Suite 30 — the report: what is in the table, and what to draw.
+ *
+ * `rankCharts` answers what is possible, which for a plain table is 98 charts
+ * ordered by category. This is the opinion on top of it, and the checks are
+ * about the opinion being *defensible*: every suggestion is one the table can
+ * actually be drawn with, states a reason naming the reader's own columns, and
+ * carries the caution `chart-help.js` holds about how it misleads.
+ *
+ * The id check is a regression. `transform.js` already records that a
+ * distinctness rule "promptly discarded" a revenue column, and this module was
+ * written with one anyway: it flagged revenue, visits, value and 41 of 42
+ * measures in a wide export as identifiers, so the most obvious table in the
+ * world — five regions and one measure — produced no suggestion at all. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(500);
+
+const report = await page.evaluate(async () => {
+  const { parseTable } = await import('/js/studio/dataio.js');
+  const { rankCharts } = await import('/js/studio/DataMatch.js');
+  const { profileTable } = await import('/js/studio/profile.js');
+  const { recommendCharts, namedCharts } = await import('/js/studio/recommend.js');
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const known = new Set(CHARTS.map((c) => c.id));
+
+  const look = (csv) => {
+    const table = parseTable(csv, true);
+    const ranked = rankCharts(table);
+    const canRead = new Set([...ranked.fits, ...ranked.partial].map((e) => e.def.id));
+    const profile = profileTable(table);
+    return { table, canRead, profile, rec: recommendCharts(profile, canRead) };
+  };
+
+  const plain = look('region,revenue\nNorth,520\nSouth,410\nEast,300\nWest,270\nCentral,180');
+  const dated = look('month,visits\n' + Array.from({ length: 18 }, (_, i) =>
+    `2024-${String((i % 12) + 1).padStart(2, '0')},${900 + i * 37 - (i % 5) * 11}`).join('\n'));
+  const messy = look('id,region,revenue\n1,North,520\n2,South,N/A\n3,East,300\n3,East,300\n4,West,\n5,North,n/a');
+  const noise = look('a,b\nxx,yy\nzz,ww\npp,qq');
+
+  const q = (r) => r.profile.quality.map((x) => x.text).join(' | ');
+
+  return {
+    // A rule naming a chart that does not exist does nothing, silently.
+    unknownIds: namedCharts().filter((id) => !known.has(id)),
+    // The bug: a measure must not be mistaken for an identifier.
+    revenueIsMeasure: plain.profile.numbers.some((c) => c.name === 'revenue'),
+    revenueNotFlagged: !/revenue" looks like an identifier/.test(q(plain)),
+    idIsFlagged: /"id" looks like an identifier/.test(q(messy)),
+
+    plainPicks: plain.rec.suggestions.map((s) => s.id),
+    plainLeadWhy: (plain.rec.suggestions[0] || {}).why || '',
+    datePicks: dated.rec.suggestions.map((s) => s.id),
+    dateLeadWhy: (dated.rec.suggestions[0] || {}).why || '',
+
+    // Every suggestion must be drawable, explained and cautioned.
+    allReadable: plain.rec.suggestions.every((s) => plain.canRead.has(s.id)),
+    allExplained: plain.rec.suggestions.every((s) => s.why && s.why.length > 20),
+    allCautioned: plain.rec.suggestions.every((s) => !!s.caution),
+    namesColumns: plain.rec.suggestions.every((s) => /region|revenue/.test(s.why)),
+
+    // A rule names three charts and has one sentence about the encoding — and
+    // that sentence is about the first of them. Handing it to all three told
+    // the reader a radar puts values "on a common baseline". The evidence half
+    // is shared because it is about their columns; the encoding half is not.
+    whys: plain.rec.suggestions.map((s) => ({ id: s.id, why: s.why })),
+    noBorrowedEncoding: plain.rec.suggestions
+      .filter((s) => !/^bar-/.test(s.id))
+      .every((s) => !/bars put them on a common baseline/.test(s.why)),
+
+    // A column that is mostly-but-not-quite numbers is the finding that
+    // matters most, and it fell through every other branch.
+    messyNamesBadCells: /revenue" is 60% numbers/.test(q(messy)) && /N\/A/.test(q(messy)),
+    messyFindsDupes: /duplicate/.test(q(messy)),
+
+    // Nothing to say is said, rather than guessed at.
+    noiseSilent: noise.rec.suggestions.length === 0,
+  };
+});
+
+check(!report.unknownIds.length,
+  'every chart a rule can name exists in the registry',
+  report.unknownIds.join(', '));
+check(report.revenueIsMeasure && report.revenueNotFlagged,
+  'a measure is not mistaken for an identifier because its values are distinct',
+  JSON.stringify(report).slice(0, 160));
+check(report.idIsFlagged, 'while a column named "id" still is');
+check(report.plainPicks.includes('bar-vertical') && /5 values in "region"/.test(report.plainLeadWhy),
+  'five categories and one measure lead to a bar, for a stated reason',
+  report.plainLeadWhy);
+check(report.datePicks[0] && /line/.test(report.datePicks[0]) && /orders the rows in time/.test(report.dateLeadWhy),
+  'a date column and a measure lead to a line', `${report.datePicks[0]} — ${report.dateLeadWhy}`);
+check(report.allReadable, 'every chart suggested is one this table can actually draw');
+check(report.allExplained && report.namesColumns,
+  'every suggestion states a reason naming the reader’s own columns');
+check(report.allCautioned,
+  'and carries the caution chart-help holds about how that chart misleads');
+check(report.noBorrowedEncoding,
+  'an alternative describes its own encoding, not the lead chart\'s',
+  (report.whys.find((w) => !/^bar-/.test(w.id) && /common baseline/.test(w.why)) || {}).id || '');
+check(report.messyNamesBadCells,
+  'a column that is mostly numbers names the cells stopping it being a measure');
+check(report.messyFindsDupes, 'and duplicated rows are reported');
+check(report.noiseSilent,
+  'a table with no signal in it gets no suggestion rather than a guess');
+
+const reportUi = await page.evaluate(async () => {
+  // The upload panel is always open now — there is no toggle to click.
+  await new Promise((r) => setTimeout(r, 150));
+  const t = document.querySelector('#match-text');
+  t.value = 'region,revenue\nNorth,520\nSouth,410\nEast,300\nWest,270\nCentral,180';
+  t.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 700));
+  const picks = [...document.querySelectorAll('.report-pick')];
+  return {
+    picks: picks.length,
+    firstHref: picks[0] ? new URL(picks[0].href).searchParams.get('chart') : null,
+    hasWhy: picks.every((p) => !!p.querySelector('.report-why')),
+    blocks: document.querySelectorAll('.report-block').length,
+    // The grid must not have been narrowed by the opinion.
+    stillOffersAll: window.openChartsGallery.fit.size,
+  };
+});
+check(reportUi.picks > 0 && reportUi.hasWhy && reportUi.blocks >= 2,
+  'the report renders under the matcher with a reason on every pick',
+  JSON.stringify(reportUi));
+check(reportUi.firstHref && reportUi.stillOffersAll > reportUi.picks,
+  'and it recommends without hiding anything rankCharts offered',
+  JSON.stringify(reportUi));
+console.log(`  ${green('✓')} report — ${reportUi.picks} suggestions with reasons, quality and relationships`);
+
 /* Suite 29 — libraries arrive when something needs them.
  *
  * The whole point is that a reader opening a bar chart does not pay for the
