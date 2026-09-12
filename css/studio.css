@@ -1040,6 +1040,32 @@ input[type="range"]::-moz-range-thumb {
 }
 .series-del:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 
+/* categories — a row each, the series editor's card turned ninety degrees.
+   Slimmer than a series row because a category is a name and nothing else:
+   its colour, where it has one, is on the series or the slice. */
+.label-list {
+  display: flex; flex-direction: column; gap: .25rem;
+  /* Thirty months of an area chart is thirty rows; past a dozen the list
+     scrolls in place rather than pushing every other control off the page. */
+  max-height: 372px; overflow: auto; padding-right: 2px;
+}
+.label-row {
+  display: flex; align-items: center; gap: .3rem;
+  padding: .12rem .2rem .12rem .55rem;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: var(--paper);
+  transition: border-color .15s var(--ease);
+}
+.label-row:hover { border-color: var(--rule-firm); }
+.label-name {
+  flex: 1; min-width: 0;
+  font-size: 12.5px; font-weight: 500; font-family: var(--sans);
+  border: 0; background: transparent; color: var(--ink);
+  outline: none; padding: .2rem 0;
+  border-bottom: 1px dashed transparent;
+}
+.label-name:focus { border-bottom-color: var(--accent-line); }
+
 /* data editor — the sidebar shows the data, the dialog edits it */
 .data-card {
   border: 1px solid var(--rule);
@@ -1636,6 +1662,9 @@ input[type="range"]::-moz-range-thumb {
   gap: .4rem;
   margin-top: .55rem;
   flex: 0 0 auto;
+  /* Five buttons and a summary do not fit a phone in one line, and a foot
+     that overflows its dialog scrolls the whole editor sideways. */
+  flex-wrap: wrap;
 }
 .dgrid-summary {
   margin-left: auto;

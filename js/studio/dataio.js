@@ -348,6 +348,42 @@ export function parseTable(text, expected) {
   return { headers, rows: hadHeader ? grid.slice(1) : grid, hadHeader, skipped };
 }
 
+/**
+ * The same table turned ninety degrees: each row becomes a column, headed by
+ * its first cell, and the header row becomes the first column.
+ *
+ * A chart reads a table one way — `labelSeries` takes a series from each
+ * column, `rowSeries` from each row — and a file arrives whichever way its
+ * author laid it out. `Product, Q1, Q2` over `Widgets, 10, 20` is a bar per
+ * product with a series per quarter; the same numbers as a series per product
+ * need the table the other way round, and until now the only way to get there
+ * was a spreadsheet. This is that step, done in front of the reader.
+ *
+ * `headers` may be empty, for a table that had no header row: then the rows
+ * alone are turned, and the first column — which is what actually named them —
+ * becomes the header. Ragged rows are squared off with blanks first, so a
+ * short row does not shift the columns under it.
+ *
+ * @param {{headers?: string[], rows: string[][]}} table
+ * @returns {{headers: string[], rows: string[][]}}
+ */
+export function transposeTable(table) {
+  const headers = (table && table.headers) || [];
+  const rows = (table && table.rows) || [];
+  const grid = headers.length ? [headers, ...rows] : [...rows];
+  if (!grid.length) return { headers: [], rows: [] };
+
+  const width = Math.max(...grid.map((r) => r.length));
+  const cell = (r, c) => (r[c] == null ? '' : String(r[c]));
+  const turned = [];
+  for (let c = 0; c < width; c++) turned.push(grid.map((r) => cell(r, c)));
+
+  return {
+    headers: turned[0].map((h, i) => h || `Column ${i + 1}`),
+    rows: turned.slice(1),
+  };
+}
+
 /** Render a { headers, rows } table back to CSV, for the editor's initial value. */
 export function toCSV(headers, rows) {
   const esc = (v) => {
@@ -875,18 +911,18 @@ const stageColumns = (h) => Math.max(2, h.length - 1);
 const SHAPE_RULES = {
   labelSeries: {
     min: 2, reads: Infinity, grows: 'each further column becomes a series',
-    columns: { add: { label: '+ Series', name: (n) => 'Series ' + n } },
+    columns: { add: { label: '+ Series', name: (n) => 'Series ' + n }, swap: true },
   },
   rowSeries: {
     min: 2, reads: Infinity, grows: 'each further column becomes a point along the row',
-    columns: { add: { label: '+ Point', name: (n) => 'Point ' + n } },
+    columns: { add: { label: '+ Point', name: (n) => 'Point ' + n }, swap: true },
   },
-  labelValue:   { min: 2, exact: 2, columns: { add: null } },
-  items:        { min: 2, grows: 'extra columns are read as named fields', columns: { add: null } },
+  labelValue:   { min: 2, exact: 2, columns: { add: null, swap: true } },
+  items:        { min: 2, grows: 'extra columns are read as named fields', columns: { add: null, swap: true } },
   pairs:        { min: 3, exact: 3, columns: { minCols: 3, add: null } },
   observations: {
     min: 1, reads: Infinity, grows: 'either one column per group, or group and value',
-    columns: { add: { label: '+ Group', name: (n) => 'Group ' + n } },
+    columns: { add: { label: '+ Group', name: (n) => 'Group ' + n }, swap: true },
   },
   links: {
     min: 3, reads: Infinity,
@@ -923,13 +959,20 @@ const SHAPE_RULES = {
   ohlc:         { min: 4, grows: 'open, high, low, close — a leading date is ignored', columns: { minCols: 4, add: null } },
   matrix: {
     min: 2, reads: Infinity, grows: 'a row label, then one column per cell',
-    columns: { add: { label: '+ Column', name: (n) => 'Column ' + n } },
+    columns: { add: { label: '+ Column', name: (n) => 'Column ' + n }, swap: true },
   },
 };
 
+// `swap` is whether "Swap rows and columns" is offered on this shape. It is
+// only true where a table is a grid of labels against series — turned round,
+// it is still one. A path of stages, a place with its coordinates or a bar of
+// open-high-low-close reads each column for what it *is*, and turning that
+// ninety degrees makes a table nothing reads; offering the button there would
+// be the same kind of promise as a `+ Column` that gets dropped in silence.
 const DEFAULT_COLUMNS = {
   text: 1, minText: 1, minCols: 2, filled: 1,
   add: { label: '+ Column', name: (n) => 'Series ' + n, stage: false },
+  swap: false,
 };
 
 /**
@@ -939,7 +982,7 @@ const DEFAULT_COLUMNS = {
  * file check all read one table. They used to hold three separate ideas of
  * which columns were words, and only one of them knew about `from, to`.
  *
- * @returns {{text, minText: number, minCols: number, filled, add: object|null}}
+ * @returns {{text, minText: number, minCols: number, filled, add: object|null, swap: boolean}}
  */
 export function columnRules(shape) {
   const rule = (SHAPE_RULES[shape] || {}).columns || {};

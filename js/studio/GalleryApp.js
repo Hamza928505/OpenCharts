@@ -13,7 +13,7 @@ import { prefetchLibraries } from './loader.js';
 import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
-import { parseTable, applyData, toCSV } from './dataio.js';
+import { parseTable, applyData, toCSV, transposeTable } from './dataio.js';
 import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
 import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
@@ -134,6 +134,7 @@ export class GalleryApp {
     const status = bar.querySelector('#match-status');
     const read = bar.querySelector('#match-read');
     const headerBox = bar.querySelector('#match-header');
+    const swapBox = bar.querySelector('#match-swap');
     const drop = bar.querySelector('#match-drop');
     const urlInput = bar.querySelector('#match-url');
     const urlGo = bar.querySelector('#match-url-go');
@@ -162,8 +163,28 @@ export class GalleryApp {
       if (!res.ok) { setStatus(res.message, 'bad'); return; }
       text.value = res.text;
       headerAnswered = false;
+      // A new file is a new table, laid out its own way; a swap asked for on
+      // the last one is not an answer about this one.
+      swapBox.checked = false;
       if (label) setStatus(`Read ${label}.`);
       run();
+    };
+
+    /**
+     * The table the other way round, when the reader asked for it.
+     *
+     * Every chart reads a series from a column, and the file most people have
+     * was written with the series down the side — one row per product, the
+     * months across. Read as it is, that is a bar per product; what they
+     * wanted was a bar per month. Turning it here, before anything ranks it,
+     * means the tiles, the hand-off and the prompt all carry the turned table
+     * and never have to know there was another way up. The text box keeps the
+     * file as it was, so the header question is still asked about the file.
+     */
+    const oriented = (table) => {
+      if (!swapBox.checked || !table.rows.length) return table;
+      const turned = transposeTable(table.hadHeader ? table : { headers: [], rows: table.rows });
+      return { ...turned, hadHeader: true, skipped: table.skipped, swapped: true };
     };
 
     let timer = null;
@@ -180,8 +201,9 @@ export class GalleryApp {
         return;
       }
 
-      const table = parseTable(raw, headerAnswered ? headerBox.checked : undefined);
-      if (!headerAnswered) headerBox.checked = table.hadHeader;
+      const parsed = parseTable(raw, headerAnswered ? headerBox.checked : undefined);
+      if (!headerAnswered) headerBox.checked = parsed.hadHeader;
+      const table = oriented(parsed);
       if (!table.rows.length) {
         setStatus('Nothing readable in that yet.', 'bad');
         return;
@@ -210,6 +232,7 @@ export class GalleryApp {
     });
 
     headerBox.addEventListener('change', () => { headerAnswered = true; run(); });
+    swapBox.addEventListener('change', run);
 
     bar.querySelector('#match-file').addEventListener('click', async () => {
       setStatus('Reading…');
@@ -257,6 +280,7 @@ export class GalleryApp {
     bar.querySelector('#match-clear').addEventListener('click', () => {
       text.value = '';
       headerAnswered = false;
+      swapBox.checked = false;
       // The table outlives this tab now, so clearing it here has to end it
       // everywhere rather than leaving it to reappear on the next chart opened.
       clearHandOff();
@@ -393,6 +417,14 @@ export class GalleryApp {
       + verdict
       + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
       + this._reportMarkup(table, ranked)
+      // The reader asked for this, but the report is what they check it
+      // against, so it says which way up the table now is.
+      + (table.swapped
+        ? '<p class="dlg-note" style="margin-top:.4rem">Rows and columns are swapped: the '
+          + `file's first column is now the header row (<b>${escapeHtml(table.headers.slice(1, 5)
+            .map(oneLine).join(', '))}${table.headers.length > 5 ? ', …' : ''}</b>), and each `
+          + 'row of the file is now a column.</p>'
+        : '')
       // Dropping rows in silence would be worse than not dropping them: a
       // reader who cannot find their first row should be told where it went.
       + (table.skipped
