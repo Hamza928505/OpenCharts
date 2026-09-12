@@ -13,6 +13,7 @@ import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES }
 import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
+import { parseDateLabel, installDateAdapter, usesTimeScale } from './timeaxis.js';
 import {
   drawAnnotations, plateOf, hasAnnotations, gridAnnotations, ANNOTATION_CSS,
 } from './annotate.js';
@@ -244,6 +245,10 @@ function renderOne(def, host, spec, opts = {}) {
     host.appendChild(wrap);
     try {
       const config = applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds);
+      // A time axis needs a date adapter, and Chart.js ships none of its own.
+      // Ours is native Date; installing is idempotent, so asking every time a
+      // config wants one costs nothing after the first.
+      if (usesTimeScale(config)) installDateAdapter();
       const chart = new window.Chart(canvas, config);
       annotate();
       return { engine, chart, canvas };
@@ -590,6 +595,29 @@ function namedFunction(fn, name) {
             .replace(/^(async\s+)?function\s*\(/, `$1function ${name}(`);
 }
 
+/**
+ * The date adapter, as source, for an export whose config draws on time.
+ *
+ * Chart.js's time scale wants an adapter and ships none; every other library
+ * hands it 60–300KB of date-fns or Luxon. Ours is native Date, so the export
+ * carries two functions and asks for nothing more — and only when a scale is
+ * actually `type: 'time'`, so every other Chart.js export is byte-for-byte
+ * what it was. The same rule `ANNOTATION_CSS` and `FACET_CSS` follow.
+ */
+function dateAdapterSource(wanted) {
+  if (!wanted) return [];
+  return [
+    '',
+    '// Dates on the x axis. Chart.js needs a date adapter and ships none; this',
+    "// one is the browser's own Date, in UTC, so no further library is loaded.",
+    toFunctionSource(parseDateLabel),
+    '',
+    toFunctionSource(installDateAdapter),
+    '',
+    'installDateAdapter();',
+  ];
+}
+
 /** Source text for any helper functions a definition declares. */
 function helperSource(block) {
   const helpers = block && block.helpers;
@@ -810,6 +838,7 @@ function buildJS(def, spec) {
       }));
       return tidy([
         ...header,
+        ...dateAdapterSource(built.some((p) => usesTimeScale(p.config))),
         '',
         `// One finished config per panel.`,
         `const panels = ${serialize(built, 0)};`,
@@ -826,6 +855,7 @@ function buildJS(def, spec) {
     const config = def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) });
     const lines = [
       ...header,
+      ...dateAdapterSource(usesTimeScale(config)),
       '',
       `const config = ${serialize(config, 0)};`,
       '',

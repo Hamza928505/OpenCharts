@@ -4,7 +4,7 @@
  */
 
 import { C, MONTHS6, QUARTERS, withAlpha } from '../palette.js';
-import { baseOpts, xAxis, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
+import { baseOpts, xAxis, xAxisFor, axisLabels, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
 import { OHLC_BARS, PARALLEL_RECORDS } from './_data.js';
 
@@ -347,7 +347,7 @@ export const comparisonCharts = [
         return {
           type: 'line',
           data: {
-            labels: spec.labels,
+            labels: axisLabels(spec.labels),
             datasets: spec.series.map((s) => ({
               label: s.label,
               data: s.data,
@@ -364,7 +364,7 @@ export const comparisonCharts = [
           },
           options: baseOpts({
             scales: {
-              x: xAxis(),
+              x: xAxisFor(spec.labels),
               y: yAxis({
                 // Reversed so rank 1 sits at the top of the frame.
                 reverse: true,

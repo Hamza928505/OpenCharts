@@ -14,6 +14,7 @@ import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
 import { parseTable, applyData, toCSV, transposeTable } from './dataio.js';
+import { isDateLabels, dateOrderIsGuess } from './timeaxis.js';
 import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
 import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
@@ -379,6 +380,8 @@ export class GalleryApp {
   }
 
   _renderReading(host, table, ranked) {
+    const firstColumn = table.rows.map((r) => r[0]);
+    const firstIsDates = isDateLabels(firstColumn);
     const chips = table.headers.map((h, i) => {
       const role = ranked.shape.roles[i] || 'numbers';
       return `<span class="match-col-chip ${role}"><b>${escapeHtml(oneLine(h))}</b>`
@@ -417,6 +420,21 @@ export class GalleryApp {
       + verdict
       + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
       + this._reportMarkup(table, ranked)
+      // A first column of dates is placed on a time axis by the line and area
+      // charts — said here, because a gap where a month is missing is the
+      // first thing a reader notices and should not be a surprise. And where
+      // `03/04/2024` could be read either way and nothing in the column
+      // settles it, the guess is named so it can be corrected.
+      + (firstIsDates
+        ? '<p class="dlg-note" style="margin-top:.4rem">The first column reads as <b>dates</b>, so '
+          + 'line and area charts place the rows on a time axis: a missing period shows as a gap, '
+          + 'and the ticks thin themselves by month or year.'
+          + (dateOrderIsGuess(firstColumn)
+            ? ' Day and month are ambiguous here (<b>' + escapeHtml(oneLine(firstColumn.find((v) => /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(String(v).trim())) || ''))
+              + '</b>) and are being read <b>month first</b>. Write the year first — 2024-04-03 — to be sure.'
+            : '')
+          + '</p>'
+        : '')
       // The reader asked for this, but the report is what they check it
       // against, so it says which way up the table now is.
       + (table.swapped

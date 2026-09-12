@@ -1462,6 +1462,53 @@ an edit that produces numbers, applied once and written into the grid; an
 is state on the spec that produces *more specs*. Only the first is allowed to
 put numbers on a chart, and it does it in front of the reader.
 
+### Dates on the axis
+
+Every chart read its x labels as words, so `2024-01`, `2024-02`, `2024-04`
+were three equally spaced categories and the missing March was invisible;
+a series of years could not thin its ticks. `timeaxis.js` fixes it for the
+eleven Chart.js line-family charts — `buildLine`'s six, area-band,
+area-100stacked, step-area, fan-chart and bump-chart — through `xAxisFor`
+in `chartjs-base.js`, which returns a `time` scale when every label parses
+as a date and the category scale it always returned otherwise.
+
+**Chart.js ships no date adapter, and this does not fetch one.** Every other
+library hands it 60–300KB of date-fns or Luxon so a chart can know a month
+follows a month. `installDateAdapter()` is that adapter in ninety lines of
+native `Date` and `Intl`, UTC throughout; `engines.js` installs it for the
+preview when a config draws on time and emits it — with `parseDateLabel` —
+into the export on the same condition, so a dated export loads Chart.js and
+nothing else and every undated export is byte-for-byte what it was (the rule
+`ANNOTATION_CSS` follows). The suite counts the script tags.
+
+Four rules, each checked:
+
+- **A bare month name is not a date.** `Jan` has no year, so it names a slot
+  rather than a moment; the twelve-month examples stay categorical, which is
+  also what stops thirteen months from `Jan` to `Jan` landing on one tick.
+  The profiler still treats them as *ordered*, through `looksDateLike`, which
+  is the parser plus exactly the bare months and quarters it refuses — one
+  reader, so the report cannot call a column dates that the axis draws as
+  words. It replaced a second, weaker `DATE_RE` the profiler kept.
+- **Every label must parse, or none does.** A `Total` row at the bottom makes
+  the column a list of words again.
+- **`03/04/2024` is settled by evidence or named as a guess.** `dateOrder`
+  reads the whole column: any first part past twelve is day-first, any second
+  part is month-first. With neither it is month-first — what `Date` itself
+  assumes — and the matcher's report says so, naming the value, because a
+  guess that is not said cannot be corrected. `time.parser` carries the
+  answer to the adapter as `'dmy'` / `'mdy'`.
+- **Ticks never go finer than the data.** Left to itself Chart.js drew a
+  monthly series as "Jan 12, Jan 23"; `time.minUnit` is the column's
+  granularity, and `tooltipFormat` the same, so a yearly series reads "2024"
+  on hover rather than "1 Jan 2024". Quarters are set outright, because
+  Chart.js marks the unit uncommon and never picks it — four quarters came
+  out as one tick reading "2024".
+
+Everything is UTC end to end: `2024-01-01` must draw and read as the first
+of January wherever the page is opened, and local time would make it New
+Year's Eve for half the world.
+
 ### Text colour
 
 Every canvas chart draws its labels through `ink(alpha)`, which resolves
@@ -2075,6 +2122,7 @@ the values it changed are shown by the series widget next door.
 | `facet.js` | Small multiples — one spec split into a grid of complete specs |
 | `a11y.js` | The chart as text — its description and its data as a table |
 | `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
+| `timeaxis.js` | Dates read as dates — the label parser, and the native-Date adapter Chart.js's time scale needs |
 | `fileimport.js` | Reads .xlsx / .csv / .txt, and refuses what is not one |
 | `chart-help.js` | The `read` and `watch` line per chart, with a category fallback |
 | `HelpPanel.js` | Those two lines, rendered beside the chart |
@@ -2115,7 +2163,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **742 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **765 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

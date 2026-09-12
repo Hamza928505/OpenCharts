@@ -9,7 +9,7 @@
 
 import { C, MONTHS, withAlpha } from '../palette.js';
 import { HORIZON_ROWS, SPIRAL_VALUES } from './_data.js';
-import { baseOpts, xAxis, yAxis, TICK } from '../chartjs-base.js';
+import { baseOpts, xAxisFor, axisLabels, yAxis, TICK } from '../chartjs-base.js';
 import { tickFormat, srcFn } from '../serialize.js';
 
 /**
@@ -64,7 +64,7 @@ export const timeseriesCharts = [
         return {
           type: 'line',
           data: {
-            labels: spec.labels,
+            labels: axisLabels(spec.labels),
             datasets: spec.series.map((s) => ({
               label: s.label,
               data: spec.labels.map((_, i) => +(((s.data[i] || 0) / totals[i]) * 100).toFixed(2)),
@@ -79,7 +79,7 @@ export const timeseriesCharts = [
           },
           options: baseOpts({
             scales: {
-              x: xAxis(),
+              x: xAxisFor(spec.labels),
               y: yAxis({ stacked: true, min: 0, max: 100, ticks: { ...TICK, callback: tickFormat({ suffix: '%' }) } }),
             },
             plugins: {
@@ -119,7 +119,7 @@ export const timeseriesCharts = [
       build: (spec) => ({
         type: 'line',
         data: {
-          labels: spec.labels,
+          labels: axisLabels(spec.labels),
           datasets: spec.series.map((s) => ({
             label: s.label,
             data: s.data,
@@ -134,7 +134,7 @@ export const timeseriesCharts = [
         },
         options: baseOpts({
           scales: {
-            x: xAxis(),
+            x: xAxisFor(spec.labels),
             y: yAxis({ ticks: { ...TICK, callback: tickFormat({ suffix: spec.opts.suffix }) } }),
           },
         }),
@@ -239,10 +239,10 @@ export const timeseriesCharts = [
 
         return {
           type: 'line',
-          data: { labels, datasets },
+          data: { labels: axisLabels(labels), datasets },
           options: baseOpts({
             scales: {
-              x: xAxis(),
+              x: xAxisFor(labels),
               y: yAxis({ ticks: { ...TICK, callback: tickFormat({ suffix: spec.opts.suffix }) } }),
             },
           }),

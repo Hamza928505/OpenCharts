@@ -7,7 +7,7 @@
  */
 
 import { C, MONTHS, MONTHS6, withAlpha } from '../palette.js';
-import { baseOpts, xAxis, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
+import { baseOpts, xAxisFor, axisLabels, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
 import { tickFormat } from '../serialize.js';
 
 const CURVE = [
@@ -62,10 +62,10 @@ function buildLine(spec, { stacked = false, yExtra = {} } = {}) {
   const o = spec.opts;
   return {
     type: 'line',
-    data: { labels: spec.labels, datasets: lineDatasets(spec) },
+    data: { labels: axisLabels(spec.labels), datasets: lineDatasets(spec) },
     options: baseOpts({
       scales: {
-        x: xAxis({ ticks: { ...TICK, maxTicksLimit: o.maxLabels || 12 } }),
+        x: xAxisFor(spec.labels, { ticks: { ...TICK, maxTicksLimit: o.maxLabels || 12 } }),
         y: yAxis({
           stacked,
           ticks: {
@@ -231,7 +231,7 @@ export const lineCharts = [
         return {
           type: 'line',
           data: {
-            labels: spec.labels,
+            labels: axisLabels(spec.labels),
             datasets: [
               // Upper bound fills down to the next dataset (the lower bound),
               // which is what paints the band without a custom plugin.
@@ -242,7 +242,7 @@ export const lineCharts = [
           },
           options: baseOpts({
             scales: {
-              x: xAxis(),
+              x: xAxisFor(spec.labels),
               y: yAxis({ ticks: { ...TICK, callback: tickFormat({ suffix: o.suffix }) } }),
             },
           }),
