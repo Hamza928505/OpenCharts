@@ -802,6 +802,96 @@ check(live.changed, 'editing a control updates the code');
 check(live.hasRadius, 'the edit appears verbatim in the code');
 console.log(`  ${green('✓')} live editing — control change reaches the JS tab`);
 
+/* Removing a row from the sidebar.
+ *
+ * A series is a column and the series editor could always take one out. A
+ * category is a row, and it was a comma-separated textarea: dropping one
+ * meant retyping the list, and even then only the names changed — every
+ * series kept its value for the category that had gone. Now each category
+ * has a ✕, and pressing it has to take that row out of *everything* indexed
+ * by it, which differs per chart. */
+const rowOut = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const read = () => document.querySelector('.code-body').textContent;
+  const before = read();
+  const dels = [...document.querySelectorAll('.controls .label-del')];
+  const offered = dels.length;
+  dels[3].click();                                  // Q4
+  await sleep(350);
+  const spec = window.openCharts.spec;
+  const after = read();
+  return {
+    offered,
+    labels: spec.labels.join(','),
+    data: spec.series.map((s) => s.data.join('/')).join(' | '),
+    codeChanged: before !== after,
+    q4Gone: !/Q4/.test(after),
+    rowsLeft: document.querySelectorAll('.controls .label-row').length,
+  };
+});
+check(rowOut.offered === 4, 'every category in the sidebar has a ✕', String(rowOut.offered));
+check(rowOut.labels === 'Q1,Q2,Q3', 'pressing one removes the category', rowOut.labels);
+check(rowOut.data === '520/680/740 | 440/575/625',
+  'and its value from every series, so the rest stay against their own numbers', rowOut.data);
+check(rowOut.codeChanged && rowOut.q4Gone && rowOut.rowsLeft === 3,
+  'the code and the panel both follow', `${rowOut.rowsLeft} rows`);
+
+/* What hangs off a label is different on every chart, and the widget works
+ * it out from the sibling controls rather than from a list per chart. */
+const rowKinds = await page.evaluate(async () => {
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const { buildControls } = await import('/js/studio/ControlPanel.js');
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const drop = (id, i) => {
+    const def = CHARTS.find((c) => c.id === id);
+    const spec = newSpec(def);
+    buildControls(host, def, spec, () => {});
+    host.querySelectorAll('.label-del')[i].click();
+    return spec;
+  };
+  const pie = drop('pie', 1);                       // Men, the blue slice
+  const fan = drop('fan-chart', 2);                 // a row in the history half
+  const sign = drop('surplus-deficit-line', 0);
+  const gantt = drop('bar-floating', 0);
+  const wings = drop('bar-butterfly', 0);
+
+  // One label left: nothing to press.
+  const one = CHARTS.find((c) => c.id === 'bar-vertical');
+  const oneSpec = newSpec(one);
+  oneSpec.labels = ['Only'];
+  oneSpec.series.forEach((s) => { s.data = [1]; });
+  buildControls(host, one, oneSpec, () => {});
+  const noDel = host.querySelectorAll('.label-del').length;
+  // And adding one puts a row through everything.
+  [...host.querySelectorAll('.btn')].find((b) => /Add category/.test(b.textContent)).click();
+  host.remove();
+  return {
+    pie: `${pie.labels.join(',')} ${pie.values.join(',')} ${pie.colors.length}`,
+    pieKeptColours: pie.colors[1] === newSpec(CHARTS.find((c) => c.id === 'pie')).colors[2],
+    fan: `${fan.labels.length} ${fan.history.length} ${fan.forecast.length}`,
+    sign: `${sign.labels.length} ${sign.values.length} ${sign.signColors.length}`,
+    gantt: `${gantt.labels.length} ${gantt.ranges.length} ${gantt.colors.length}`,
+    wings: `${wings.labels.length} ${wings.left.data.length} ${wings.right.data.length} ${wings.sides.length}`,
+    noDel,
+    added: `${oneSpec.labels.join(',')} ${oneSpec.series.map((s) => s.data.length).join('/')}`,
+  };
+});
+check(rowKinds.pie === 'Women,Living,Accessories 48,13,8 3' && rowKinds.pieKeptColours,
+  'a slice goes with its value and its colour, and the slices after it keep theirs', rowKinds.pie);
+check(rowKinds.fan === '9 5 4',
+  'on a split axis the row comes out of the half that holds it', rowKinds.fan);
+check(rowKinds.sign === '11 11 2',
+  'a colour pair named some other way is not touched', rowKinds.sign);
+check(rowKinds.gantt === '5 5 5',
+  'an array no control names, but that is one per row, follows too', rowKinds.gantt);
+check(rowKinds.wings === '5 5 5 2',
+  'both sides of a butterfly lose the row; the two side colours do not', rowKinds.wings);
+check(rowKinds.noDel === 0, 'the last category cannot be removed');
+check(rowKinds.added === 'Only,Category 2 2/2',
+  'adding a category puts a row through every series', rowKinds.added);
+console.log(`  ${green('✓')} rows — a category removed from the sidebar leaves every array in step`);
+
 /* Suite 7 — the sidebar shows the data, and the grid edits it. */
 const sidebar = await page.evaluate(async () => {
   const card = document.querySelector('.data-card');

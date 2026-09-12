@@ -99,10 +99,6 @@ const parseNumbers = (text) =>
   text.split(/[,\n\s]+/).map((s) => s.trim()).filter(Boolean)
     .map((s) => { const n = Number(s); return Number.isFinite(n) ? n : 0; });
 
-/** Parse a comma/newline separated list into trimmed strings. */
-const parseLabels = (text) =>
-  text.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
-
 /* ── widgets ─────────────────────────────────────────────────────────────── */
 
 function widgetToggle(ctrl, spec, notify) {
@@ -197,20 +193,186 @@ function widgetText(ctrl, spec, notify) {
   return wrap;
 }
 
-function widgetLabels(ctrl, spec, notify) {
-  const wrap = field(ctrl.label || 'Category labels');
-  const input = el('textarea', 'input mono');
-  input.value = (getPath(spec, ctrl.key || 'labels') || []).join(', ');
-  input.rows = 2;
-  input.addEventListener('change', () => {
-    const next = parseLabels(input.value);
-    if (next.length) {
-      setPath(spec, ctrl.key || 'labels', next);
-      notify();
+/**
+ * The category editor: one row per label, each with its own ✕.
+ *
+ * A series is a column and a category is a row, and the sidebar could take a
+ * column out — the series editor has had a ✕ per series since it shipped —
+ * but not a row. Categories were a comma-separated textarea, so dropping one
+ * meant retyping the list, and even then only the *names* changed: every
+ * series kept its value for the category that had gone, and the chart
+ * quietly drew the remaining labels against the wrong numbers.
+ *
+ * Removing a row means removing it from everything indexed by it, and what
+ * that is differs per chart: the `data` of each series, one or more `values`
+ * arrays, a colour per slice, and on the floating bar a `ranges` array that
+ * no control names at all. `dependents` works that out from the sibling
+ * controls rather than from a list per chart — see the rules on it — so a
+ * chart that adds a labels control gets the right behaviour without having
+ * to say what hangs off its labels.
+ */
+function widgetLabels(ctrl, spec, notify, def) {
+  const key = ctrl.key || 'labels';
+  const host = el('div', 'ctrl-group');
+  host.style.gap = '.3rem';
+  const min = ctrl.min || 1;
+
+  /**
+   * Every array in the spec with one entry per category, as `{ arr, kind,
+   * from? }` — `kind` says what a new row should hold, `from` is set on a
+   * segment of a split axis.
+   *
+   * Four rules, each for a shape found in the library:
+   * - A `series` control: each series' `data`, where it is as long as the
+   *   labels. (bar-vertical, line-multi, radar, stream …)
+   * - A `values` control whose array is as long as the labels. (pie,
+   *   surplus-deficit, the butterfly's two sides.) Where no single one is,
+   *   but together they *sum* to it, they are consecutive segments of one
+   *   axis — the fan chart's `history` and `forecast` — and a row lives in
+   *   whichever segment holds its index.
+   * - A `colors` control whose `names` are the labels themselves: one colour
+   *   per slice. Colours named some other way (`Positive / Negative`) are
+   *   left alone even when there happen to be as many of them.
+   * - Any other top-level array as long as the labels that no control names
+   *   at all and holds no objects — the floating bar's `ranges`. Arrays a
+   *   control *does* name are excluded here on purpose: two sign colours over
+   *   two remaining periods would otherwise lose one.
+   */
+  function dependents() {
+    const labels = getPath(spec, key) || [];
+    const n = labels.length;
+    const out = [];
+    const seen = new Set([labels]);
+    const named = new Set([key]);
+    const take = (arr, kind, from) => {
+      if (!Array.isArray(arr) || seen.has(arr)) return;
+      seen.add(arr);
+      out.push({ arr, kind, from });
+    };
+
+    const controls = (def && def.controls) || [];
+    controls.forEach((c) => { if (c.key) named.add(c.key.split('.')[0]); });
+
+    controls.filter((c) => c.type === 'series').forEach((c) => {
+      (getPath(spec, c.key || 'series') || []).forEach((sr) => {
+        if (sr && Array.isArray(sr.data) && sr.data.length === n) take(sr.data, 'number');
+      });
+    });
+
+    const values = controls.filter((c) => c.type === 'values')
+      .map((c) => getPath(spec, c.key || 'values')).filter(Array.isArray);
+    const whole = values.filter((v) => v.length === n);
+    if (whole.length) whole.forEach((v) => take(v, 'number'));
+    else if (values.length > 1 && values.reduce((t, v) => t + v.length, 0) === n) {
+      let at = 0;
+      values.forEach((v) => { take(v, 'number', at); at += v.length; });
     }
-  });
-  wrap.appendChild(input);
-  return wrap;
+
+    controls.filter((c) => c.type === 'colors').forEach((c) => {
+      const arr = getPath(spec, c.key || 'colors');
+      const names = typeof c.names === 'function' ? c.names(spec) : null;
+      const byLabel = names === labels
+        || (Array.isArray(names) && names.length === n && names.every((x, i) => x === labels[i]));
+      if (byLabel && Array.isArray(arr) && arr.length === n) take(arr, 'colour');
+    });
+
+    Object.keys(spec).forEach((k) => {
+      const arr = spec[k];
+      if (named.has(k) || !Array.isArray(arr) || arr.length !== n) return;
+      if (arr.some((x) => x && typeof x === 'object' && !Array.isArray(x))) return;
+      take(arr, Array.isArray(arr[0]) ? 'tuple' : typeof arr[0] === 'string' ? 'text' : 'number');
+    });
+    return out;
+  }
+
+  /** What a fresh row holds in an array of this kind. */
+  const blank = (d, i) => {
+    if (d.kind === 'colour') return paletteAt(i);
+    if (d.kind === 'text') return '';
+    if (d.kind === 'tuple') return (d.arr[0] || []).map(() => 0);
+    return 0;
+  };
+
+  function removeAt(i) {
+    const labels = getPath(spec, key) || [];
+    if (labels.length <= min) return;
+    const deps = dependents();
+    labels.splice(i, 1);
+    deps.forEach((d) => {
+      const j = d.from == null ? i : i - d.from;
+      if (j >= 0 && j < d.arr.length) d.arr.splice(j, 1);
+    });
+  }
+
+  function add() {
+    const labels = getPath(spec, key) || [];
+    const deps = dependents();
+    const i = labels.length;
+    labels.push(`Category ${i + 1}`);
+    // A split axis grows at its end, so only its last segment gains a row.
+    const segments = deps.filter((d) => d.from != null);
+    deps.forEach((d) => {
+      if (d.from != null && d !== segments[segments.length - 1]) return;
+      d.arr.push(blank(d, i));
+    });
+  }
+
+  const rebuild = () => {
+    if (typeof host._rebuildAll === 'function') host._rebuildAll(); else paint();
+  };
+
+  function paint() {
+    host.innerHTML = '';
+    const labels = getPath(spec, key) || [];
+    host.appendChild(field(ctrl.label || 'Category labels'));
+
+    const list = el('div', 'label-list');
+    labels.forEach((text, i) => {
+      const row = el('div', 'label-row');
+      const name = el('input', 'label-name');
+      name.value = text;
+      name.spellcheck = false;
+      name.setAttribute('aria-label', `Category ${i + 1}`);
+      name.addEventListener('input', () => { labels[i] = name.value; notify(); });
+      row.appendChild(name);
+      if (ctrl.removable !== false && labels.length > min) {
+        const del = el('button', 'series-del label-del', '✕');
+        del.type = 'button';
+        del.title = 'Remove this category';
+        del.setAttribute('aria-label', `Remove ${text || `category ${i + 1}`}`);
+        del.addEventListener('click', () => {
+          removeAt(i);
+          notify();
+          // The values under it changed too, and those live in the series
+          // widget: rebuild the panel rather than leave them stale.
+          rebuild();
+        });
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    });
+    host.appendChild(list);
+
+    const max = ctrl.max || 60;
+    if (ctrl.addable !== false && labels.length < max) {
+      const addBtn = el('button', 'btn btn-sm btn-block', '+ Add category');
+      addBtn.type = 'button';
+      addBtn.addEventListener('click', () => {
+        add();
+        notify();
+        rebuild();
+        // Straight into naming it.
+        const inputs = document.querySelectorAll('.controls .label-name');
+        const last = inputs[inputs.length - 1];
+        if (last) { last.focus(); last.select(); }
+      });
+      host.appendChild(addBtn);
+    }
+  }
+
+  paint();
+  host._repaint = paint;
+  return host;
 }
 
 /**

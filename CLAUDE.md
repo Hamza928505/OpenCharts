@@ -1993,6 +1993,34 @@ panel knows they are siblings — and the listener is registered against an
 listeners die with the panel. Without that, a map's city list would rebuild
 itself over whatever chart you opened next; the suite checks exactly that.
 
+**A category is a row, and it can be removed like a series can.** The series
+editor has had a ✕ per series since it shipped; `labels` was a comma-separated
+textarea, so taking a category out meant retyping the list — and even then
+only the *names* changed, while every series kept its value for the category
+that had gone, so the chart drew the remaining labels against the wrong
+numbers. `widgetLabels` is now one row per category with a ✕ and `+ Add
+category`, and removing one takes that index out of everything indexed by it.
+
+What that is differs per chart, and `dependents()` works it out from the
+sibling controls rather than from a list per chart, so a new chart with a
+labels control gets it for free. Four rules, each for a shape in the library,
+each checked:
+
+- each `series` control's `data`, where it is as long as the labels;
+- a `values` array as long as the labels — or, where none is but several
+  *sum* to it, consecutive segments of one axis (the fan chart's `history`
+  and `forecast`), with the row taken from whichever holds its index;
+- a `colors` array whose `names` *are* the labels, so a slice keeps its colour
+  and the slices after it keep theirs — a pair named `Positive / Negative`
+  is left alone however many there happen to be;
+- any other top-level array as long as the labels that **no control names**
+  and holds no objects (the floating bar's `ranges`). Arrays a control does
+  name are excluded on purpose: two sign colours over two remaining periods
+  would otherwise lose one.
+
+The last category cannot be removed, and a removal rebuilds the panel, because
+the values it changed are shown by the series widget next door.
+
 ### Studio modules (`js/studio/`)
 
 | File | Role |
@@ -2068,7 +2096,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **723 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **734 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
