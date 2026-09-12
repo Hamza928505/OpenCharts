@@ -5302,6 +5302,165 @@ check(capSvg.plainSvgs === 1 && capSvg.titledSvgs === 2 && capSvg.hasTitle,
   JSON.stringify(capSvg));
 console.log(`  ${green('✓')} captions — title, subtitle, source and byline on every chart, in every output`);
 
+/* Suite — somewhere to keep what you made.
+ *
+ * A share link was the only way a chart survived closing the tab. The shelf
+ * is localStorage plus a file: Save in the studio, a strip of cards in the
+ * gallery, Export and Import to carry them between browsers. It is storage
+ * and a list, not a format — a saved chart is the same `{ chart, spec }` the
+ * Spec view prints, opened through the door a share link uses. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const kept = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openCharts;
+  localStorage.removeItem('opencharts.shelf');
+  const btn = document.querySelector('#btn-save');
+  const savedBefore = btn.classList.contains('is-saved');
+
+  app.spec.labels[0] = 'Kept';
+  const title = [...document.querySelectorAll('.stage-tools .caption-fields input')]
+    .find((x) => x.getAttribute('aria-label') === 'Title');
+  title.value = 'Sales by quarter';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(300);
+
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+  await sleep(300);
+  const first = JSON.parse(localStorage.getItem('opencharts.shelf'));
+  const url = new URL(location.href).searchParams.get('saved');
+
+  // A second save updates the entry, not a twin of it.
+  app.spec.labels[1] = 'Kept too';
+  btn.click();
+  await sleep(300);
+  const second = JSON.parse(localStorage.getItem('opencharts.shelf'));
+  const savedAfter = btn.classList.contains('is-saved');
+
+  // Another chart is a new thing, not an edit of the saved one.
+  app.load('pie');
+  await sleep(500);
+  return {
+    savedBefore,
+    savedAfter,
+    count: first.length,
+    name: first[0].name,
+    chart: first[0].chart,
+    thumb: /^data:image\/png/.test(first[0].thumb || ''),
+    label: first[0].spec.labels[0],
+    urlNames: url === first[0].id,
+    count2: second.length,
+    label2: second[0].spec.labels[1],
+    id: first[0].id,
+    unsavedOnSwitch: !btn.classList.contains('is-saved') && app.savedId === null,
+  };
+});
+check(!kept.savedBefore && kept.savedAfter, 'the Save button says when the chart is on the shelf');
+check(kept.count === 1 && kept.chart === 'bar-vertical' && kept.label === 'Kept' && kept.thumb,
+  'Ctrl+S keeps the chart, its spec and a thumbnail', JSON.stringify({ n: kept.count, chart: kept.chart }));
+check(kept.name === 'Sales by quarter', 'named after its title where it has one', kept.name);
+check(kept.urlNames, 'and the address names the saved chart, so a reload reopens it');
+check(kept.count2 === 1 && kept.label2 === 'Kept too', 'saving again updates the entry rather than adding a twin');
+check(kept.unsavedOnSwitch, 'opening another chart starts unsaved');
+
+await page.goto(`${base}/studio.html?chart=pie&saved=${kept.id}`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+const reopened = await page.evaluate(() => ({
+  def: window.openCharts.def.id,
+  label: window.openCharts.spec.labels[0],
+  title: window.openCharts.spec.caption && window.openCharts.spec.caption.title,
+  savedId: window.openCharts.savedId,
+}));
+check(reopened.def === 'bar-vertical' && reopened.label === 'Kept' && reopened.title === 'Sales by quarter',
+  'a saved chart reopens as it was kept — the entry names the chart, whatever ?chart= says', JSON.stringify(reopened));
+check(reopened.savedId === kept.id, 'and Save there updates the same entry');
+
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const strip = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const m = await import('/js/studio/shelf.js');
+  const s = document.querySelector('#shelf');
+  const card = s.querySelector('.shelf-card');
+  const out = {
+    count: s.querySelector('.shelf-count').textContent,
+    name: card.querySelector('.shelf-name').textContent,
+    href: card.getAttribute('href'),
+    kind: card.querySelector('.shelf-kind').textContent,
+    hasExport: !!s.querySelector('#shelf-export'),
+    hasImport: !!s.querySelector('#shelf-import'),
+  };
+
+  card.querySelector('.shelf-rename').click();
+  await sleep(60);
+  const input = s.querySelector('.shelf-name-input');
+  input.value = 'Renamed chart';
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(100);
+  out.renamed = s.querySelector('.shelf-name').textContent;
+
+  const file = m.exportShelf();
+  out.fileKind = JSON.parse(file).kind;
+
+  // Storage is written by this code and read by this code, and anything can
+  // happen in between: a garbage row and a row naming a chart this library
+  // does not have must not take the shelf down.
+  const list = JSON.parse(localStorage.getItem('opencharts.shelf'));
+  list.push({ garbage: true });
+  list.push({ id: 'zz', chart: 'no-such-chart', spec: {}, name: 'ghost' });
+  localStorage.setItem('opencharts.shelf', JSON.stringify(list));
+  window.openChartsGallery._renderShelf();
+  out.cardsAfterCorrupt = s.querySelectorAll('.shelf-card').length;
+  out.ghostHidden = ![...s.querySelectorAll('.shelf-name')].some((n) => n.textContent === 'ghost');
+
+  // Import: the file back is an update; a Spec-view object is an add; a
+  // chart this library lacks is skipped and counted; garbage is refused.
+  const isChart = (id) => ['bar-vertical', 'line-basic'].includes(id);
+  out.reimport = m.importShelf(file, { isChart }).message;
+  out.single = m.importShelf(JSON.stringify({ chart: 'line-basic', spec: { labels: ['a'] } }), { isChart }).message;
+  out.unknown = m.importShelf(JSON.stringify({ chart: 'plotly-thing', spec: {} }), { isChart }).message;
+  out.garbage = m.importShelf('not json', { isChart }).ok;
+
+  // The cap evicts the least recently touched, never the one just saved.
+  for (let i = 0; i < 45; i++) m.saveChart({ chart: 'pie', spec: { i }, name: `n${i}` });
+  const after = m.listSaved();
+  out.capped = after.length;
+  out.newest = after[0].name;
+  out.renamedSurvives = after.some((r) => r.name === 'Renamed chart') === false;
+
+  // Remove asks first, then removes.
+  window.openChartsGallery._renderShelf();
+  const before = s.querySelectorAll('.shelf-card').length;
+  s.querySelector('.shelf-remove').click();
+  await sleep(200);
+  const asked = !!document.querySelector('.ask');
+  [...document.querySelectorAll('.ask-foot .btn')].find((b) => /Remove it/.test(b.textContent)).click();
+  await sleep(200);
+  out.removed = s.querySelectorAll('.shelf-card').length === before - 1;
+
+  localStorage.removeItem('opencharts.shelf');
+  window.openChartsGallery._renderShelf();
+  out.emptyState = s.classList.contains('is-empty') && /Nothing kept yet/.test(s.textContent) && !!s.querySelector('#shelf-import');
+  return { ...out, asked };
+});
+check(strip.count === '1' && strip.name === 'Sales by quarter' && strip.href === `studio.html?chart=bar-vertical&saved=${kept.id}`,
+  'the gallery shows the saved chart as a card that opens it', strip.href);
+check(/Vertical Bar · just now/.test(strip.kind) && strip.hasExport && strip.hasImport,
+  'with its chart, when it was saved, and Export and Import', strip.kind);
+check(strip.renamed === 'Renamed chart', 'a card is renamed in place', strip.renamed);
+check(strip.fileKind === 'opencharts-shelf', 'Export writes a charts file');
+check(strip.cardsAfterCorrupt === 1 && strip.ghostHidden,
+  'a garbage row and a chart this library lacks get no card and take nothing down', String(strip.cardsAfterCorrupt));
+check(strip.reimport === '1 updated' && strip.single === '1 added',
+  'Import updates what is here and adds what is not', `${strip.reimport} / ${strip.single}`);
+check(/1 skipped/.test(strip.unknown) && strip.garbage === false,
+  'and skips a chart this library lacks, and refuses what is not a file', strip.unknown);
+check(strip.capped === 40 && strip.newest === 'n44',
+  'the cap holds forty and evicts the least recently touched, never the one just saved',
+  `${strip.capped} kept, newest ${strip.newest}`);
+check(strip.asked && strip.removed, 'Remove asks first, then removes');
+check(strip.emptyState, 'an empty shelf is one line saying how to fill it, with Import still reachable');
+console.log(`  ${green('✓')} shelf — save, reopen, rename, export, import, cap, remove`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data
