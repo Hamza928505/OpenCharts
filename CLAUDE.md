@@ -1098,6 +1098,45 @@ decorated rather than a swatch being wired to the wrong colour.
 `ControlPanel.js` for two widgets; this tab was the third caller, and a third
 copy of one statement about the palette would be a third thing to keep true.
 
+### Colour by value
+
+"Bars above target green, below red" and "shade by size" — the two rules
+everyone reaches for in a BI tool's conditional formatting. `colourby.js`
+makes them an **edit**, the bargain `transform.js` makes: a rule is built in
+the Colours tab, previewed as a strip of the items it would colour, and on
+Apply written through `paletteOf(def, spec).set(i, hex)` into whatever array
+the colours live in. The export carries colours and never a rule, so it stays
+a renderer of literal values; change the data later and the colours stay
+where they were, which is why the rule is one click to run again rather than
+a layer re-derived at draw time.
+
+Three kinds: **threshold** (at or above a value → one colour, below → another),
+**gradient** (low to high along a sequential ramp) and **diverging** (away from
+a midpoint along a two-hue ramp, each side scaled to its own extent so the
+midpoint sits on the middle stop whatever the spread).
+
+Two questions the module answers, each checked:
+
+- **Which value belongs to which colour?** `valuesFor` reads the numbers off
+  `def.toText(spec)` — the writer the suite holds to a round trip, so the one
+  description of a chart's data guaranteed complete — and lines them up with
+  `paletteOf`. One colour per *row* reads a cell in each row (with a column
+  to choose where there are two, as on the floating bar); one colour per
+  value *column* reads the column's total; a count matching neither gets no
+  panel at all. A rule on the wrong thing is worse than none.
+- **What may a ramp use?** Every step of every ramp clears WCAG's 3:1 for a
+  graphical object **on white**, because white is the ground every export
+  draws on (`BASE_CSS` gives `.chart-card` `#ffffff`). That rules out the
+  pale end a sequential ramp usually starts from, so these run mid-tone to
+  dark — narrower, and still readable. Mixed in linear light so the middle is
+  not muddy. The suite samples forty steps of each.
+
+The half-built rule lives in a `WeakMap` keyed by the spec object, because
+the Colours tab is re-mounted on every rebuild — a colour picked, a value
+typed anywhere — and a rule that vanished on each keystroke would be unusable.
+It goes with the spec when a chart is switched or an undo replaces it. Apply
+is one undo step.
+
 ### Undo in the studio
 
 The data editor has had undo since it shipped, and it covers the table and
@@ -2194,7 +2233,8 @@ the values it changed are shown by the series widget next door.
 | `flags.js` | The flag icon set — `data/flags.json`, fetched once, painted into pickers |
 | `confirm.js` | Blocking confirm/alert, the counterpart to `toast.js` |
 | `colorpicker.js` | The swatch popover, portalled so nothing can clip it |
-| `palette-ui.js` | The colour-vision warning and the whole-palette editor |
+| `palette-ui.js` | The colour-vision warning, the whole-palette editor, and the colour-by-value panel |
+| `colourby.js` | Threshold, gradient and diverging rules — the ramps, the arithmetic, and which value belongs to which colour |
 | `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
@@ -2254,7 +2294,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **797 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **812 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
