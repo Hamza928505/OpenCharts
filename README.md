@@ -467,7 +467,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **734 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **736 checks**, and it fails if
 anything writes to the console.
 
 ```bash
