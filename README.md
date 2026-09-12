@@ -279,6 +279,15 @@ it cannot — most charts work their scale out from their own data, privately �
 it says that too, in words, under the control. A grid of panels that looks
 comparable and is not would be worse than one that admits it.
 
+## A title and a source on every chart
+
+A chart that leaves the tool should be able to explain itself. Under the
+plate, **Title & source** takes a title, a subtitle, a source (with a link)
+and a byline; they appear above and below the chart in the studio and travel
+with every export — the HTML carries a `<header>` and a `<figcaption>`, the
+PNG and SVG carry the words in the picture, and the accessible description
+leads with the title. A chart with none of them exports exactly as before.
+
 ## Notes on the chart
 
 A label on the peak, a rule at the target, a shaded band over the quarter that
@@ -467,7 +476,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **765 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **779 checks**, and it fails if
 anything writes to the console.
 
 ```bash

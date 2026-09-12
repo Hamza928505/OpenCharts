@@ -1288,6 +1288,48 @@ The difference is that a transform produces numbers, which the library's one
 hard rule says a renderer must be handed rather than derive; an annotation
 produces no numbers at all.
 
+### A chart that explains itself
+
+A title above the plate, a line under it saying how to read it, a source at
+the bottom saying where the numbers came from. Datawrapper's signature, and
+every export here was a bare plate — the reader wrote all of that around it
+in whatever page it landed in, or did not.
+
+`caption.js` does it the way annotations were done: **markup around the
+plate, not ink in the canvas.** `captionHead(spec)` and `captionFoot(spec)`
+are the one source for both the studio's preview — `StudioApp.rebuild`
+fills two containers either side of `#chart-host` — and the export, where
+`buildHTML` puts the `<header>` above the plate and the `<figcaption>` after
+the legend. No renderer was touched, so all 115 charts gained it at once, and
+the plate's own box is unchanged by a title, so a note laid over it stays
+put. `CAPTION_CSS` is emitted only when a field is filled; an untitled export
+is byte-for-byte what it was.
+
+Five fields — title, subtitle, source, source link, byline — on
+`spec.caption`, edited by the `caption` control the registry attaches to
+every chart. It leads the stage tools under the plate, because it is the
+first thing a publisher writes about a finished chart. `tidyCaption` drops
+the blanks after every keystroke and the whole object when nothing is left,
+so a caption typed and deleted leaves no trace in the Spec view, the share
+link or the export. A link with no name is *shown* as the name but never
+written back as one — the first version did, and clearing the name left the
+link's copy of it behind.
+
+Three rules, each checked:
+
+- **The source link is hostile until proven a web address.** It lands in an
+  `href` in somebody else's page, so `safeUrl` admits `http:` and `https:`
+  only; `javascript:` becomes plain text in brackets beside the name.
+- **The words reach a reader who cannot see the picture first.**
+  `chartSummary` leads with the title and subtitle and ends with the source
+  and byline; the plate's `aria-label` starts with the title.
+- **A picture of the chart carries the caption.** A PNG of the plate alone
+  is a chart with its source torn off. `captionLines` measures each caption
+  element with its own computed font against its own box, so the lines break
+  where the browser broke them; `_frame` widens the export to hold them, and
+  the same lines are painted into the PNG, into an outer `<svg>` around an
+  SVG chart, and into a facet grid's composite.
+
 ### Small multiples
 
 Vega-Lite's `facet`, and the reason the file most people have is still not a
@@ -2047,7 +2089,7 @@ is `d3.geoOrthographic`. Two rules for it:
 `js/studio/ControlPanel.js` renders widgets from `controls: []`. Each entry has
 a `group` (heading), a `type`, and a dot-path `key` into the spec. Types:
 `series`, `colors`, `values`, `labels`, `toggle`, `seg`, `slider`, `select`,
-`text`, `countries`, `cities`, `color`, `annotations`, `facet`. Consecutive entries
+`text`, `countries`, `cities`, `color`, `annotations`, `facet`, `caption`. Consecutive entries
 sharing a `group`
 are drawn under one numbered heading.
 
@@ -2119,6 +2161,7 @@ the values it changed are shown by the series widget next door.
 | `motion.js` | Pointer-driven motion — the sheen, the ripple, the dialog's origin |
 | `resize.js` | The grip that sets how wide the controls column is |
 | `annotate.js` | Notes, rules and bands laid over the plate, and the drag that places them |
+| `caption.js` | Title, subtitle, source and byline around the plate — the markup for preview and export, and the lines a picture of it carries |
 | `facet.js` | Small multiples — one spec split into a grid of complete specs |
 | `a11y.js` | The chart as text — its description and its data as a table |
 | `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
@@ -2163,7 +2206,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **765 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **779 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
