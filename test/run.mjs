@@ -892,6 +892,64 @@ check(rowKinds.added === 'Only,Category 2 2/2',
   'adding a category puts a row through every series', rowKinds.added);
 console.log(`  ${green('✓')} rows — a category removed from the sidebar leaves every array in step`);
 
+/* No chart generates its own data — and neither does the sidebar.
+ *
+ * "+ Add series" used to fill a new series with random values scattered
+ * around the first one, which put numbers on the chart that were nobody's:
+ * the one rule this library is built on, broken in the control most charts
+ * carry. A new series arrives as zeros, the blank a spreadsheet would hold,
+ * and the values box under it is where the real ones go. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+const blankSeries = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const addBtn = () => [...document.querySelectorAll('.controls .btn')].find((b) => /Add series/.test(b.textContent));
+  const before = window.openCharts.spec.series.length;
+  addBtn().click(); await sleep(250);
+  addBtn().click(); await sleep(250);
+  const s = window.openCharts.spec.series;
+  const added = s.slice(before);
+  return {
+    count: s.length - before,
+    lengths: added.map((x) => x.data.length).join(','),
+    labelCount: window.openCharts.spec.labels.length,
+    allZero: added.every((x) => x.data.every((v) => v === 0)),
+    identical: JSON.stringify(added[0].data) === JSON.stringify(added[1].data),
+    focused: document.activeElement && document.activeElement.classList.contains('mono'),
+  };
+});
+check(blankSeries.count === 2 && blankSeries.lengths === `${blankSeries.labelCount},${blankSeries.labelCount}`,
+  'a new series has one value per category', blankSeries.lengths);
+check(blankSeries.allZero && blankSeries.identical,
+  'and arrives blank rather than filled with numbers nobody typed');
+check(blankSeries.focused, 'with the cursor already in its values box');
+
+// The rule, held at the source: no studio module reaches for Math.random
+// except to mint an element id, and no chart definition does at all. The
+// dot-density map places its dots from a seed on the spec, which is why an
+// export redraws the map that was copied.
+const { readdir: readDirForRandom } = await import('node:fs/promises');
+const studioFiles = [];
+for (const dir of ['js/studio', 'js/studio/charts']) {
+  for (const f of await readDirForRandom(join(ROOT, dir))) if (f.endsWith('.js')) studioFiles.push(`${dir}/${f}`);
+}
+const randomUsers = [];
+for (const f of studioFiles) {
+  const src = await readFile(join(ROOT, f), 'utf8');
+  const hits = src.split('\n').map((l, i) => (/Math\.random\(/.test(l) ? i + 1 : 0)).filter(Boolean);
+  // engines.js mints a unique canvas id for the custom engine — an identifier, not a value.
+  if (hits.length && !(f === 'js/studio/engines.js' && hits.length === 1)) randomUsers.push(`${f}:${hits.join(',')}`);
+}
+check(!randomUsers.length, 'no studio module or chart definition invents a value with Math.random',
+  randomUsers.join(' '));
+console.log(`  ${green('✓')} blank series — Add series writes zeros, ${studioFiles.length} modules free of Math.random`);
+
+// Back to the state the grid suite below reads: the example, with the JS tab open.
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(700);
+await page.evaluate(() => document.querySelector('.tab[data-tab="js"]').click());
+await page.waitForTimeout(200);
+
 /* Suite 7 — the sidebar shows the data, and the grid edits it. */
 const sidebar = await page.evaluate(async () => {
   const card = document.querySelector('.data-card');

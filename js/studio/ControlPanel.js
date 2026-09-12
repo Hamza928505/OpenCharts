@@ -456,18 +456,27 @@ function widgetSeries(ctrl, spec, notify, def) {
       const add = el('button', 'btn btn-sm btn-block', '+ Add series');
       add.type = 'button';
       add.addEventListener('click', () => {
+        // A new series arrives blank — one zero per category, the same as a
+        // new column in the grid. It used to be filled with random values
+        // scattered around the first series, which put numbers on the chart
+        // that were nobody's: the one rule this library is built on, broken
+        // in the sidebar. Zeros are the blank a spreadsheet would hold, and
+        // the values box under the row is where the real ones go.
         const len = (list[0] && list[0].data ? list[0].data.length : (spec.labels || []).length) || 6;
-        const base = list[0] && list[0].data ? list[0].data : null;
         list.push({
           label: `Series ${list.length + 1}`,
           color: paletteAt(list.length),
-          data: Array.from({ length: len }, (_, i) => {
-            const seed = base ? base[i % base.length] : 50;
-            return Math.max(1, Math.round(seed * (0.55 + Math.random() * 0.7)));
-          }),
+          data: new Array(len).fill(0),
         });
         paint();
         notify();
+        toast(`Series ${list.length} added — type its values under the name`, 'ok');
+        // Straight into the values box, since that is the next thing to do.
+        if (ctrl.data) {
+          const boxes = host.querySelectorAll('.series-row .input.mono');
+          const last = boxes[boxes.length - 1];
+          if (last) { last.focus(); last.select(); }
+        }
       });
       host.appendChild(add);
     }
