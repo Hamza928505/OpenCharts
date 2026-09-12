@@ -14,7 +14,6 @@ import { renderSources } from './SourcesPanel.js';
 import { renderHelp } from './HelpPanel.js';
 import { buildPrompt } from './prompt.js';
 import { openDataDialog } from './DataDialog.js';
-import { openAiConfigDialog } from './ai-config.js';
 import { prefetchLibraries } from './loader.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { toast } from './toast.js';
@@ -331,7 +330,12 @@ export class StudioApp {
     $('#btn-share')?.addEventListener('click', () => this._share());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
-    $('#btn-ai-config')?.addEventListener('click', () => openAiConfigDialog());
+    // A key stored for the "AI Analyst" is swept up. That control stored an
+    // encrypted API key in localStorage and nothing ever read it back — a
+    // credential handed over to a feature that did not exist. The control is
+    // gone; a key a reader already saved should not be left lying either.
+    // Remove this sweep when the analyst itself ships and needs the key.
+    try { localStorage.removeItem('opencharts.ai-key'); } catch { /* not fatal */ }
 
     // Restore the rail the way it was left. Read once, here, rather than at
     // module load: a private window can throw on read too.

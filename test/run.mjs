@@ -2774,6 +2774,28 @@ check(/Copied/.test(stageBtn.feedback), 'the button says it copied', stageBtn.fe
 check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data only choice');
 console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
 
+/* No control asks for a credential it cannot use.
+ *
+ * The stage bar carried an "AI Settings" button that encrypted an API key
+ * into localStorage, and nothing anywhere read it back — a reader handed a
+ * secret to a feature that did not exist. The control is gone, and a key a
+ * reader had already saved is swept up on the next visit rather than left
+ * lying. When the analyst itself ships, this check is the one to revisit. */
+await page.evaluate(() => localStorage.setItem('opencharts.ai-key', 'enc:v1:left-over'));
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(600);
+const noKey = await page.evaluate(() => ({
+  button: !!document.querySelector('#btn-ai-config'),
+  asksForKey: [...document.querySelectorAll('.stage-actions .btn')]
+    .some((b) => /AI Settings|API key/i.test(b.textContent + (b.title || ''))),
+  stored: localStorage.getItem('opencharts.ai-key'),
+}));
+check(!noKey.button && !noKey.asksForKey,
+  'the stage bar offers no control that stores a credential nothing reads');
+check(noKey.stored === null,
+  'and a key a reader had already saved is removed on the next visit', String(noKey.stored));
+console.log(`  ${green('✓')} no dangling credential — AI key control removed, stored key swept`);
+
 
 
 
