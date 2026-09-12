@@ -3243,6 +3243,30 @@ body[data-focus="1"] .stage-data { display: none; }
 .palette-editor .palette-warn,
 .palette-editor .palette-sim { margin-top: .9rem; }
 
+/* Colour by value — a rule built in front of the reader, previewed as a
+   strip of the items it would colour, written into the palette on Apply. */
+.colour-by { margin-top: 1.4rem; padding-top: 1.1rem; border-top: 1px solid var(--rule); }
+.colour-by-title { margin: 0 0 .2rem; font-size: 13px; font-weight: 600; }
+.colour-by-sub { margin: 0 0 .8rem; font-size: 12px; color: var(--ink-faint); max-width: 62ch; }
+.colour-by-row, .colour-by-fields { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; }
+.colour-by-fields { margin-top: .6rem; }
+.colour-by-field { display: inline-flex; align-items: center; gap: .4rem; font-size: 12px; color: var(--ink-soft); }
+.colour-by-select, .colour-by-num {
+  font: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule-firm); border-radius: var(--r-xs);
+  padding: .3rem .5rem; min-height: 30px;
+}
+.colour-by-num { width: 6.5em; font-family: var(--mono); font-size: 12px; }
+.colour-by-dot {
+  width: 22px; height: 22px; padding: 0; border: 1px solid rgba(0,0,0,.16); border-radius: 6px; cursor: pointer;
+}
+.colour-by-ramp { display: inline-block; width: 84px; height: 12px; border-radius: 3px; border: 1px solid var(--rule); }
+.colour-by-preview { display: flex; flex-wrap: wrap; gap: .3rem .8rem; margin-top: .8rem; }
+.colour-by-chip { display: inline-flex; align-items: center; gap: .35rem; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.colour-by-chip-dot { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.14); }
+.colour-by-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin-top: .8rem; }
+.colour-by-note { font-size: 12px; color: var(--ink-faint); }
+
 @media (prefers-color-scheme: dark) {
   .palette-editor-dot { border-color: rgba(255,255,255,.2); }
 }

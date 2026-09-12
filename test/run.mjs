@@ -5461,6 +5461,90 @@ check(strip.asked && strip.removed, 'Remove asks first, then removes');
 check(strip.emptyState, 'an empty shelf is one line saying how to fill it, with Import still reachable');
 console.log(`  ${green('✓')} shelf — save, reopen, rename, export, import, cap, remove`);
 
+/* Suite — colour by value.
+ *
+ * "Bars above target green, below red"; "shade by size". A rule is built in
+ * the Colours tab, previewed as a strip beside the items it would colour, and
+ * written into the palette on Apply — an edit, like a transform, so the export
+ * carries colours and never a rule. Offered only where the numbers can be
+ * lined up with the colours, and every ramp step clears 3:1 on white, the
+ * ground every export draws on. */
+await page.goto(`${base}/studio.html?chart=pie`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const byValue = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const c = await import('/js/studio/colourby.js');
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const { generateCode } = await import('/js/studio/engines.js');
+
+  // The arithmetic.
+  const rampFloor = Math.min(...c.RAMPS.flatMap((r) =>
+    Array.from({ length: 41 }, (_, i) => c.contrastOnWhite(c.rampAt(r, i / 40)))));
+  const th = c.colourByValue([1, 5, 10], { kind: 'threshold', at: 5, above: '#111111', below: '#eeeeee' }).join(',');
+  const gr = c.colourByValue([0, 50, 100], { kind: 'gradient', ramp: 'green', lo: 0, hi: 100 });
+  const dv = c.colourByValue([-10, 0, 10], { kind: 'diverging', ramp: 'rose-green', mid: 0, lo: -10, hi: 10 });
+  const kept = c.colourByValue([1, NaN], { kind: 'threshold', at: 0, above: '#111111', below: '#222222' }, () => '#abcdef')[1];
+  const aligned = {};
+  for (const id of ['pie', 'bar-horizontal', 'bar-vertical', 'bar-floating', 'sankey', 'line-basic', 'treemap']) {
+    const def = CHARTS.find((x) => x.id === id);
+    const a = c.valuesFor(def, newSpec(def));
+    aligned[id] = a ? `${a.mode}:${a.columns.length}` : 'none';
+  }
+
+  // The panel, on a pie: two colours around 30, applied.
+  document.querySelector('.tab[data-tab="colours"]').click();
+  await sleep(300);
+  const panel = document.querySelector('.colour-by');
+  if (!panel) return { panel: false };
+  const before = [...window.openCharts.spec.colors];
+  const at = panel.querySelector('input[aria-label="At or above"]');
+  at.value = '30';
+  at.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(50);
+  const preview = [...panel.querySelectorAll('.colour-by-chip')].map((ch) => `${ch.textContent}=${ch.title}`);
+  const specBefore = JSON.stringify(window.openCharts.spec);
+  [...panel.querySelectorAll('.btn')].find((b) => /Apply colours/.test(b.textContent)).click();
+  await sleep(500);
+  const after = [...window.openCharts.spec.colors];
+  const code = generateCode(window.openCharts.def, window.openCharts.spec);
+  const toast = (document.querySelector('.toast') || {}).textContent || '';
+  // Undo takes the whole recolouring back as one step.
+  window.openCharts.undo();
+  await sleep(300);
+  const undone = JSON.stringify(window.openCharts.spec) === specBefore;
+
+  return {
+    panel: true, rampFloor, th, gr: gr.join(','), dv: dv.join(','), kept, aligned,
+    sub: panel.querySelector('.colour-by-sub').textContent,
+    preview, before, after,
+    split: window.openCharts.spec.values.map((v, i) => (v >= 30) === (after[i] === after[0])).every(Boolean),
+    jsHasHex: after.every((h) => code.js.includes(h)),
+    jsHasRule: /threshold|colourBy|rampAt|kind:/i.test(code.js),
+    toast, undone,
+  };
+});
+check(byValue.panel, 'the Colours tab offers a rule where the numbers line up with the colours');
+check(byValue.rampFloor >= 3, 'every step of every ramp clears 3:1 on white, the ground exports draw on', byValue.rampFloor.toFixed(2));
+check(byValue.th === '#eeeeee,#111111,#111111', 'a threshold splits at or above the value', byValue.th);
+check(byValue.gr === '#46a05c,#2e8d44,#123d1c', 'a gradient runs the ramp end to end', byValue.gr);
+check(byValue.dv === '#b53c5e,#858aa0,#2e8d44', 'a diverging rule puts the midpoint on the middle stop', byValue.dv);
+check(byValue.kept === '#abcdef', 'a value that is not a number keeps the colour it had');
+check(byValue.aligned.pie === 'row:1' && byValue.aligned['bar-horizontal'] === 'row:1' && byValue.aligned['bar-floating'] === 'row:2',
+  'one colour per row reads each row\'s value, and offers a choice where there are two', JSON.stringify(byValue.aligned));
+check(byValue.aligned['bar-vertical'] === 'column:1', 'one colour per series reads the series\' totals', byValue.aligned['bar-vertical']);
+check(byValue.aligned.sankey === 'none' && byValue.aligned['line-basic'] === 'none' && byValue.aligned.treemap === 'none',
+  'and nothing is offered where colours line up with neither', JSON.stringify(byValue.aligned));
+check(/each row's value/.test(byValue.sub) && /written into the chart, not a rule/.test(byValue.sub),
+  'the panel says what it reads and that it runs once', byValue.sub);
+check(byValue.preview.join('|') === 'Women · 48=#2e8d44|Men · 31=#2e8d44|Living · 13=#b53c5e|Accessories · 8=#b53c5e',
+  'the preview shows every item with the colour it would get, before anything is applied', byValue.preview.join('|'));
+check(byValue.split && byValue.after.join(',') !== byValue.before.join(','),
+  'Apply writes the colours into the spec, split exactly at the value', byValue.after.join(','));
+check(byValue.jsHasHex && !byValue.jsHasRule, 'the export carries the colours as literals and no rule');
+check(/^Coloured each row's value at or above 30/.test(byValue.toast), 'and says what it did', byValue.toast);
+check(byValue.undone, 'undo takes the whole recolouring back as one step');
+console.log(`  ${green('✓')} colour by value — threshold, gradient and diverging, applied as an edit`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data

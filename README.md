@@ -307,6 +307,15 @@ coordinates, which is what makes them work identically on all <!-- count:rendere
 The trade is honest and worth knowing: move the data and the note stays where
 it was, which is why you place it by dragging rather than typing two numbers.
 
+## Colour by value
+
+In the **Colours** tab, **Colour by value** colours a chart's items from their
+numbers: two colours either side of a threshold, a shade from low to high, or
+a divergence around a midpoint. You see every item with the colour it would
+get before you apply, and applying writes the colours into the chart — the
+export carries colours, not a rule, and works anywhere. Every ramp step is
+readable on the white the export draws on.
+
 ## Colours that work for everyone
 
 Roughly one man in twelve has some form of red-green colour deficiency, and the
@@ -484,7 +493,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **797 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **812 checks**, and it fails if
 anything writes to the console.
 
 ```bash
