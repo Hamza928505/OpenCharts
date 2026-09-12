@@ -23,6 +23,7 @@
 
 import { looksNumeric } from './dataio.js';
 import { toNumber, ID_NAME } from './transform.js';
+import { looksDateLike } from './timeaxis.js';
 
 /**
  * Is this an identifier?
@@ -54,8 +55,6 @@ const CATEGORY_CEILING = 50;
 
 const isBlank = (v) => v == null || String(v).trim() === '';
 
-/** ISO dates, `2024/01/03`, `03-01-2024`, and month names. Deliberately narrow. */
-const DATE_RE = /^(\d{4}[-/]\d{1,2}([-/]\d{1,2})?|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d{0,4})$/i;
 
 const median = (sorted) => {
   if (!sorted.length) return null;
@@ -84,8 +83,11 @@ function profileColumn(name, index, values) {
 
   const nums = filled.map(toNumber).filter(Number.isFinite);
   const numericShare = filled.length ? nums.length / filled.length : 0;
+  // The same reading the time axis uses, plus the bare month and quarter
+  // names it refuses — a column of `Jan … Dec` is still ordered. One parser,
+  // so the report cannot call a column dates that the axis then draws as words.
   const dateShare = filled.length
-    ? filled.filter((v) => DATE_RE.test(String(v).trim())).length / filled.length
+    ? filled.filter((v) => looksDateLike(v)).length / filled.length
     : 0;
 
   const col = {
@@ -257,7 +259,7 @@ function qualityNotes(cols, table) {
       });
     }
     // A date stored as text still sorts as text, so 10 March lands before 2 March.
-    if (c.type === 'text' && c.sample.some((v) => DATE_RE.test(v))) {
+    if ((c.type === 'text' || c.type === 'category') && c.sample.some((v) => looksDateLike(v))) {
       out.push({
         level: 'warn',
         column: c.name,

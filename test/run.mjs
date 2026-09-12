@@ -4979,6 +4979,165 @@ check(turnedUpload.labels === '2021,2022,2023,2024',
   'and applying it draws a slice per year', turnedUpload.labels);
 console.log(`  ${green('✓')} swap — rows as series in the matcher, the grid, the pipeline and the upload`);
 
+/* Suite — dates read as dates.
+ *
+ * Every chart read its x labels as words, so `2024-01`, `2024-02`, `2024-04`
+ * were three equally spaced categories and the missing March was invisible.
+ * The line and area charts now place a column of dates on a time axis, driven
+ * by a native-Date adapter that is emitted into the export, so the export asks
+ * for no further library. Bare month names are deliberately *not* dates: the
+ * twelve-month examples stay categorical. */
+const dateUnit = await page.evaluate(async () => {
+  const t = await import('/js/studio/timeaxis.js');
+  const p = (v, d) => { const x = t.parseDateLabel(v, d); return Number.isFinite(x) ? new Date(x).toISOString().slice(0, 10) : 'NaN'; };
+  const same = (a, b) => t.parseDateLabel(a) === t.parseDateLabel(b);
+  return {
+    spellings: ['2024-01-15', '2024/01/15', '15 Jan 2024', 'Jan 15, 2024', 'January 15 2024', '15-Jan-24', '15/01/2024', '01/15/2024', '15.01.2024']
+      .map((v) => p(v)).every((v) => v === '2024-01-15'),
+    months: same('2024-01', 'Jan 2024') && same('Jan 2024', "Jan '24") && same('Jan-24', '2024 Jan') && same('January 2024', '2024/01'),
+    quarters: same('2024-Q3', 'Q3 2024') && same("Q3'24", '2024 Q3') && p('Q3 2024') === '2024-07-01',
+    year: p('2024') === '2024-01-01',
+    ambiguous: `${p('03/04/2024')} ${p('03/04/2024', true)}`,
+    settled: t.dateOrder(['03/04/2024', '13/04/2024']).dayFirst && t.dateOrder(['03/04/2024', '04/13/2024']).dayFirst === false,
+    guess: t.dateOrderIsGuess(['03/04/2024', '05/04/2024']) && !t.dateOrderIsGuess(['13/04/2024']),
+    refused: [p('Jan'), p('North'), p('12'), p('2024-02-30'), p('Market 2024'), p('1000')].every((v) => v === 'NaN'),
+    utc: p('2024-01-01') === '2024-01-01' && p('2024-01-15T10:30+02:00') === '2024-01-15',
+    axis: t.isDateLabels(['2024-01', '2024-02', '2024-04']) && !t.isDateLabels(['Jan', 'Feb', 'Mar']) && !t.isDateLabels(['2024-01', 'Total']),
+    grain: [['2019', '2020'], ['2024-01', '2024-02'], ['2024-01-03', '2024-01-04'], ['Q1 2024', 'Q2 2024']].map((l) => t.dateGranularity(l)).join(','),
+    orderedStill: t.looksDateLike('Jan') && t.looksDateLike('Q1') && !t.looksDateLike('North'),
+  };
+});
+check(dateUnit.spellings, 'nine spellings of 15 January 2024 read as one day');
+check(dateUnit.months && dateUnit.quarters && dateUnit.year,
+  'months, quarters and years in their usual spellings read as their first day');
+check(dateUnit.ambiguous === '2024-03-04 2024-04-03' && dateUnit.settled && dateUnit.guess,
+  'day and month are settled by any value past twelve, and a guess is known to be one', dateUnit.ambiguous);
+check(dateUnit.refused, 'a bare month, a word, a count, February 30th and "Market 2024" are not dates');
+check(dateUnit.utc, 'a date is the same day wherever the page is opened');
+check(dateUnit.axis, 'a column is placed on a time axis only when every label is a date and bare months are not');
+check(dateUnit.grain === 'year,month,fullday,quarter',
+  'the coarsest unit describing a column is read off it', dateUnit.grain);
+check(dateUnit.orderedStill, 'the profiler still treats bare months and quarters as ordered');
+
+await page.goto(`${base}/studio.html?chart=line-basic`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const dateAxis = await page.evaluate(async () => {
+  const { applyData } = await import('/js/studio/dataio.js');
+  const { generateCode } = await import('/js/studio/engines.js');
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const app = window.openCharts;
+  const before = app.inst.chart.scales.x.type;
+  const plainJs = generateCode(app.def, newSpec(app.def)).js;
+
+  const read = async (csv) => {
+    const res = applyData(app.def, app.spec, csv);
+    app.rebuild();
+    await new Promise((r) => setTimeout(r, 500));
+    const x = app.inst.chart.scales.x;
+    return { ok: res.ok, x, chart: app.inst.chart };
+  };
+
+  // A month missing from the middle.
+  const monthly = await read('Month,Revenue\n2024-01,10\n2024-02,20\n2024-04,40\n2024-05,50');
+  const px = ['2024-01', '2024-02', '2024-04'].map((l) => monthly.x.getPixelForValue(monthly.x.parse(l)));
+  const monthlyOut = {
+    type: monthly.x.type,
+    gap: (px[2] - px[1]) / (px[1] - px[0]),
+    ticks: monthly.x.ticks.map((tk) => tk.label),
+    tip: monthly.x.getLabelForValue(monthly.x.parse('2024-04')),
+    sameTick: monthly.x.parse('2024-01') === monthly.x.parse('Jan 2024'),
+    js: generateCode(app.def, app.spec).js,
+  };
+
+  const yearly = await read('Year,Value\n2019,1\n2020,2\n2021,3\n2022,4');
+  const quarterly = await read('Quarter,Value\nQ1 2024,1\nQ2 2024,2\nQ3 2024,3\nQ4 2024,4');
+  const dayFirst = await read('Date,Value\n03/04/2024,1\n13/04/2024,2\n23/04/2024,3');
+
+  // Back to words: the example's bare months stay categorical.
+  const words = await read('Month,Revenue\nJan,10\nFeb,20\nMar,30');
+
+  return {
+    before,
+    plainHasAdapter: plainJs.includes('installDateAdapter'),
+    monthly: monthlyOut,
+    yearlyTicks: yearly.x.ticks.map((tk) => tk.label).join(','),
+    quarterlyTicks: quarterly.x.ticks.map((tk) => tk.label).join(','),
+    quarterlyTip: quarterly.x.getLabelForValue(quarterly.x.parse('Q3 2024')),
+    dayFirstTip: dayFirst.x.getLabelForValue(dayFirst.x.parse('03/04/2024')),
+    wordsType: words.x.type,
+  };
+});
+check(dateAxis.before === 'category' && dateAxis.wordsType === 'category',
+  'the example and a column of bare months draw on a category axis');
+check(!dateAxis.plainHasAdapter, 'a chart with no dates exports without the adapter');
+check(dateAxis.monthly.type === 'time', 'a column of dates draws on a time axis', dateAxis.monthly.type);
+check(dateAxis.monthly.gap > 1.85 && dateAxis.monthly.gap < 2.1,
+  'a missing month is a gap twice as wide as a present one', dateAxis.monthly.gap.toFixed(2));
+check(dateAxis.monthly.ticks.length > 0 && dateAxis.monthly.ticks.every((l) => /^[A-Z][a-z]{2} 2024$/.test(l)),
+  'a monthly series ticks by month, never finer', dateAxis.monthly.ticks.join(','));
+check(dateAxis.monthly.tip === 'Apr 2024' && dateAxis.monthly.sameTick,
+  'the tooltip says the month, and "2024-01" and "Jan 2024" land on one tick', dateAxis.monthly.tip);
+check(dateAxis.yearlyTicks === '2019,2020,2021,2022',
+  'a yearly series ticks by year', dateAxis.yearlyTicks);
+check(/^Q[1-4] 2024/.test(dateAxis.quarterlyTicks) && dateAxis.quarterlyTip === 'Q3 2024',
+  'a quarterly series reads as quarters', `${dateAxis.quarterlyTicks} / ${dateAxis.quarterlyTip}`);
+check(/Apr 3, 2024|3 Apr 2024/.test(dateAxis.dayFirstTip),
+  'a day-first column is read day-first once any value settles it', dateAxis.dayFirstTip);
+check(dateAxis.monthly.js.includes('installDateAdapter();') && dateAxis.monthly.js.includes('function parseDateLabel'),
+  'the export carries the adapter and the parser, and asks for no library');
+
+// The export runs, on time, with no errors.
+const datedHtml = await page.evaluate(async () => {
+  const { applyData } = await import('/js/studio/dataio.js');
+  const { generateCode } = await import('/js/studio/engines.js');
+  const app = window.openCharts;
+  applyData(app.def, app.spec, 'Month,Revenue\n2024-01,10\n2024-02,20\n2024-04,40\n2024-05,50');
+  return generateCode(app.def, app.spec).standalone;
+});
+generated.set('/export-dated-line.html', datedHtml);
+{
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(`${base}/export-dated-line.html`, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(800);
+  const state = await probe.evaluate(() => {
+    const c = Chart.getChart(document.querySelector('canvas'));
+    return { type: c.scales.x.type, tip: c.scales.x.getLabelForValue(c.scales.x.parse('2024-04')), scripts: [...document.scripts].filter((s) => s.src).length };
+  });
+  await probe.close();
+  check(!errs.length && state.type === 'time' && state.tip === 'Apr 2024',
+    'a dated export runs clean on a time axis', errs[0] || JSON.stringify(state));
+  check(state.scripts === 1, 'and loads Chart.js and nothing else for it', `${state.scripts} script tags`);
+}
+
+// The matcher says what it saw.
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const dateReport = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const box = document.querySelector('#match-text');
+  const say = async (csv) => {
+    box.value = csv;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(500);
+    return document.querySelector('#match-read').textContent;
+  };
+  const dated = await say('Month,Revenue\n2024-01,10\n2024-02,20\n2024-04,40');
+  const guessed = await say('Date,Revenue\n03/04/2024,10\n05/04/2024,20\n07/04/2024,40');
+  const words = await say('Region,Revenue\nNorth,10\nSouth,20\nEast,40');
+  return {
+    dated: /time axis/.test(dated) && /gap/.test(dated),
+    guessed: /month first/.test(guessed) && /03\/04\/2024/.test(guessed),
+    datedNotGuessed: !/month first/.test(dated),
+    words: !/time axis/.test(words),
+  };
+});
+check(dateReport.dated, 'the report says a first column of dates goes on a time axis');
+check(dateReport.guessed && dateReport.datedNotGuessed,
+  'and names the day/month guess, only where nothing in the column settled it');
+check(dateReport.words, 'a column of words is not told about time axes');
+console.log(`  ${green('✓')} dates — read as dates, drawn on time, exported without a library`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data

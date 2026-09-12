@@ -8,6 +8,8 @@
  * the copied snippet working anywhere without carrying our CSS with it.
  */
 
+import { isDateLabels, dateOrder, dateGranularity } from './timeaxis.js';
+
 export const TICK_COLOR = '#8a8880';
 export const GRID_COLOR = 'rgba(128,128,128,.14)';
 
@@ -20,6 +22,51 @@ export const xAxis = (extra = {}) => ({
   border: { color: GRID_COLOR },
   ...extra,
 });
+
+/**
+ * The x axis a list of labels deserves: time when they are dates, category
+ * when they are words.
+ *
+ * `2024-01, 2024-02, 2024-04` used to be three equally spaced categories, so a
+ * missing month was invisible and a series of years could not thin its ticks.
+ * When every label parses as a date (`isDateLabels` — bare month names do
+ * not, so the twelve-month examples stay categorical) the scale becomes
+ * Chart.js's `time`, driven by the native-Date adapter `engines.js` installs
+ * and emits beside the export, so no further library is asked for.
+ *
+ * `time.parser` carries the day/month order `dateOrder` read off the column,
+ * and `tooltipFormat` the coarsest unit that describes every label, so a
+ * yearly series reads "2024" on hover rather than "1 Jan 2024".
+ *
+ * Everything returned is a literal, as `xAxis` requires: the config is
+ * serialised as data.
+ */
+export const xAxisFor = (labels, extra = {}) => {
+  if (!isDateLabels(labels)) return xAxis(extra);
+  const { ticks: extraTicks, ...rest } = extra;
+  const grain = dateGranularity(labels);
+  // Ticks never go finer than the data: a monthly series gets months, not
+  // "Jan 12, Jan 23" — which is what Chart.js chose left to itself.
+  const minUnit = { year: 'year', quarter: 'quarter', month: 'month', fullday: 'day', datetime: 'minute' }[grain];
+  return xAxis({
+    type: 'time',
+    time: {
+      parser: dateOrder(labels).dayFirst ? 'dmy' : 'mdy',
+      tooltipFormat: grain,
+      minUnit,
+      // Chart.js never picks quarters on its own (the unit is marked
+      // uncommon), so four quarters came out as one tick reading "2024".
+      // Quarterly data is told the unit; autoSkip thins a long run.
+      ...(grain === 'quarter' ? { unit: 'quarter' } : {}),
+    },
+    ticks: { ...TICK, maxRotation: 0, autoSkipPadding: 12, ...extraTicks },
+    ...rest,
+  });
+};
+
+/** Labels as the time scale wants them: strings, so a year is a year and not a timestamp. */
+export const axisLabels = (labels) =>
+  (isDateLabels(labels) ? labels.map((l) => String(l)) : labels);
 
 /** Y axis: value scale with horizontal guides. */
 export const yAxis = (extra = {}) => ({
