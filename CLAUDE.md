@@ -1288,6 +1288,53 @@ The difference is that a transform produces numbers, which the library's one
 hard rule says a renderer must be handed rather than derive; an annotation
 produces no numbers at all.
 
+### Somewhere to keep what you made
+
+A share link was the only way a chart survived closing the tab. `shelf.js`
+is the shelf every publishing tool has, without the account: `localStorage`
+on this browser, plus a JSON file to carry it to another. **Storage and a
+list, not a format** — a saved chart is the `{ chart, spec }` the Spec view
+prints, with a name, a thumbnail and two timestamps beside it, and it opens
+through the door a share link uses (`load(chart, { shared: spec })`, merged
+over `newSpec`, so a chart saved before its definition gained an option
+still opens).
+
+Three surfaces:
+
+- **The studio** has `Save` in the stage bar and `Ctrl+S`. The name is the
+  caption's title where there is one, the chart's title otherwise; the
+  thumbnail is the canvas at 240px (an SVG chart shows its name instead —
+  rasterising it is a round-trip on every save). A second save updates the
+  entry the chart was opened from; opening another chart starts unsaved. The
+  address gains `?saved=<id>`, so a reload or a bookmark reopens what was
+  kept — `_boot` reads it before `?chart=`, because the entry names the chart.
+- **The gallery** has a `My charts` strip above the grid: one card per saved
+  chart, rename in place, remove after asking (there is no other copy),
+  `Export all` and `Import…`. Always present, one line tall when empty,
+  because a feature nobody can see is a feature nobody uses — and Import has
+  to be reachable before anything has been saved here, or a shelf carried
+  from another browser has nowhere to land.
+- **The file** is `{ kind: 'opencharts-shelf', version, charts }`; Import
+  also takes a bare `{ chart, spec }` from the Spec view. Entries already
+  here (by id) are updated, the rest added, and a chart this library does not
+  have is skipped and counted.
+
+Four rules, each checked:
+
+- **A corrupt row is skipped, never fatal.** Anything can happen to storage
+  between a write and a read; one bad row must not take the shelf down. A
+  row naming a chart this library lacks stays in storage and in an export,
+  gets no card, and opening it says why instead of showing a blank studio.
+- **The cap evicts the least recently touched, never the one just saved**,
+  and the toast names how many went. `SHELF_LIMIT` is 40. Thumbnails go
+  before any chart does when storage refuses a write. The tie-break is
+  strict — `<=` evicted the chart just saved when two landed in one
+  millisecond.
+- **Nothing in `shelf.js` knows what a chart is.** The registry is not
+  imported; callers pass `isChart`. Ids are time plus a counter, not
+  `Math.random` — the suite's rule from the sidebar applies here too.
+- **Ctrl+S stands down while the data editor is open**, like Ctrl+Z.
+
 ### A chart that explains itself
 
 A title above the plate, a line under it saying how to read it, a source at
@@ -2162,6 +2209,7 @@ the values it changed are shown by the series widget next door.
 | `resize.js` | The grip that sets how wide the controls column is |
 | `annotate.js` | Notes, rules and bands laid over the plate, and the drag that places them |
 | `caption.js` | Title, subtitle, source and byline around the plate — the markup for preview and export, and the lines a picture of it carries |
+| `shelf.js` | My charts — saved `{ chart, spec }` entries in localStorage, and the file that carries them between browsers |
 | `facet.js` | Small multiples — one spec split into a grid of complete specs |
 | `a11y.js` | The chart as text — its description and its data as a table |
 | `transform.js` | Group, filter, bin, sort and limit a table before it becomes a chart |
@@ -2206,7 +2254,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **779 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **797 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

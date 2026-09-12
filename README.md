@@ -41,6 +41,14 @@ thing as a button on the table, undoable, and as a step in the Shape tab.
 Nothing is uploaded. The file is read in the browser, and the table travels to
 the studio in session storage rather than over a network.
 
+## Keeping a chart
+
+**Save** in the studio (or Ctrl+S) keeps the chart on this browser, under
+its title. The gallery shows what you kept as **My charts** — open one, rename
+it, remove it — and **Export all** writes them as one JSON file that
+**Import…** reads back on another browser. Nothing leaves your machine; there
+is no account. Forty charts fit, and the oldest go first when they do not.
+
 ## Sharing a chart
 
 Once you have a chart the way you want it, **Share** copies a link that
@@ -476,7 +484,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **779 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **797 checks**, and it fails if
 anything writes to the console.
 
 ```bash

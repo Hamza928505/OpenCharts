@@ -23,6 +23,8 @@ import { profileTable } from './profile.js';
 import { recommendCharts } from './recommend.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
+import { ask } from './confirm.js';
+import { listSaved, removeSaved, renameSaved, exportShelf, importShelf, whenSaved } from './shelf.js';
 
 /**
  * How long one frame may spend building charts before yielding.
@@ -69,6 +71,7 @@ export class GalleryApp {
     this._buildFilters();
     this._buildStats();
     this._buildMatcher();
+    this._buildShelf();
     /** id → host, waiting to be built. */
     this._pending = new Map();
     this._pumping = false;
@@ -302,6 +305,136 @@ export class GalleryApp {
         run();
       }
     }
+  }
+
+  /**
+   * My charts: what this reader kept, on this browser.
+   *
+   * A strip above the grid, one card per saved chart, opening the studio on
+   * the saved spec. Always present, one line tall when empty, because a
+   * feature nobody can see is a feature nobody uses — and the Import button
+   * has to be reachable before anything has been saved here, or a shelf
+   * carried from another browser has nowhere to land.
+   *
+   * Rename edits in place; Remove asks first, because the chart is not
+   * anywhere else. Export writes the whole shelf as one JSON file, Import
+   * reads one back and says what it did, chart by chart.
+   */
+  _buildShelf() {
+    const host = document.querySelector('#shelf');
+    if (!host) return;
+    this.shelfEl = host;
+    this._renderShelf();
+  }
+
+  _renderShelf() {
+    const host = this.shelfEl;
+    // An entry naming a chart this library does not have cannot open here;
+    // it stays in storage — and in an export — but gets no card.
+    const saved = listSaved().filter((s) => CHARTS.some((c) => c.id === s.chart));
+    const esc = escapeHtml;
+    host.classList.toggle('is-empty', !saved.length);
+
+    host.innerHTML =
+      `<div class="shelf-head">`
+      + `<h2 class="shelf-title">My charts <span class="shelf-count">${saved.length}</span></h2>`
+      + (saved.length
+        ? '<p class="shelf-sub">Kept on this browser. Export them to carry them to another.</p>'
+        : '<p class="shelf-sub">Nothing kept yet — press <b>Save</b> in the studio, or import a charts file.</p>')
+      + `<div class="shelf-tools">`
+      + (saved.length ? `<button class="btn btn-sm" id="shelf-export" type="button">Export all</button>` : '')
+      + `<button class="btn btn-sm btn-ghost" id="shelf-import" type="button">Import…</button>`
+      + `<input id="shelf-file" type="file" accept="application/json,.json" hidden>`
+      + `</div></div>`
+      + (saved.length ? `<div class="shelf-grid">${saved.map((s) => this._shelfCard(s)).join('')}</div>` : '');
+
+    host.querySelector('#shelf-export')?.addEventListener('click', () => {
+      const blob = new Blob([exportShelf()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `opencharts-my-charts-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast(`Exported ${saved.length} chart${saved.length === 1 ? '' : 's'}`, 'ok');
+    });
+
+    const file = host.querySelector('#shelf-file');
+    host.querySelector('#shelf-import')?.addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+      const res = importShelf(await f.text(), { isChart: (id) => CHARTS.some((c) => c.id === id) });
+      toast(res.message, res.ok ? 'ok' : 'bad', 4200);
+      this._renderShelf();
+    });
+
+    host.querySelectorAll('.shelf-remove').forEach((b) => b.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const id = b.dataset.id;
+      const entry = saved.find((s) => s.id === id);
+      const yes = await ask({
+        title: `Remove "${entry ? (entry.name || 'this chart') : 'this chart'}" from My charts?`,
+        text: 'It is kept on this browser only, so there is no other copy.',
+        tone: 'warn',
+        confirm: 'Remove it',
+        cancel: 'Keep it',
+      });
+      if (!yes) return;
+      removeSaved(id);
+      this._renderShelf();
+    }));
+
+    // Rename in place: the name becomes a box, Enter or leaving it commits.
+    host.querySelectorAll('.shelf-rename').forEach((b) => b.addEventListener('click', (e) => {
+      e.preventDefault();
+      const card = b.closest('.shelf-card');
+      const nameEl = card.querySelector('.shelf-name');
+      const input = document.createElement('input');
+      input.className = 'shelf-name-input';
+      input.value = nameEl.textContent;
+      input.setAttribute('aria-label', 'Chart name');
+      nameEl.replaceWith(input);
+      input.focus();
+      input.select();
+      let done = false;
+      const commit = () => {
+        if (done) return;
+        done = true;
+        renameSaved(b.dataset.id, input.value);
+        this._renderShelf();
+      };
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+        if (ev.key === 'Escape') { done = true; this._renderShelf(); }
+      });
+      input.addEventListener('blur', commit);
+      // The card is a link; typing in it must not follow it.
+      input.addEventListener('click', (ev) => ev.preventDefault());
+    }));
+  }
+
+  _shelfCard(s) {
+    const esc = escapeHtml;
+    const def = CHARTS.find((c) => c.id === s.chart);
+    const href = `studio.html?chart=${encodeURIComponent(s.chart)}&saved=${encodeURIComponent(s.id)}`;
+    const thumb = s.thumb
+      ? `<img class="shelf-thumb" src="${s.thumb}" alt="">`
+      : `<div class="shelf-thumb shelf-thumb-blank" aria-hidden="true">${def ? esc(def.title) : ''}</div>`;
+    return `<a class="shelf-card" href="${href}">`
+      + thumb
+      + `<div class="shelf-meta">`
+      + `<span class="shelf-name">${esc(s.name || (def ? def.title : s.chart))}</span>`
+      + `<span class="shelf-kind">${def ? esc(def.title) : esc(s.chart)} · ${esc(whenSaved(s.updatedAt))}</span>`
+      + `</div>`
+      + `<span class="shelf-actions">`
+      + `<button class="shelf-rename" type="button" data-id="${esc(s.id)}" title="Rename" aria-label="Rename">✎</button>`
+      + `<button class="shelf-remove" type="button" data-id="${esc(s.id)}" title="Remove" aria-label="Remove">✕</button>`
+      + `</span>`
+      + `</a>`;
   }
 
   /** What the parser saw, and what it means — shown before any chart list. */

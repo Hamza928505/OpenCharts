@@ -25,6 +25,7 @@ import { mountControlsResize } from './resize.js';
 import { tableMarkup } from './a11y.js';
 import { attachAnnotationDrags } from './annotate.js';
 import { captionHead, captionFoot, captionLines } from './caption.js';
+import { saveChart, getSaved, thumbnailOf } from './shelf.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -96,11 +97,26 @@ export class StudioApp {
    * first render, so this is separate from the constructor.
    */
   async _boot() {
-    const id = this._idFromUrl();
-    const token = new URLSearchParams(location.search).get('s');
+    const params = new URLSearchParams(location.search);
+    const token = params.get('s');
     const shared = token ? await decodeSpec(token) : null;
     if (token && !shared) toast('That shared link could not be read — showing the default', 'bad');
-    this.load(id, { push: false, shared });
+
+    // A saved chart opens through the same door a shared link does: its spec
+    // merged over the chart's defaults. The shelf entry names the chart, so
+    // `?saved=` alone is enough to reopen it; `?chart=` is there for the URL
+    // to read well and for a link whose entry has since been removed.
+    const savedId = params.get('saved');
+    const saved = savedId ? getSaved(savedId) : null;
+    if (savedId && !saved) toast('That saved chart is no longer on this browser — showing the default', 'bad');
+    // A chart saved by a newer library than this one names a chart this one
+    // does not have; say so rather than open a blank studio.
+    if (saved && !getChart(saved.chart)) toast(`That saved chart is a "${saved.chart}", which this library does not have`, 'bad', 4200);
+    if (saved && getChart(saved.chart)) {
+      this.load(saved.chart, { push: false, shared: saved.spec, savedId: saved.id });
+      return;
+    }
+    this.load(this._idFromUrl(), { push: false, shared });
 
     // Switching chart is the second most common thing anyone does here, and
     // the rail reaches all 115 — so the libraries the next one might want are
@@ -332,6 +348,7 @@ export class StudioApp {
     });
     $('#btn-png')?.addEventListener('click', () => this._exportPNG());
     $('#btn-share')?.addEventListener('click', () => this._share());
+    $('#btn-save')?.addEventListener('click', () => this._save());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
     // A key stored for the "AI Analyst" is swept up. That control stored an
@@ -397,13 +414,17 @@ export class StudioApp {
 
   /* ── Load & render ─────────────────────────────────────────────────────── */
 
-  load(id, { push = true, shared = null } = {}) {
+  load(id, { push = true, shared = null, savedId = null } = {}) {
     const def = getChart(id);
     if (!def) return;
 
     destroyInstance(this.inst);
     this.inst = null;
     this.def = def;
+    // Which shelf entry Save updates. Opening any other chart is a new thing,
+    // not an edit of the saved one, so it starts unsaved.
+    this.savedId = savedId;
+    this._paintSaveState();
     // A shared link carries a whole spec. Merge it over the defaults rather
     // than replacing them, so a link made before a chart gained a new option
     // still opens.
@@ -568,6 +589,14 @@ export class StudioApp {
    */
   _bindHistoryKeys() {
     document.addEventListener('keydown', (e) => {
+      // Ctrl+S is what every editor means by "keep this"; the browser's own
+      // Save Page is not what anyone in a chart studio wants from it.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+        if (document.querySelector('.dlg-scrim')) return;
+        e.preventDefault();
+        this._save();
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
       if (document.querySelector('.dlg-scrim')) return;
       const t = e.target;
@@ -613,6 +642,47 @@ export class StudioApp {
       // A table is one deliberate act however quickly it followed the last.
       this._commit({ step: true });
     });
+  }
+
+  /**
+   * Keep the chart on this browser's shelf.
+   *
+   * The name is the caption's title where there is one — the reader already
+   * said what the chart is about — and the chart's own title otherwise. A
+   * second save updates the entry the chart was opened from rather than
+   * adding a twin; opening a different chart starts a new one.
+   */
+  _save() {
+    if (!this.def) return;
+    const caption = this.spec && this.spec.caption;
+    const name = (caption && caption.title) || this.def.title;
+    const canvas = this.host.querySelector('canvas');
+    const res = saveChart({
+      id: this.savedId,
+      name,
+      chart: this.def.id,
+      spec: this.spec,
+      thumb: thumbnailOf(canvas),
+    });
+    if (!res.ok) { toast(res.message, 'bad'); return; }
+    this.savedId = res.entry.id;
+    this._paintSaveState();
+    // The address now names the saved chart, so a reload or a bookmark
+    // reopens what was kept rather than the example.
+    const url = new URL(location.href);
+    url.searchParams.set('saved', this.savedId);
+    history.replaceState({ id: this.def.id }, '', url.toString());
+    toast(res.message, 'ok', res.evicted ? 4200 : undefined);
+  }
+
+  /** The Save button says whether this chart is already on the shelf. */
+  _paintSaveState() {
+    const b = $('#btn-save');
+    if (!b) return;
+    b.classList.toggle('is-saved', !!this.savedId);
+    b.title = this.savedId
+      ? 'Update this chart in My charts (Ctrl+S)'
+      : 'Keep this chart in My charts on this browser (Ctrl+S)';
   }
 
   /** Copy a link that reproduces exactly what is on screen. */
