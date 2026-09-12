@@ -27,7 +27,7 @@
  * `filter → group → sort → limit` reads exactly as it is written.
  */
 
-import { looksNumeric } from './dataio.js';
+import { looksNumeric, transposeTable } from './dataio.js';
 
 /** How a group's rows are folded into one. */
 export const AGGREGATES = [
@@ -57,6 +57,7 @@ export const OPS = [
   { id: 'bin', label: 'Bucket a number into ranges' },
   { id: 'sort', label: 'Sort by…' },
   { id: 'limit', label: 'Keep only the first…' },
+  { id: 'transpose', label: 'Swap rows and columns' },
 ];
 
 /**
@@ -266,7 +267,25 @@ function opBin(table, step) {
   };
 }
 
-const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin };
+/**
+ * Each row becomes a column and each column a row.
+ *
+ * The one step here that changes nothing about the numbers — it changes which
+ * of them a chart reads as a series. A file laid out with the series down the
+ * side, `Product, Q1, Q2` over `Widgets, 10, 20`, is read as a bar per product
+ * by every `labelSeries` chart; the same numbers as a bar per quarter need the
+ * table the other way round, and this is the only way to get there that does
+ * not go through a spreadsheet. `transposeTable` in dataio owns the arithmetic
+ * so the gallery's matcher and the grid's own button turn a table identically.
+ */
+function opTranspose(table) {
+  return transposeTable(table);
+}
+
+const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin, transpose: opTranspose };
+
+/** The steps Arquero has no equivalent for; a pipeline holding one runs natively. */
+const NATIVE_ONLY = new Set(['bin', 'transpose']);
 
 /**
  * Run every step in order.
@@ -292,10 +311,11 @@ export function runSteps(table, steps) {
   const errors = [];
 
   // Use Arquero if available for the entire pipeline.
-  // Skip if any step uses 'bin' — not yet ported to Arquero — because aborting
+  // Skip if any step is one Arquero has no equivalent for — a bin, or a
+  // transpose, which is not a relational operation at all — because aborting
   // mid-pipeline leaves stages and current in an inconsistent state.
-  const hasBin = steps && steps.some((s) => s && s.op === 'bin');
-  if (typeof window.aq !== 'undefined' && steps && steps.length > 0 && !hasBin) {
+  const nativeOnly = steps && steps.some((s) => s && NATIVE_ONLY.has(s.op));
+  if (typeof window.aq !== 'undefined' && steps && steps.length > 0 && !nativeOnly) {
     try {
       const aq = window.aq;
       // Convert to Arquero table
@@ -459,6 +479,7 @@ export function describeStep(step, headers) {
     case 'bin': return `Bucket ${name(step.col)} into ${step.bins || 10} ranges`;
     case 'sort': return `Sort by ${name(step.col)}, ${step.dir === 'desc' ? 'largest first' : 'smallest first'}`;
     case 'limit': return `Keep the first ${step.n || 10} rows`;
+    case 'transpose': return 'Swap rows and columns — each row becomes a column, headed by its first cell';
     default: return 'Unknown step';
   }
 }
@@ -476,6 +497,7 @@ export function defaultStep(op, table) {
     case 'bin': return { op, col: nums[0] ?? 0, bins: 10 };
     case 'sort': return { op, col: nums[0] ?? 0, dir: 'desc' };
     case 'limit': return { op, n: 10 };
+    case 'transpose': return { op };
     default: return { op };
   }
 }

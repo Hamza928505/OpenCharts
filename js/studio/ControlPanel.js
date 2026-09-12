@@ -10,7 +10,7 @@
 
 import { paletteAt } from './palette.js';
 import { attachColourPicker } from './colorpicker.js';
-import { parseTable, applyData, expectedFormat, checkTableShape } from './dataio.js';
+import { parseTable, applyData, expectedFormat, checkTableShape, transposeTable } from './dataio.js';
 import { chooseDataFile } from './fileimport.js';
 import { rankCharts, requestMatch } from './DataMatch.js';
 import { ask } from './confirm.js';
@@ -642,16 +642,29 @@ function widgetData(ctrl, spec, notify, def) {
         elsewhere = ranked.fits.length + ranked.partial.length;
       } catch { /* the offer just goes unqualified */ }
 
+      // A file that does not fit as it is very often fits turned round: the
+      // series were written down the side rather than across the top. That is
+      // the same file, and refusing it for the way it was laid out would be
+      // refusing the reader's own data on a technicality they cannot see.
+      // A table with no header row is turned without its invented one, since
+      // the column that really named the rows is what becomes the header.
+      const turned = transposeTable(table.hadHeader ? table : { headers: [], rows: table.rows });
+      const turnedFit = turned.rows.length ? checkTableShape(def, turned) : { ok: false };
+
       const choice = await ask({
         title: `${res.name} does not match this chart`,
-        text: fit.message,
+        text: turnedFit.ok
+          ? `${fit.message} With rows and columns swapped it does fit, so the editor `
+            + 'can open on it that way round — the table there has a button to turn it back.'
+          : fit.message,
         list: [
           `This chart reads: ${fit.expected.columns.join(', ') || fit.expected.hint}`,
           `Your file has: ${table.headers.join(', ')}`,
+          turnedFit.ok ? `Swapped, it has: ${turned.headers.join(', ')}` : null,
           fit.expected.grows ? `Note: ${fit.expected.grows}` : null,
         ].filter(Boolean),
         tone: 'stop',
-        confirm: 'Open the editor',
+        confirm: turnedFit.ok ? 'Open it swapped' : 'Open the editor',
         alt: elsewhere ? `See ${elsewhere} charts that read this` : null,
         cancel: 'Cancel',
       });
@@ -664,8 +677,11 @@ function widgetData(ctrl, spec, notify, def) {
         return;
       }
       // The grid is where a near miss gets fixed — renaming a column or
-      // deleting a stray one — rather than being refused outright.
-      if (choice) openDataDialog(def, spec, afterApply, res.text);
+      // deleting a stray one — rather than being refused outright. The turned
+      // table goes over as a table, not as text: its header row is the file's
+      // label column, which the header guess gets wrong whenever those are
+      // years, and this is the one caller that knows.
+      if (choice) openDataDialog(def, spec, afterApply, turnedFit.ok ? turned : res.text);
       return;
     }
 

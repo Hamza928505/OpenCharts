@@ -31,6 +31,13 @@ A spreadsheet written for people rarely starts at its header — there is a titl
 in A1, often a row of merged section banners under it. Those are skipped, and
 the reader is told how many rows went.
 
+**Series run down your file rather than across it?** Every chart reads a
+series from a column, and a file laid out one row per product with the months
+across draws a bar per product. Tick **Swap rows and columns** and the same
+file is read the other way up — a bar per month, a series per product — on
+every tile, in the studio and in the prompt. The data editor has the same
+thing as a button on the table, undoable, and as a step in the Shape tab.
+
 Nothing is uploaded. The file is read in the browser, and the table travels to
 the studio in session storage rather than over a network.
 
@@ -241,8 +248,9 @@ rather than 2,400 simulated ones.
 
 The file most people have is five hundred transactions; the chart they want is
 revenue by region, seven bars. The **Shape** tab in the data editor closes that
-gap with five operations — filter, group, bin, sort, limit — in a pipeline
-where each step reads the table the one before it made.
+gap with six operations — filter, group, bin, sort, limit, and swapping rows
+for columns — in a pipeline where each step reads the table the one before it
+made.
 
 They are an **edit, not a layer**. They run once, and what comes out is written
 into the grid as literal values, exactly as a paste would be. Nothing is
@@ -459,7 +467,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **655 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **723 checks**, and it fails if
 anything writes to the console.
 
 ```bash

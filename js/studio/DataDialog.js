@@ -26,7 +26,7 @@ import { ask } from './confirm.js';
 import { readDataFile, readDataUrl, ACCEPTED } from './fileimport.js';
 import { loadLibrary } from './loader.js';
 import {
-  OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns,
+  OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns, describeStep,
 } from './transform.js';
 import { toast } from './toast.js';
 import { facetableColumns, facetByColumn, facetSource, isFaceted } from './facet.js';
@@ -47,10 +47,16 @@ const el = (tag, cls, text) => {
  * @param {object} def   chart definition
  * @param {object} spec  live spec — only mutated if the user applies a change
  * @param {Function} onApply called after a successful apply
- * @param {string} [seedText] open on this table instead of the chart's current
- *   one — how a file that did not match its chart gets handed over for fixing
+ * @param {string|{headers: string[], rows: string[][]}} [seed] open on this
+ *   table instead of the chart's current one — how a file that did not match
+ *   its chart gets handed over for fixing. Text is parsed, and its header row
+ *   guessed at; a table is taken as it stands, for a caller that already knows
+ *   which row is the header — the guess fails on exactly the table a swap
+ *   produces, whose header row is the file's label column and may be years.
  */
-export function openDataDialog(def, spec, onApply, seedText) {
+export function openDataDialog(def, spec, onApply, seed) {
+  const seedTable = seed && typeof seed === 'object' && Array.isArray(seed.rows) ? seed : null;
+  const seedText = seedTable ? toCSV(seedTable.headers, seedTable.rows) : seed;
   const desc = def.data || {};
   const picker = desc.picker || null;   // 'cities' | 'countries' | null
 
@@ -116,7 +122,9 @@ export function openDataDialog(def, spec, onApply, seedText) {
     : (currentText && currentText.trim() ? currentText : (desc.example || ''));
   // A table this chart wrote itself has a header by construction. A table
   // handed over from a file does not, so that one still has to be worked out.
-  const start = parseTable(startText, fromChart ? true : expectedCols);
+  const start = seedTable
+    ? { headers: [...seedTable.headers], rows: seedTable.rows.map((r) => [...r]) }
+    : parseTable(startText, fromChart ? true : expectedCols);
 
   /* ── colours in the table ────────────────────────────────────────────
    *
@@ -246,7 +254,12 @@ export function openDataDialog(def, spec, onApply, seedText) {
   const gridNote = el('p', 'dlg-note');
   gridNote.innerHTML =
     'Click a cell and type. <kbd>Tab</kbd> moves across, <kbd>Enter</kbd> moves down. '
-    + 'You can paste a block straight from Excel or Sheets into any cell — it fills from there.';
+    + 'You can paste a block straight from Excel or Sheets into any cell — it fills from there.'
+    // Only said where the button exists: the sentence names a control, and a
+    // sentence about a control that is not there is a scavenger hunt.
+    + (columnRules(desc.shape).swap
+      ? ' If your series run down the table rather than across it, <b>Swap rows ↔ columns</b> turns it.'
+      : '');
   gridPanel.appendChild(gridNote);
 
   /* Splitting one table into a grid of charts.
@@ -445,7 +458,8 @@ export function openDataDialog(def, spec, onApply, seedText) {
     loadLibrary('arquero').catch(() => { /* the native runners are the truth */ });
 
     wrap.appendChild(el('p', 'dlg-note',
-      'Group, filter, sort or bucket the rows before they reach the chart. '
+      'Group, filter, sort or bucket the rows before they reach the chart — or swap '
+      + 'rows and columns, when the series run down the file instead of across it. '
       + 'Useful when the file is five hundred transactions and the chart is seven bars.'));
 
     const stepList = el('div', 'shape-steps');
@@ -583,6 +597,10 @@ export function openDataDialog(def, spec, onApply, seedText) {
         body.appendChild(el('span', 'shape-word', 'Keep the first'));
         body.appendChild(numberBox(step.n || 10, (v) => { step.n = v; change(); }, 'How many rows'));
         body.appendChild(el('span', 'shape-word', 'rows'));
+      } else if (step.op === 'transpose') {
+        // Nothing to choose: the whole table turns. The sentence is the
+        // control, so a reader can see what the step will do to it.
+        body.appendChild(el('span', 'shape-word', describeStep(step, headers)));
       }
 
       row.appendChild(body);

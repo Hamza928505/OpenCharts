@@ -4609,6 +4609,190 @@ check(shapeUi.undoOn && shapeUi.afterUndo === 120,
   'a reshape can be undone back to the whole file', `${shapeUi.afterUndo} rows after undo`);
 console.log(`  ${green('✓')} shape — group, filter, bin, sort and limit, applied as an edit`);
 
+/* A table the other way up.
+ *
+ * Every chart reads a series from a column, and the file most people have was
+ * written with the series down the side. Read as it is, `Product, Q1, Q2` over
+ * `Widgets, 10, 20` is a bar per product; what was wanted was a bar per
+ * quarter, and until this the only way there was a spreadsheet. The swap is
+ * offered in three places and this holds all three to one arithmetic. */
+const turnedUnit = await page.evaluate(async () => {
+  const d = await import('/js/studio/dataio.js');
+  const t = await import('/js/studio/transform.js');
+  const tbl = { headers: ['Product', 'Q1', 'Q2', 'Q3'], rows: [['Widgets', '10', '20', '30'], ['Gadgets', '15', '25']] };
+  const turned = d.transposeTable(tbl);
+  const back = d.transposeTable(turned);
+  const noHead = d.transposeTable({ headers: [], rows: [['Widgets', '10', '20'], ['Gadgets', '15', '25']] });
+  const piped = t.runSteps(tbl, [{ op: 'transpose' }, { op: 'sort', col: 1, dir: 'desc' }]).table;
+  const flat = (x) => `${x.headers.join(',')}|${x.rows.map((r) => r.join(',')).join('|')}`;
+  return {
+    turned: flat(turned),
+    back: flat(back),
+    noHead: flat(noHead),
+    piped: piped.rows.map((r) => r[0]).join(','),
+    offered: t.OPS.some((o) => o.id === 'transpose'),
+    rules: ['labelSeries', 'rowSeries', 'items', 'matrix', 'links', 'places', 'ohlc', 'tree']
+      .map((sh) => `${sh}:${d.columnRules(sh).swap ? 'y' : 'n'}`).join(' '),
+  };
+});
+check(turnedUnit.turned === 'Product,Widgets,Gadgets|Q1,10,15|Q2,20,25|Q3,30,',
+  'a turned table is headed by its first column, and a ragged row is squared off',
+  turnedUnit.turned);
+check(turnedUnit.back === 'Product,Q1,Q2,Q3|Widgets,10,20,30|Gadgets,15,25,',
+  'and turning it back gives the table it came from', turnedUnit.back);
+check(turnedUnit.noHead === 'Widgets,Gadgets|10,15|20,25',
+  'a table with no header row is turned without its invented one', turnedUnit.noHead);
+check(turnedUnit.piped === 'Q3,Q2,Q1' && turnedUnit.offered,
+  'the Shape pipeline offers the swap as a step the next one sees', turnedUnit.piped);
+check(turnedUnit.rules === 'labelSeries:y rowSeries:y items:y matrix:y links:n places:n ohlc:n tree:n',
+  'a swap is offered where a table is a grid of series, and not where a column means something',
+  turnedUnit.rules);
+
+/* The gallery: the tick box turns the table before anything ranks it, so the
+ * tiles, the hand-off and the prompt all carry the turned table. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const turnedGallery = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const app = window.openChartsGallery;
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const def = CHARTS.find((c) => c.id === 'bar-vertical');
+  const box = document.querySelector('#match-text');
+  box.value = 'Product,Q1,Q2,Q3\nWidgets,10,20,30\nGadgets,15,25,35';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(500);
+  const hdr = document.querySelector('#match-header');
+  if (!hdr.checked) { hdr.checked = true; hdr.dispatchEvent(new Event('change', { bubbles: true })); await sleep(300); }
+  const shape = (s) => `${s.labels.join(',')} / ${s.series.map((x) => x.label).join(',')}`;
+  const before = shape(app._specFor(def));
+  const swap = document.querySelector('#match-swap');
+  if (!swap) return { offered: false };
+  swap.checked = true;
+  swap.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(400);
+  const turned = app._specFor(def);
+  const said = /swapped/i.test(document.querySelector('#match-read').textContent);
+  const held = app.table.headers.join(',');
+  // Off again is the table as it was — the text box never changed.
+  swap.checked = false;
+  swap.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(400);
+  return {
+    offered: true,
+    before,
+    after: shape(turned),
+    values: JSON.stringify(turned.series.map((x) => x.data)),
+    said,
+    held,
+    boxKept: box.value.startsWith('Product,Q1'),
+    restored: shape(app._specFor(def)),
+  };
+});
+check(turnedGallery.offered, 'the matcher offers to swap rows and columns');
+check(turnedGallery.before === 'Widgets,Gadgets / Q1,Q2,Q3',
+  'as it is, a series is a column', turnedGallery.before);
+check(turnedGallery.after === 'Q1,Q2,Q3 / Widgets,Gadgets'
+  && turnedGallery.values === '[[10,20,30],[15,25,35]]',
+  'swapped, a series is a row and the tiles draw it that way',
+  `${turnedGallery.after} ${turnedGallery.values}`);
+check(turnedGallery.held === 'Product,Widgets,Gadgets' && turnedGallery.boxKept,
+  'the turned table is what the studio will be handed, and the pasted text is untouched',
+  turnedGallery.held);
+check(turnedGallery.said, 'and the report says which way up the table now is');
+check(turnedGallery.restored === turnedGallery.before,
+  'unticking it gives the table back as it was', turnedGallery.restored);
+
+/* The editor: a button on the grid, undoable, and only where it means something. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(2200);
+const turnedGrid = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1000);
+  const foot = () => [...document.querySelectorAll('.dgrid-foot .btn')];
+  const state = () => [...document.querySelectorAll('.dlg .dgrid thead input')].map((c) => c.value).join(',')
+    + '|' + document.querySelectorAll('.dlg .dgrid tbody tr').length;
+  const swapBtn = foot().find((b) => /Swap rows/.test(b.textContent));
+  if (!swapBtn) return { offered: false };
+  const before = state();
+  swapBtn.click();
+  await sleep(300);
+  const after = state();
+  foot().find((b) => b.textContent === 'Undo').click();
+  await sleep(300);
+  const undone = state();
+  const opts = [...document.querySelectorAll('.shape-add .shape-select option')].map((o) => o.value);
+  const note = document.querySelector('.dlg-gridwrap .dlg-note').textContent;
+  return {
+    offered: true, before, after, undone,
+    shapeStep: opts.includes('transpose'),
+    noteSays: /Swap rows/.test(note),
+  };
+});
+check(turnedGrid.offered, 'the grid offers a swap button');
+check(turnedGrid.before === 'label,2024,2023|4' && turnedGrid.after === 'label,Q1,Q2,Q3,Q4|2',
+  'pressing it turns the table in place', `${turnedGrid.before} → ${turnedGrid.after}`);
+check(turnedGrid.undone === turnedGrid.before, 'and Undo puts it back', turnedGrid.undone);
+check(turnedGrid.shapeStep && turnedGrid.noteSays,
+  'the Shape tab lists the step and the grid note names the button');
+
+await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+const noSwap = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('button')].find((b) => /Edit data/i.test(b.textContent)).click();
+  await sleep(1000);
+  return {
+    offered: [...document.querySelectorAll('.dgrid-foot .btn')].some((b) => /Swap rows/.test(b.textContent)),
+    noteSays: /Swap rows/.test(document.querySelector('.dlg-gridwrap .dlg-note').textContent),
+  };
+});
+check(!noSwap.offered && !noSwap.noteSays,
+  'a flow is not offered a swap, and the note does not name a button that is not there');
+
+/* The sidebar upload: a file that does not fit as it is, and does turned —
+ * one row of years across, on a chart that reads a label and a value. The
+ * header row of the turned table is the file's label column, which here is
+ * years, so it has to reach the editor as a table rather than as text the
+ * header guess would get wrong. */
+await page.goto(`${base}/studio.html?chart=pie`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+const [turnedChooser] = await Promise.all([
+  page.waitForEvent('filechooser'),
+  page.evaluate(() => [...document.querySelectorAll('.controls .btn')]
+    .find((b) => /Upload a file/.test(b.textContent)).click()),
+]);
+await turnedChooser.setFiles({
+  name: 'share.csv',
+  mimeType: 'text/csv',
+  buffer: Buffer.from('Year,2021,2022,2023,2024\nShare,12,18,27,43\n'),
+});
+await page.waitForTimeout(900);
+const turnedAsk = await page.evaluate(() => ({
+  list: [...document.querySelectorAll('.ask-list li')].map((l) => l.textContent).join(' | '),
+  buttons: [...document.querySelectorAll('.ask-foot .btn')].map((b) => b.textContent).join(' | '),
+}));
+check(/Swapped, it has: Year, Share/.test(turnedAsk.list),
+  'an upload that only fits turned is told so, with the turned columns named', turnedAsk.list);
+check(/Open it swapped/.test(turnedAsk.buttons) && /charts that read this/.test(turnedAsk.buttons),
+  'and offered the editor that way round, without losing the way to the gallery', turnedAsk.buttons);
+const turnedUpload = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  [...document.querySelectorAll('.ask-foot .btn')].find((b) => /Open it swapped/.test(b.textContent)).click();
+  await sleep(900);
+  const heads = [...document.querySelectorAll('.dlg .dgrid thead input')].map((c) => c.value).join(',');
+  const rows = [...document.querySelectorAll('.dlg .dgrid tbody tr')]
+    .map((tr) => [...tr.querySelectorAll('.dgrid-cell')].map((c) => c.value).join(',')).join('|');
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Use this data/.test(b.textContent)).click();
+  await sleep(900);
+  return { heads, rows, labels: (window.openCharts.spec.labels || []).join(',') };
+});
+check(turnedUpload.heads === 'Year,Share' && turnedUpload.rows === '2021,12|2022,18|2023,27|2024,43',
+  'the editor opens on the turned table with the years as its labels',
+  `${turnedUpload.heads} ${turnedUpload.rows}`);
+check(turnedUpload.labels === '2021,2022,2023,2024',
+  'and applying it draws a slice per year', turnedUpload.labels);
+console.log(`  ${green('✓')} swap — rows as series in the matcher, the grid, the pipeline and the upload`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data

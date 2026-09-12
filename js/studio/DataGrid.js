@@ -10,7 +10,7 @@
  * any cell and it fills the grid from that point.
  */
 
-import { looksNumeric, columnRules, countOf } from './dataio.js';
+import { looksNumeric, columnRules, countOf, transposeTable } from './dataio.js';
 import { attachColourPicker } from './colorpicker.js';
 
 const el = (tag, cls, text) => {
@@ -146,6 +146,9 @@ export function createDataGrid(opts) {
   addRowBtn.type = 'button';
   const addColBtn = el('button', 'btn btn-sm', (addSpec && addSpec.label) || '+ Column');
   addColBtn.type = 'button';
+  const swapBtn = el('button', 'btn btn-sm dgrid-swap', 'Swap rows ↔ columns');
+  swapBtn.type = 'button';
+  swapBtn.title = 'Turn the table: each row becomes a column';
   const undoBtn = el('button', 'btn btn-sm dgrid-undo', 'Undo');
   undoBtn.type = 'button';
   undoBtn.title = 'Undo (Ctrl+Z)';
@@ -156,7 +159,7 @@ export function createDataGrid(opts) {
   redoBtn.addEventListener('click', redo);
 
   const summary = el('span', 'dgrid-summary');
-  foot.append(addRowBtn, addColBtn, undoBtn, redoBtn, summary);
+  foot.append(addRowBtn, addColBtn, swapBtn, undoBtn, redoBtn, summary);
 
   function paintHistory() {
     undoBtn.disabled = !past.length;
@@ -166,6 +169,10 @@ export function createDataGrid(opts) {
   // dropped in silence. Offering the button anyway is the kind of promise the
   // rest of this studio is built not to make.
   if (!addSpec) addColBtn.remove();
+  // And a swap only where the table is a grid of labels against series, so
+  // that turned round it is still one. A path, a place or an OHLC bar reads
+  // each column for what it is, and turned ninety degrees is nothing.
+  if (!rules.swap) swapBtn.remove();
 
   root.append(scroll, foot);
 
@@ -397,6 +404,18 @@ export function createDataGrid(opts) {
   });
 
   addRowBtn.addEventListener('click', addRow);
+  // A file arrives laid out however its author thought of it, and a chart
+  // reads a series from a column whichever way that was. This is the other
+  // way round — undoable, because it is the edit a reader most wants back
+  // when it turns out the file was the right way up after all.
+  swapBtn.addEventListener('click', () => {
+    if (!rules.swap) return;
+    remember();
+    const turned = transposeTable({ headers, rows });
+    headers = turned.headers;
+    rows = turned.rows;
+    render(); notify();
+  });
   addColBtn.addEventListener('click', () => {
     if (!addSpec) return;
     remember();

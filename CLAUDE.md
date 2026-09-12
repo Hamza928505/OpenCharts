@@ -368,9 +368,11 @@ amount of column-picking gets from one to the other. The answer used to be
 "aggregate it in a spreadsheet first", which is the step this tool exists to
 remove.
 
-`transform.js` adds five operations — **filter, group, bin, sort, limit** —
-and the Shape tab in the data editor puts them in a pipeline. Each step reads
-as a sentence and sees the table the previous one made.
+`transform.js` adds six operations — **filter, group, bin, sort, limit,
+transpose** — and the Shape tab in the data editor puts them in a pipeline.
+Each step reads as a sentence and sees the table the previous one made. (The
+last is the odd one out: it changes no number, only which of them a chart
+reads as a series — see "A table the other way up" below.)
 
 **Transforms are an edit, not a layer, and that is the whole design.** They run
 once, in the editor, and what comes out is written into the grid as literal
@@ -410,6 +412,52 @@ suite asserts the group total equals the source total, that every value lands
 in exactly one bin, and that counting rows accounts for all of them. A
 transform that is merely plausible is worse than none: it puts numbers on a
 chart nobody can trace back to the file.
+
+### A table the other way up
+
+Every chart reads a series from a column — `labelSeries` takes one per column,
+and the four shapes that do not are fixed by chart, not by the reader. A file
+arrives however its author laid it out, and the common layout is the other
+one: one row per product, the quarters across. Read as it is, that is a bar
+per product with a series per quarter; what was wanted was a bar per quarter
+with a series per product, and the only route there was a spreadsheet. That
+was reported as "charts are made from rows only", which is what it looks like.
+
+`transposeTable(table)` in `dataio.js` is the one arithmetic — each row
+becomes a column headed by its first cell, the header row becomes the first
+column, ragged rows are squared off first — and three surfaces call it:
+
+- **The matcher** has a `Swap rows and columns` tick box beside `First row is
+  a header`. It turns the *parsed* table before `rankCharts` sees it, so the
+  tiles, the hand-off and the prompt all carry the turned table and none of
+  them has to know there was another way up. The text box keeps the file as
+  it was, so the header question is still asked about the file, and the report
+  says which way up the table now is. A new file unticks it: a swap asked for
+  on the last table is not an answer about this one.
+- **The grid** has a `Swap rows ↔ columns` button in its foot, undoable —
+  turning the table is the edit a reader most wants back when the file turns
+  out to have been the right way up after all. And the Shape tab has it as a
+  step, because "swap, then sort" is a real pipeline.
+- **The sidebar upload**, when the file does not fit the chart as it is, tries
+  it turned; if that fits, the dialog names the turned columns and offers
+  `Open it swapped`. The turned table goes to the editor **as a table, not as
+  text**: its header row is the file's label column, and when those are years
+  the header guess gets it wrong — which is exactly the file this is for.
+  `openDataDialog` takes `{ headers, rows }` as its seed for that reason.
+
+**A swap is offered only where a table is a grid of series.** `columnRules`
+carries `swap: true` on `labelSeries`, `rowSeries`, `labelValue`, `items`,
+`observations` and `matrix`, and nothing else: a path of stages, a place with
+its coordinates or an open-high-low-close bar reads each column for what it
+*is*, and turned ninety degrees is a table nothing reads. The grid note names
+the button only where the button exists.
+
+A table with no header row is turned **without its invented one**. The parser
+names a headerless table `Label, Series 1, …`, and turning those in would put
+`Series 1` down the label column; the file's own first column is what really
+named its rows, so the rows alone are turned and that column becomes the
+header. The suite holds all three surfaces, and the no-header case, to the one
+arithmetic.
 
 ### Which chart to actually draw
 
@@ -2020,7 +2068,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **691 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **723 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -2029,7 +2077,8 @@ spelling, geo focus and globe rotation, share links and embeds, standalone
 exports, AI prompts, responsive breakpoints (including the editor on a 390px
 phone), flags and country metadata, the colour-vision check, the spec view
 and undo, the collapsible rail and focus mode, interaction motion, accessible chart
-output, reading a table from a link, reshaping a table, annotating a chart,
+output, reading a table from a link, reshaping a table (and turning it, rows
+for columns), annotating a chart,
 queued previews and forgiving hover, splitting one table into small
 multiples, editing a colour wherever it is shown, undo and redo across the
 whole spec, a resizable controls column, and console cleanliness.

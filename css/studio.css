@@ -1636,6 +1636,9 @@ input[type="range"]::-moz-range-thumb {
   gap: .4rem;
   margin-top: .55rem;
   flex: 0 0 auto;
+  /* Five buttons and a summary do not fit a phone in one line, and a foot
+     that overflows its dialog scrolls the whole editor sideways. */
+  flex-wrap: wrap;
 }
 .dgrid-summary {
   margin-left: auto;
