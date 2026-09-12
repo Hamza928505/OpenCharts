@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-OpenCharts is a chart library of **114 chart types**, all reachable through one
+OpenCharts is a chart library of **<!-- count:charts -->115<!-- /count --> chart types**, all reachable through one
 studio page where they can be edited live and copied as HTML, CSS and JS.
 
 - `index.html` — the gallery. Renders every chart live (lazily, via
@@ -19,9 +19,10 @@ studio page where they can be edited live and copied as HTML, CSS and JS.
 files from `file://` will not work — the browser blocks module imports. Use
 `python -m http.server 8000` or any static server. There is still no build step.
 
-Charts run on five renderers — Chart.js (39), raw Canvas 2D (48), D3 (21), the
-dependency-free OpenCharts engine (5) and one DOM/CSS chart — across 15
-categories. The studio treats them all uniformly.
+Charts run on <!-- count:renderers-word -->six<!-- /count --> renderers — <!-- count:renderer-line -->Chart.js (39), raw Canvas 2D (48), D3 (21), the dependency-free OpenCharts engine (5), one DOM/CSS chart and one on Apache ECharts<!-- /count --> — across
+<!-- count:categories -->15<!-- /count --> categories. The studio treats them all uniformly. (These counts, and every
+other present-tense count in this file and the README, are written by
+`tools/build-counts.mjs` from the registry; the suite fails if they disagree.)
 
 ## Architecture
 
@@ -86,7 +87,7 @@ renderer code may be written:
 to carry a `<script>` tag per library, which was fine at four and stops being
 fine immediately: a reader opening a bar chart paid for the map projections,
 the flow controller and the analytics engine first. Two tags are left —
-Chart.js and D3, vendored in `lib/` and used by 60 of the 115 charts, where
+Chart.js and D3, vendored in `lib/` and used by <!-- count:eager -->60<!-- /count --> of the <!-- count:charts -->115<!-- /count --> charts, where
 lazy loading buys no request and costs a placeholder on most tiles. Everything
 that costs a **network request** is now fetched on demand.
 
@@ -101,7 +102,7 @@ Five rules:
 - **The vendored copy wins.** An entry with a `local` path loads from `lib/`,
   so the offline promise survives for everything the repository ships.
 - **`renderChart` stays synchronous.** The gallery builds tiles inside a frame
-  budget and the suite renders 115 charts in a loop; returning a promise would
+  budget and the suite renders <!-- count:charts -->115<!-- /count --> charts in a loop; returning a promise would
   rewrite both. A chart whose library is still coming gets a placeholder naming
   it — "Loading Apache ECharts…", because *loading* alone is indistinguishable
   from broken — and the real chart when the script lands. `inst.whenReady` is
@@ -166,6 +167,17 @@ count, title, blurb, engine, column list and help line is derived.
 
 The tool refuses to write if any chart resolves to no `read`/`watch` pair,
 which is the same rule the suite enforces for the studio.
+
+**And so are the counts in this file.** The README opened with "114 chart
+types" and this guide with "five renderers" while the registry held 115 on
+six — an ECharts heatmap had landed and every sentence quoting a count kept
+the old one. `tools/build-counts.mjs` writes the registry's counts into
+marked spans (`<!-- count:charts -->115<!-- /count -->`, invisible where
+markdown renders), into the shields badge and into `package.json`'s
+description; `--check` exits 1 naming each stale one, and the suite runs it.
+Only present-tense claims are marked — a sentence recording that "all 114
+charts gained annotations" the afternoon they did is history, and history
+keeps its numbers. Adding a chart means running the tool, or the build says so.
 
 ### Geo charts
 
@@ -1175,7 +1187,7 @@ a sideways scroll. A gradient on a pseudo-element costs no layout at all.
 `js/studio/motion.js` holds only the parts that need to know where the pointer
 is, and follows three rules:
 
-- **Delegated, never per element.** The gallery is 114 cards; binding a
+- **Delegated, never per element.** The gallery is <!-- count:charts -->115<!-- /count --> cards; binding a
   `pointermove` to each would cost more than the rest of the page together.
 - **One custom-property write per frame.** Pointer moves outrun the display, so
   coordinates are stashed and applied in a `requestAnimationFrame` — writing on
@@ -1216,7 +1228,7 @@ re-placing it after an edit is the same glance again.
 **It is DOM over the plate, not ink in the canvas.** Three things follow, and
 each of them is the reason:
 
-- It works identically on all five renderers, including the two — Chart.js and
+- It works identically on all <!-- count:renderers-word -->six<!-- /count --> renderers, including the two — Chart.js and
   the custom engine — that emit no `spec` for anything to hook into.
 - Percentages reflow by themselves, so a resize costs no redraw. Which is also
   why the overlay survives `render()` on a canvas chart, where only the canvas
@@ -1532,7 +1544,7 @@ Four decisions worth keeping:
 
 - **Per-point keyboard navigation is not attempted.** It is the other half of
   what Highcharts does, and a canvas has no per-point DOM to focus; building a
-  parallel one for 114 charts would be a second renderer to keep in step. A
+  parallel one for <!-- count:charts -->115<!-- /count --> charts would be a second renderer to keep in step. A
   table is the honest answer for a library this shape, and it is the fallback
   Highcharts itself offers.
 - **The table is not truncated.** The prompt cuts its table because the full
@@ -1656,7 +1668,7 @@ out — and all of it is derived:
 *before* serialisation for the 39 Chart.js charts, so their template carries a
 finished `config` and no spec at all, while the hand-drawn ones carry the spec
 their `draw`/`mount` reads. A single "edit the spec" instruction would be wrong
-for 44 of the 114 — the 39 on Chart.js and the 5 on the custom engine, neither
+for <!-- count:no-spec -->44<!-- /count --> of the <!-- count:charts -->115<!-- /count --> — the <!-- count:chartjs -->39<!-- /count --> on Chart.js and the <!-- count:native -->5<!-- /count --> on the custom engine, neither
 of which emits a `spec` at all — and the suite checks each chart's brief names
 the identifier its own generated code actually uses.
 
@@ -2034,7 +2046,7 @@ the values it changed are shown by the series widget next door.
 |---|---|
 | `registry.js` | Catalogue, categories, `newSpec()` cloning, search |
 | `charts/_data.js` | **The literal data every chart opens with.** Generated; see `tools/` |
-| `engines.js` | Render + code generation for all five renderer kinds |
+| `engines.js` | Render + code generation for all <!-- count:renderers-word -->six<!-- /count --> renderer kinds |
 | `serialize.js` | JS value → readable source, `srcFn`, `tickFormat` |
 | `ControlPanel.js` | Schema-driven controls — `buildControls` for the sidebar, `buildStageTools` for the small-multiples / notes section under the plate |
 | `DataDialog.js` | The data editor: grid, place pickers, paste tab |
@@ -2103,7 +2115,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **740 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **742 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
