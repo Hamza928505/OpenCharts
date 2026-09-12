@@ -26,6 +26,7 @@ import { flagIcon } from './flags.js';
 import { simulate, paletteOf } from './cvd.js';
 import { colourWarning } from './palette-ui.js';
 import { ANNOTATION_TYPES, newAnnotation, defaultArrow, PANEL_ALL } from './annotate.js';
+import { CAPTION_FIELDS, tidyCaption } from './caption.js';
 import {
   isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
   seriesKeyOf, scaleSharing, panelCount, panelColumns, facetNote, panelNames,
@@ -1356,8 +1357,42 @@ function widgetFacet(ctrl, spec, notify, def) {
   return wrap;
 }
 
+/**
+ * Title, subtitle, source and byline.
+ *
+ * Five text boxes and nothing else. They write to `spec.caption` and the
+ * blanks are dropped after every keystroke, so a caption somebody typed and
+ * then deleted leaves no trace in the spec, the share link or the export.
+ * What they produce is markup around the plate — see `caption.js` — so the
+ * chart itself is not redrawn for a title, only re-wrapped.
+ */
+function widgetCaption(ctrl, spec, notify) {
+  const key = ctrl.key || 'caption';
+  const host = el('div', 'ctrl-group caption-fields');
+  host.style.gap = '.45rem';
+  CAPTION_FIELDS.forEach((f) => {
+    const wrap = field(f.label);
+    const input = el('input', 'input');
+    input.type = f.type || 'text';
+    input.placeholder = f.placeholder || '';
+    input.spellcheck = f.type !== 'url';
+    input.setAttribute('aria-label', f.label);
+    input.value = (spec[key] && spec[key][f.key]) || '';
+    input.addEventListener('input', () => {
+      if (!spec[key] || typeof spec[key] !== 'object') spec[key] = {};
+      spec[key][f.key] = input.value;
+      tidyCaption(spec);
+      notify();
+    });
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  });
+  return host;
+}
+
 const WIDGETS = {
   data:    widgetData,
+  caption: widgetCaption,
   facet:   widgetFacet,
   toggle:  widgetToggle,
   seg:     widgetSeg,
@@ -1394,7 +1429,7 @@ export function buildControls(container, def, spec, onChange) {
   // state laid over whatever the chart turned out to be, not knobs that shape
   // it. `buildStageTools` picks them up from the same definition.
   const controls = (def.controls || []).filter(
-    (c) => c.type !== 'facet' && c.type !== 'annotations');
+    (c) => c.type !== 'facet' && c.type !== 'annotations' && c.type !== 'caption');
 
   if (!controls.length) {
     const note = el('p', 'lede');
@@ -1456,8 +1491,11 @@ export function buildControls(container, def, spec, onChange) {
  */
 export function buildStageTools(container, def, spec, onChange) {
   container.innerHTML = '';
+  // The caption leads: it is the first thing a publisher writes about a
+  // finished chart, whatever order the registry attached the three in.
   const entries = (def.controls || []).filter(
-    (c) => c.type === 'facet' || c.type === 'annotations');
+    (c) => c.type === 'caption' || c.type === 'facet' || c.type === 'annotations')
+    .sort((a, b) => (a.type === 'caption' ? -1 : 0) - (b.type === 'caption' ? -1 : 0));
   if (!entries.length) { container.hidden = true; return; }
   container.hidden = false;
 
@@ -1469,7 +1507,7 @@ export function buildStageTools(container, def, spec, onChange) {
     '<span class="stage-tools-caret" aria-hidden="true">'
     + '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 2l3.5 3-3.5 3"/></svg>'
     + '</span>'
-    + '<span class="stage-tools-title">Small multiples &amp; notes</span>';
+    + '<span class="stage-tools-title">Title, notes &amp; small multiples</span>';
   head.addEventListener('click', () => {
     const next = container.dataset.open !== 'true';
     container.dataset.open = String(next);

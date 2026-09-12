@@ -5138,6 +5138,170 @@ check(dateReport.guessed && dateReport.datedNotGuessed,
 check(dateReport.words, 'a column of words is not told about time axes');
 console.log(`  ${green('✓')} dates — read as dates, drawn on time, exported without a library`);
 
+/* Suite — a chart that can explain itself.
+ *
+ * A title above the plate, a source line below it: what separates a chart from
+ * a picture of one. Done the way annotations were — markup around the plate,
+ * one function for the preview and the export, no renderer touched — so every
+ * chart has it, an untitled export is byte-for-byte what it was, and the
+ * words reach a screen reader before the picture does. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const cap = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { generateCode } = await import('/js/studio/engines.js');
+  const { CHARTS } = await import('/js/studio/registry.js');
+  const app = window.openCharts;
+  const before = generateCode(app.def, app.spec);
+  // The plate's own box must not change: a note laid over it is placed as
+  // a fraction of that box and would move when a title was typed.
+  const plateSize = () => { const r = document.querySelector('#chart-host').getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; };
+  const plateSizeBefore = plateSize();
+
+  const inputs = () => [...document.querySelectorAll('.stage-tools .caption-fields input')];
+  const type = (label, v) => {
+    const i = inputs().find((x) => x.getAttribute('aria-label') === label);
+    i.value = v;
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const labels = inputs().map((i) => i.getAttribute('aria-label'));
+  const groups = [...document.querySelectorAll('.stage-tools .stage-tools-label')].map((l) => l.textContent);
+
+  type('Title', 'Revenue grew every quarter <b>except</b> Q3');
+  type('Subtitle', 'Sales in $K, 2023 and 2024');
+  type('Source', 'Company filings');
+  type('Source link', 'javascript:alert(1)');
+  type('Byline', 'Chart: Hamza');
+  await sleep(500);
+  const hostile = generateCode(app.def, app.spec);
+  const headShown = document.querySelector('#chart-caption-head').textContent.replace(/\s+/g, ' ').trim();
+  const plateResized = plateSize() !== plateSizeBefore;
+
+  type('Source link', 'https://example.com/filings');
+  await sleep(400);
+  const titled = generateCode(app.def, app.spec);
+  const footShown = document.querySelector('#chart-caption-foot').textContent.replace(/\s+/g, ' ').trim();
+  const linkShown = document.querySelector('#chart-caption-foot a');
+
+  // A PNG of a titled chart is taller than one of the plate alone, and an
+  // SVG chart's file grows a frame to hold the words.
+  const dl = [];
+  const proto = HTMLAnchorElement.prototype;
+  const origClick = proto.click;
+  proto.click = function () { dl.push(this.href); };
+  app._exportPNG();
+  await sleep(250);
+  proto.click = origClick;
+  const titledPng = await new Promise((r) => { const i = new Image(); i.onload = () => r(i.height); i.src = dl[0]; });
+
+  // Clearing every field leaves no trace anywhere.
+  labels.forEach((l) => type(l, ''));
+  await sleep(400);
+  const cleared = generateCode(app.def, app.spec);
+  proto.click = function () { dl.push(this.href); };
+  app._exportPNG();
+  await sleep(250);
+  proto.click = origClick;
+  const plainPng = await new Promise((r) => { const i = new Image(); i.onload = () => r(i.height); i.src = dl[1]; });
+
+  return {
+    labels: labels.join(','),
+    groups: groups.join(' | '),
+    everyChart: CHARTS.filter((c) => !(c.controls || []).some((x) => x.type === 'caption')).map((c) => c.id),
+    inSidebar: !!document.querySelector('.controls .caption-fields'),
+    headShown, footShown, linkHref: linkShown && linkShown.getAttribute('href'), plateResized,
+    escaped: hostile.html.includes('<h2 class="oc-caption-title">Revenue grew every quarter &lt;b&gt;except&lt;/b&gt; Q3</h2>'),
+    noScriptHref: !/href="javascript/.test(hostile.html) && hostile.html.includes('(javascript:alert(1))'),
+    goodHref: titled.html.includes('href="https://example.com/filings" rel="noopener"'),
+    figcaption: /<figcaption class="oc-caption-foot">/.test(titled.html),
+    headBeforePlate: titled.html.indexOf('oc-caption-title') < titled.html.indexOf('id="chart"'),
+    footAfterPlate: titled.html.indexOf('oc-caption-foot') > titled.html.indexOf('id="chart"'),
+    cssCarried: titled.css.includes('.oc-caption-title') && !before.css.includes('.oc-caption'),
+    jsUntouched: titled.js === before.js,
+    summaryLeads: /^Revenue grew every quarter/.test(titled.html.match(/chart-desc" class="visually-hidden">([^<]*)</)[1]),
+    summaryTails: /Source: Company filings\. Chart: Hamza\./.test(titled.html.match(/chart-desc" class="visually-hidden">([^<]*)</)[1]),
+    labelLeads: /aria-label="Revenue grew every quarter[^"]*— Vertical Bar chart/.test(titled.html),
+    titledPng, plainPng,
+    unchanged: cleared.html === before.html && cleared.css === before.css && cleared.js === before.js,
+    noTrace: !('caption' in app.spec),
+    standalone: titled.standalone,
+  };
+});
+check(cap.labels === 'Title,Subtitle,Source,Source link,Byline', 'five caption fields, in that order', cap.labels);
+check(!cap.everyChart.length, 'every chart in the library carries the caption control', cap.everyChart.slice(0, 5).join(','));
+check(/^Title & source/.test(cap.groups) && !cap.inSidebar,
+  'it leads the stage tools under the plate and is not in the sidebar', cap.groups);
+check(cap.headShown === 'Revenue grew every quarter <b>except</b> Q3 Sales in $K, 2023 and 2024' && !cap.plateResized,
+  'the preview shows the title above the plate and the plate keeps its own box', cap.headShown);
+check(cap.footShown === 'Source: Company filings Chart: Hamza' && cap.linkHref === 'https://example.com/filings',
+  'and the source and byline below it, the source as a link', cap.footShown);
+check(cap.escaped && cap.noScriptHref,
+  'a title reaches the export as text, and a javascript: link becomes text beside the name, never an href');
+check(cap.goodHref && cap.figcaption && cap.headBeforePlate && cap.footAfterPlate,
+  'the export carries a header above the plate and a figcaption below it');
+check(cap.cssCarried && cap.jsUntouched, 'the caption CSS is carried only when there is a caption, and the JS is untouched');
+check(cap.summaryLeads && cap.summaryTails && cap.labelLeads,
+  'the accessible description leads with the title and ends with the source; the plate is labelled by it');
+check(cap.titledPng > cap.plainPng + 60, 'a PNG of a titled chart carries the caption', `${cap.titledPng} vs ${cap.plainPng}`);
+check(cap.unchanged && cap.noTrace, 'clearing every field leaves the spec and every export as they were');
+
+generated.set('/export-captioned.html', cap.standalone);
+{
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(`${base}/export-captioned.html`, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(600);
+  const shown = await probe.evaluate(() => ({
+    title: (document.querySelector('.oc-caption-title') || {}).textContent,
+    order: [...document.querySelector('figure').children].map((c) => c.className || c.tagName.toLowerCase()).join('>'),
+    link: (document.querySelector('figcaption a') || {}).href,
+  }));
+  await probe.close();
+  check(!errs.length && shown.title === 'Revenue grew every quarter <b>except</b> Q3',
+    'a captioned export runs and shows the title as typed', errs[0] || shown.title);
+  check(/oc-caption>chart-wrap>legend>oc-caption-foot/.test(shown.order) && shown.link === 'https://example.com/filings',
+    'in the order header, plate, legend, source', shown.order);
+}
+
+// An SVG chart's picture grows a frame for the words.
+await page.goto(`${base}/studio.html?chart=dendrogram`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const capSvg = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const type = (label, v) => {
+    const i = [...document.querySelectorAll('.stage-tools .caption-fields input')].find((x) => x.getAttribute('aria-label') === label);
+    i.value = v;
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const grab = async () => {
+    const dl = [];
+    const proto = HTMLAnchorElement.prototype;
+    const origClick = proto.click;
+    const origRevoke = URL.revokeObjectURL;
+    proto.click = function () { dl.push(this.href); };
+    URL.revokeObjectURL = () => {};
+    window.openCharts._exportPNG();
+    await sleep(250);
+    proto.click = origClick;
+    URL.revokeObjectURL = origRevoke;
+    return (await fetch(dl[0])).text();
+  };
+  const plain = await grab();
+  type('Title', 'Where the branches split');
+  await sleep(400);
+  const titled = await grab();
+  return {
+    plainSvgs: (plain.match(/<svg/g) || []).length,
+    titledSvgs: (titled.match(/<svg/g) || []).length,
+    hasTitle: titled.includes('Where the branches split'),
+  };
+});
+check(capSvg.plainSvgs === 1 && capSvg.titledSvgs === 2 && capSvg.hasTitle,
+  'an SVG export is the chart alone until a caption wraps it in a frame carrying the words',
+  JSON.stringify(capSvg));
+console.log(`  ${green('✓')} captions — title, subtitle, source and byline on every chart, in every output`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data

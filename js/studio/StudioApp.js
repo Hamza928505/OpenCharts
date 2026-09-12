@@ -24,6 +24,7 @@ import { initMotion, markChanged } from './motion.js';
 import { mountControlsResize } from './resize.js';
 import { tableMarkup } from './a11y.js';
 import { attachAnnotationDrags } from './annotate.js';
+import { captionHead, captionFoot, captionLines } from './caption.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -109,6 +110,9 @@ export class StudioApp {
 
   _cacheDom() {
     this.host       = $('#chart-host');
+    this.stageBody  = $('#stage-body');
+    this.captionHeadEl = $('#chart-caption-head');
+    this.captionFootEl = $('#chart-caption-foot');
     this.legendEl   = $('#legend');
     this.metricsEl  = $('#metrics');
     this.controlsEl = $('#controls');
@@ -676,6 +680,13 @@ export class StudioApp {
     if (this._stopAnnotDrag) this._stopAnnotDrag();
     this.inst = renderChart(this.def, this.host, this.spec);
 
+    // The caption is markup around the plate, not part of the render: the
+    // host is emptied by every renderer and the plate's own box has to stay
+    // the plate's, or a note laid over it would move when a title was typed.
+    // Same two functions the export uses, so preview and export agree.
+    if (this.captionHeadEl) this.captionHeadEl.innerHTML = captionHead(this.spec);
+    if (this.captionFootEl) this.captionFootEl.innerHTML = captionFoot(this.spec);
+
     // A note is placed by dragging it, not by typing two numbers, so the
     // binding is re-made whenever the plate under it is. Torn down first:
     // four of the five renderers draw into the host itself, which outlives
@@ -787,7 +798,7 @@ export class StudioApp {
    */
   _exportGrid(grid) {
     const facets = [...grid.querySelectorAll('.oc-facet')];
-    const box = grid.getBoundingClientRect();
+    const box = this._frame(grid.getBoundingClientRect());
     const pad = 14;
     const style = getComputedStyle(document.body);
     const paper = style.getPropertyValue('--surface').trim() || '#ffffff';
@@ -810,6 +821,7 @@ export class StudioApp {
       ctx.scale(dpr, dpr);
       ctx.fillStyle = paper;
       ctx.fillRect(0, 0, W, H);
+      this._paintCaption(ctx, at);
       facets.forEach((f, i) => {
         const label = f.querySelector('.oc-facet-name');
         if (label) {
@@ -841,6 +853,7 @@ export class StudioApp {
       bg.setAttribute('height', '100%');
       bg.setAttribute('fill', paper);
       out.appendChild(bg);
+      this._captionSvg(out, at);
       facets.forEach((f, i) => {
         const label = f.querySelector('.oc-facet-name');
         if (label) {
@@ -877,6 +890,55 @@ export class StudioApp {
     return false;
   }
 
+  /**
+   * The box a picture of the chart has to cover: the plate, plus whatever
+   * caption sits above and below it. Without a caption it is the plate.
+   */
+  _frame(plate) {
+    const lines = captionLines(this.stageBody);
+    if (!lines.length) return plate;
+    let top = plate.top;
+    let bottom = plate.bottom;
+    let left = plate.left;
+    let right = plate.right;
+    lines.forEach((l) => {
+      top = Math.min(top, l.y);
+      bottom = Math.max(bottom, l.y + l.lineHeight);
+      left = Math.min(left, l.x);
+      right = Math.max(right, l.x + l.width + 2);
+    });
+    const gap = 6;
+    top -= gap; bottom += gap;
+    return { top, bottom, left, right, width: right - left, height: bottom - top };
+  }
+
+  /** The caption's lines, painted where they sit on screen. */
+  _paintCaption(ctx, at) {
+    captionLines(this.stageBody).forEach((l) => {
+      const p = at({ left: l.x, top: l.y });
+      ctx.font = l.font;
+      ctx.fillStyle = l.color;
+      ctx.textBaseline = 'top';
+      // The line box is taller than the glyphs; centre the text in it.
+      ctx.fillText(l.text, p.x, p.y + (l.lineHeight - l.size) / 2);
+    });
+  }
+
+  /** The same lines as <text>, for the SVG exports. */
+  _captionSvg(out, at) {
+    const NS = 'http://www.w3.org/2000/svg';
+    captionLines(this.stageBody).forEach((l) => {
+      const p = at({ left: l.x, top: l.y });
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('x', String(Math.round(p.x)));
+      t.setAttribute('y', String(Math.round(p.y + (l.lineHeight - l.size) / 2 + l.size * 0.8)));
+      t.setAttribute('fill', l.color);
+      t.setAttribute('style', `font: ${l.font}`);
+      t.textContent = l.text;
+      out.appendChild(t);
+    });
+  }
+
   _exportPNG() {
     const grid = this.host.querySelector('.oc-facets');
     if (grid) {
@@ -888,16 +950,28 @@ export class StudioApp {
       return;
     }
 
+    const paper = getComputedStyle(document.body).getPropertyValue('--surface').trim() || '#ffffff';
+
     const canvas = this.host.querySelector('canvas');
     if (canvas) {
-      // Repaint onto an opaque background so the PNG is not transparent.
+      // Repaint onto an opaque background so the PNG is not transparent, at
+      // the canvas's own pixel density, inside a frame that also holds the
+      // caption — a picture of the plate alone is a chart with its source
+      // torn off.
+      const r = canvas.getBoundingClientRect();
+      const box = this._frame(r);
+      const scale = r.width ? canvas.width / r.width : 1;
+      const at = (rect) => ({ x: rect.left - box.left, y: rect.top - box.top });
       const out = document.createElement('canvas');
-      out.width = canvas.width;
-      out.height = canvas.height;
+      out.width = Math.round(box.width * scale);
+      out.height = Math.round(box.height * scale);
       const ctx = out.getContext('2d');
-      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface').trim() || '#ffffff';
-      ctx.fillRect(0, 0, out.width, out.height);
-      ctx.drawImage(canvas, 0, 0);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = paper;
+      ctx.fillRect(0, 0, box.width, box.height);
+      this._paintCaption(ctx, at);
+      const p = at(r);
+      ctx.drawImage(canvas, p.x, p.y, r.width, r.height);
       downloadDataUrl(out.toDataURL('image/png'), `${this.def.id}.png`);
       toast('PNG exported', 'ok');
       return;
@@ -907,8 +981,33 @@ export class StudioApp {
     if (svg) {
       // SVG charts export as .svg — rasterising them here would need a
       // round-trip through an Image and would silently drop CSS-inherited ink.
-      const clone = svg.cloneNode(true);
-      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      // With a caption the chart is nested in an outer frame that carries the
+      // text; without one the file is the chart's own <svg>, as it always was.
+      const inner = svg.cloneNode(true);
+      inner.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      let clone = inner;
+      if (captionLines(this.stageBody).length) {
+        const NS = 'http://www.w3.org/2000/svg';
+        const r = svg.getBoundingClientRect();
+        const box = this._frame(r);
+        const at = (rect) => ({ x: rect.left - box.left, y: rect.top - box.top });
+        clone = document.createElementNS(NS, 'svg');
+        clone.setAttribute('xmlns', NS);
+        clone.setAttribute('width', String(Math.round(box.width)));
+        clone.setAttribute('height', String(Math.round(box.height)));
+        const bg = document.createElementNS(NS, 'rect');
+        bg.setAttribute('width', '100%');
+        bg.setAttribute('height', '100%');
+        bg.setAttribute('fill', paper);
+        clone.appendChild(bg);
+        this._captionSvg(clone, at);
+        const p = at(r);
+        inner.setAttribute('x', String(Math.round(p.x)));
+        inner.setAttribute('y', String(Math.round(p.y)));
+        inner.setAttribute('width', String(Math.round(r.width)));
+        inner.setAttribute('height', String(Math.round(r.height)));
+        clone.appendChild(inner);
+      }
       const blob = new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       downloadDataUrl(url, `${this.def.id}.svg`);

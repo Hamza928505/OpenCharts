@@ -29,6 +29,7 @@ import { helpFor } from './chart-help.js';
 import { parseTable, looksNumeric } from './dataio.js';
 import { describeAnnotations } from './annotate.js';
 import { facetSource, describeFacet } from './facet.js';
+import { describeCaption, captionOf } from './caption.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -104,6 +105,11 @@ const num = (n) => (Math.abs(n) >= 1000 ? n.toLocaleString('en-US') : String(n))
  */
 export function chartSummary(def, spec) {
   const parts = [];
+  // The author's own headline first, where there is one: it is what the
+  // chart claims, and a reader who cannot see the picture should hear the
+  // claim before the kind of picture making it.
+  const said = describeCaption(spec);
+  if (said.lead) parts.push(said.lead);
   parts.push(`${def.title}.`);
   if (def.blurb) parts.push(def.blurb.trim().replace(/\.?$/, '.'));
 
@@ -134,6 +140,7 @@ export function chartSummary(def, spec) {
   // available only to the people who can see it.
   const marked = describeAnnotations(spec && spec.annotations);
   if (marked) parts.push(marked);
+  if (said.tail) parts.push(said.tail);
 
   parts.push('The underlying data follows as a table.');
   return parts.join(' ');
@@ -146,7 +153,8 @@ export function chartSummary(def, spec) {
 export function chartLabel(def, spec) {
   const table = chartTable(def, spec);
   const size = table ? `, ${table.rows.length} rows` : '';
-  return `${def.title} chart${size}`;
+  const c = captionOf(spec);
+  return c && c.title ? `${c.title} — ${def.title} chart${size}` : `${def.title} chart${size}`;
 }
 
 /**

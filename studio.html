@@ -122,8 +122,12 @@
               </button>
             </div>
           </div>
-          <div class="stage-body">
+          <div class="stage-body" id="stage-body">
+            <!-- Title and subtitle above the plate, source and byline below it:
+                 the same markup the export carries, from the same functions. -->
+            <div class="chart-caption" id="chart-caption-head"></div>
             <div class="chart-host" id="chart-host"></div>
+            <div class="chart-caption" id="chart-caption-foot"></div>
           </div>
           <div class="legend" id="legend"></div>
           <div class="metrics" id="metrics" style="display:none"></div>

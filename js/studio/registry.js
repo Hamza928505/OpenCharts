@@ -34,6 +34,7 @@ import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
 import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
 import { ANNOTATION_CONTROL } from './annotate.js';
 import { FACET_CONTROL } from './facet.js';
+import { CAPTION_CONTROL } from './caption.js';
 
 /** Category display order in the gallery and the rail. */
 export const CATEGORY_ORDER = [
@@ -108,6 +109,14 @@ ALL.forEach((def) => {
   if (def.data && !def.html) {
     const controls = def.controls || (def.controls = []);
     if (!controls.some((c) => c.type === 'facet')) controls.push({ ...FACET_CONTROL });
+  }
+
+  // A title, a subtitle, a source line and a byline: DOM around the plate,
+  // so every chart has them and no renderer knows. First of the stage tools,
+  // because a title is the first thing a publisher writes.
+  {
+    const controls = def.controls || (def.controls = []);
+    if (!controls.some((c) => c.type === 'caption')) controls.push({ ...CAPTION_CONTROL });
   }
 
   // A note, a rule and a shaded band are positioned as a fraction of the

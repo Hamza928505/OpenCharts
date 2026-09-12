@@ -14,6 +14,7 @@ import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
 import { attachTips, attachCanvasTips, recordTip } from './tooltip.js';
 import { parseDateLabel, installDateAdapter, usesTimeScale } from './timeaxis.js';
+import { captionHead, captionFoot, hasCaption, CAPTION_CSS } from './caption.js';
 import {
   drawAnnotations, plateOf, hasAnnotations, gridAnnotations, ANNOTATION_CSS,
 } from './annotate.js';
@@ -670,12 +671,19 @@ function buildHTML(def, spec) {
     : indent(plate('chart', chartLabel(def, spec)), 2);
 
   const table = tableMarkup(def, spec);
+  // Title and subtitle above the plate, source and byline below it — the same
+  // functions the studio's preview wraps the host with, so the two cannot say
+  // different things. Empty strings when nothing is written, and dropped.
+  const head = captionHead(spec);
+  const foot = captionFoot(spec);
 
   return [
     `<figure class="chart-card" aria-describedby="chart-desc">`,
     `  <p id="chart-desc" class="visually-hidden">${escapeText(chartSummary(def, spec))}</p>`,
+    head ? indent(head, 2) : null,
     inner,
     hasLegend ? `  <div class="legend" id="legend"></div>` : null,
+    foot ? indent(foot, 2) : null,
     table ? indent(table, 2) : null,
     `</figure>`,
   ].filter(Boolean).join('\n');
@@ -710,6 +718,7 @@ function buildCSS(def, spec) {
   // chart nobody annotated is byte-for-byte what it was before the feature
   // existed. A chart's own CSS comes after, and can therefore restyle it.
   if (hasAnnotations(spec)) parts.push(ANNOTATION_CSS);
+  if (hasCaption(spec)) parts.push(CAPTION_CSS);
   if (def.css) parts.push(typeof def.css === 'function' ? def.css(spec) : def.css);
   return tidy(parts.join('\n\n'));
 }
@@ -742,7 +751,9 @@ function publicSpec(spec) {
  * them.
  */
 function specForCode(spec) {
-  const { annotations, ...rest } = publicSpec(spec);
+  // Neither is read by any `draw` or `mount`: notes are laid over the plate
+  // and the caption is markup around it, both emitted from the HTML side.
+  const { annotations, caption, ...rest } = publicSpec(spec);
   return rest;
 }
 
