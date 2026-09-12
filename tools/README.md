@@ -24,6 +24,7 @@ node tools/build-wiki.mjs OpenCharts.wiki
 | `write-sample-data.mjs` | `js/studio/charts/_data.js` | you want to change the data charts open with |
 | `build-favicon.mjs` | `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` | the brand mark in `css/studio.css` changes |
 | `build-wiki.mjs` | the GitHub wiki's four reference pages, in a clone you pass it | any chart is added, renamed, re-blurbed or re-shaped |
+| `build-counts.mjs` | the chart, category and renderer counts quoted in `README.md`, `CLAUDE.md` and `package.json` | any chart or renderer is added or removed — the suite fails until it is run (`--check` says what is stale) |
 
 ## The data charts open with
 

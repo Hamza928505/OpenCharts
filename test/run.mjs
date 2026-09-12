@@ -24,6 +24,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.PORT || 8123);
@@ -124,6 +125,21 @@ check(!meta.uncategorised.length, 'every chart has a known category', meta.uncat
 check(!meta.missingBlurb.length, 'every chart has a blurb', meta.missingBlurb.join(', '));
 check(!meta.missingTags.length, 'every chart has search tags', meta.missingTags.join(', '));
 console.log(`  ${green('✓')} registry — ${meta.total} charts, ${meta.categories} categories`);
+
+/* The prose that quotes the registry has to agree with it.
+ *
+ * The README said 114 charts on five renderers while the registry held 115
+ * on six: an ECharts heatmap had landed and every sentence quoting a count
+ * kept the old one. `tools/build-counts.mjs` writes the counts into marked
+ * spans; `--check` reads them back and exits 1 naming each stale one, so a
+ * chart added without re-running it fails here rather than shipping a README
+ * off by one. Run from the repo root the way a contributor would. */
+const counts = spawnSync(process.execPath, [join(ROOT, 'tools/build-counts.mjs'), '--check'],
+  { cwd: ROOT, encoding: 'utf8' });
+check(counts.status === 0, 'README, CLAUDE.md and package.json quote the registry\'s own counts',
+  (counts.stderr || counts.stdout || '').trim().split('\n').slice(0, 4).join(' | '));
+check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
+  'and the checker itself counts what the page counts', counts.stdout.trim());
 
 /* Suite 2 — every chart renders, takes data, and generates code. */
 const targets = only ? meta.ids.filter((id) => id.includes(only)) : meta.ids;

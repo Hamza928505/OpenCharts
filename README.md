@@ -1,17 +1,17 @@
 # OpenCharts
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-6C63D8.svg)](LICENSE)
-[![Charts](https://img.shields.io/badge/charts-114-16916A.svg)](#the-two-pages)
+[![Charts](https://img.shields.io/badge/charts-115-16916A.svg)](#the-two-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
-A library of **114 chart types**. Every one opens in a studio where the data,
+A library of **<!-- count:charts -->115<!-- /count --> chart types**. Every one opens in a studio where the data,
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
 ## Start from your data
 
 The gallery asks the question the other way round too. **Match my data** at the
-top of the index takes a pasted table or a spreadsheet and narrows the 114
+top of the index takes a pasted table or a spreadsheet and narrows the <!-- count:charts -->115<!-- /count -->
 charts to the ones that can actually read it — a `from, to, value` table finds
 the Sankey and the chord diagram, a label and three numeric columns finds a
 hundred and six. Every tile then draws *your* rows rather than its own example,
@@ -271,7 +271,7 @@ region, side by side.
 
 It is a general operation rather than three chart types that happen to be
 small: the split produces one complete spec per panel and hands each to the
-same renderer the chart already had, so all 114 charts can do it and none of
+same renderer the chart already had, so all <!-- count:charts -->115<!-- /count --> charts can do it and none of
 them had to be told how.
 
 Where a chart can put every panel on **one axis**, it does, and says so. Where
@@ -286,7 +286,7 @@ went wrong — the thing that turns a chart into an explanation. Drag one onto
 the plate and it travels with the exported code.
 
 They are positioned as a fraction of the chart's box rather than in data
-coordinates, which is what makes them work identically on all five renderers.
+coordinates, which is what makes them work identically on all <!-- count:renderers-word -->six<!-- /count --> renderers.
 The trade is honest and worth knowing: move the data and the note stays where
 it was, which is why you place it by dragging rather than typing two numbers.
 
@@ -396,7 +396,7 @@ spreadsheet cannot expand until the tab dies.
 
 ## Reading a chart by hovering it
 
-Every chart says what it is showing when you point at it — all 114, not just the
+Every chart says what it is showing when you point at it — all <!-- count:charts -->115<!-- /count -->, not just the
 39 that Chart.js gives tooltips to for free. A canvas chart reports the shapes
 it painted so they can be hit-tested; an SVG chart tags its marks. Radial charts
 test the actual wedge rather than a bounding box, so pointing at a slice gives
@@ -452,7 +452,7 @@ Finance, Geo, KPI & Micro, and Custom Engine.
 ```bash
 npm install          # once — pulls Playwright
 npx playwright install chromium
-npm test             # renders all 114 charts and checks them
+npm test             # renders all <!-- count:charts -->115<!-- /count --> charts and checks them
 ```
 
 The suite runs in a real headless browser, because two thirds of the library
@@ -467,7 +467,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **740 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **742 checks**, and it fails if
 anything writes to the console.
 
 ```bash
