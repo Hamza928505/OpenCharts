@@ -225,6 +225,13 @@ The one seeded value left is `dot-density-map`'s `spec.seed`, which places
 dots inside each country by rejection sampling. That is rendering, not data,
 and it stays seeded so an export redraws the map that was copied.
 
+**The sidebar is held to the same rule.** `+ Add series` used to fill a new
+series with random values scattered around the first one — numbers on the
+chart that were nobody's, from the control most charts carry. A new series
+now arrives as zeros, the blank a spreadsheet would hold, with the cursor in
+its values box. The suite reads every module under `js/studio/` and fails on
+any `Math.random` but the one that mints an element id in `engines.js`.
+
 ### The data editor
 
 Every chart accepts a table. The files that carry it:
@@ -2096,7 +2103,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **736 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **740 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
