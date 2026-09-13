@@ -150,12 +150,27 @@ export function srcFn(source) {
  * A numeric tick formatter with an optional prefix, suffix and thousands
  * separator, built so it exports cleanly.
  */
-export function tickFormat({ prefix = '', suffix = '', separator = false, decimals = null } = {}) {
-  if (!prefix && !suffix && !separator && decimals == null) return undefined;
+export function tickFormat({
+  prefix = '', suffix = '', separator = false, decimals = null, compact = false, locale = '',
+} = {}) {
+  if (!prefix && !suffix && !separator && decimals == null && !compact) return undefined;
   const q = (s) => quote(s);
+  // The locale is baked in as a literal, like everything else here, so the
+  // export formats numbers the way the author saw them rather than the way
+  // the reader's browser happens to. Blank means the browser's own.
+  const loc = locale ? q(locale) : 'undefined';
   let value = 'v';
-  if (decimals != null) value = `v.toFixed(${decimals})`;
-  else if (separator) value = 'v.toLocaleString()';
+  if (compact) {
+    // 1234567 → 1.2M. `Intl` has done this since 2020 in every browser that
+    // runs the rest of this library, and it knows what a lakh is.
+    value = `new Intl.NumberFormat(${loc}, { notation: 'compact', maximumFractionDigits: ${decimals == null ? 1 : decimals} }).format(v)`;
+  } else if (decimals != null && separator) {
+    value = `v.toLocaleString(${loc}, { minimumFractionDigits: ${decimals}, maximumFractionDigits: ${decimals} })`;
+  } else if (decimals != null) {
+    value = `v.toFixed(${decimals})`;
+  } else if (separator) {
+    value = locale ? `v.toLocaleString(${loc})` : 'v.toLocaleString()';
+  }
   const parts = [];
   if (prefix) parts.push(q(prefix));
   parts.push(value);

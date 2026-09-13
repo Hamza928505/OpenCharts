@@ -307,6 +307,15 @@ coordinates, which is what makes them work identically on all <!-- count:rendere
 The trade is honest and worth knowing: move the data and the note stays where
 it was, which is why you place it by dragging rather than typing two numbers.
 
+## The axis, your way
+
+On the bar and line charts, **Axis** sets the number format — plain, with
+thousands separators, or compact (`1.2K`, `3.4M`) — the locale it is written
+in, a linear or log scale, and the axis minimum and maximum. Blank bounds mean
+automatic. A log scale is refused, and says why, where a value is zero or
+below. Every choice is baked into the export as a literal, so it formats the
+way you saw it wherever it lands.
+
 ## Colour by value
 
 In the **Colours** tab, **Colour by value** colours a chart's items from their
@@ -493,7 +502,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **812 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **823 checks**, and it fails if
 anything writes to the console.
 
 ```bash

@@ -6,7 +6,7 @@
  */
 
 import { C, MONTHS, QUARTERS, withAlpha, paletteAt } from '../palette.js';
-import { baseOpts, xAxis, yAxis, TICK, seriesLegend } from '../chartjs-base.js';
+import { baseOpts, xAxis, yAxis, TICK, seriesLegend, valueAxisControls, valueAxis, AXIS_DEFAULTS } from '../chartjs-base.js';
 import { tickFormat } from '../serialize.js';
 
 /** Controls shared by the plain grouped/stacked bars. */
@@ -17,11 +17,8 @@ const barStyleControls = [
     format: (v) => Math.round(v * 100) + '%' },
 ];
 
-const axisControls = [
-  { group: 'Axis', type: 'text',   key: 'opts.prefix', label: 'Value prefix', placeholder: '$' },
-  { group: 'Axis', type: 'text',   key: 'opts.suffix', label: 'Value suffix', placeholder: 'K' },
-  { group: 'Axis', type: 'toggle', key: 'opts.separator', label: 'Thousands separator' },
-];
+// The axis block is shared with the line family — see `valueAxisControls`.
+const axisControls = valueAxisControls;
 
 function barDatasets(spec, { stack = false } = {}) {
   const o = spec.opts;
@@ -71,7 +68,7 @@ export const barCharts = [
         { label: '2024', color: C.green, data: [520, 680, 740, 910] },
         { label: '2023', color: C.violet,   data: [440, 575, 625, 770] },
       ],
-      opts: { radius: 5, thickness: 0.72, outline: false, prefix: '$', suffix: 'K', separator: false },
+      opts: { radius: 5, thickness: 0.72, outline: false, prefix: '$', suffix: 'K', separator: false, axis: { ...AXIS_DEFAULTS } },
     },
     controls: [
       { group: 'Data', type: 'labels', key: 'labels', label: 'Category labels' },
@@ -87,7 +84,7 @@ export const barCharts = [
         options: baseOpts({
           scales: {
             x: xAxis(),
-            y: yAxis({ ticks: { ...TICK, callback: tickFormat({ prefix: spec.opts.prefix, suffix: spec.opts.suffix, separator: spec.opts.separator }) } }),
+            y: valueAxis(spec, spec.series.map((s) => s.data)),
           },
         }),
       }),
@@ -108,7 +105,7 @@ export const barCharts = [
         { label: 'In-store',  color: C.blue,   data: [0.31, 0.38, 0.42, 0.51] },
         { label: 'Wholesale', color: C.amber,  data: [0.18, 0.22, 0.24, 0.29] },
       ],
-      opts: { radius: 5, thickness: 0.68, outline: false, prefix: '$', suffix: 'M', separator: false, decimals: 2 },
+      opts: { radius: 5, thickness: 0.68, outline: false, prefix: '$', suffix: 'M', separator: false, axis: { ...AXIS_DEFAULTS }, decimals: 2 },
     },
     controls: [
       { group: 'Data', type: 'labels', key: 'labels', label: 'Category labels' },
@@ -123,7 +120,7 @@ export const barCharts = [
         options: baseOpts({
           scales: {
             x: xAxis({ stacked: true }),
-            y: yAxis({ stacked: true, ticks: { ...TICK, callback: tickFormat({ prefix: spec.opts.prefix, suffix: spec.opts.suffix, decimals: spec.opts.decimals }) } }),
+            y: valueAxis(spec, spec.series.map((s) => s.data), { stacked: true }),
           },
         }),
       }),
@@ -141,7 +138,7 @@ export const barCharts = [
       labels: ['Linen Blazer', 'Silk Midi Dress', 'Wool Overcoat', 'Canvas Tote', 'Cashmere Knit', 'Leather Belt', 'Wide-Leg Trousers', 'Cotton Shirt'],
       values: [142, 128, 115, 98, 87, 74, 63, 55],
       colors: [C.green, C.green, C.green, C.blue, C.blue, C.amber, C.amber, C.amber],
-      opts: { radius: 5, thickness: 0.78, prefix: '$', suffix: 'K', separator: false, label: 'Revenue' },
+      opts: { radius: 5, thickness: 0.78, prefix: '$', suffix: 'K', separator: false, axis: { ...AXIS_DEFAULTS }, label: 'Revenue' },
     },
     controls: [
       { group: 'Data',  type: 'labels', key: 'labels', label: 'Category labels' },
@@ -169,7 +166,7 @@ export const barCharts = [
           indexAxis: 'y',
           interaction: { intersect: false, mode: 'nearest' },
           scales: {
-            x: yAxis({ ticks: { ...TICK, callback: tickFormat({ prefix: spec.opts.prefix, suffix: spec.opts.suffix, separator: spec.opts.separator }) } }),
+            x: valueAxis(spec, spec.values),
             y: xAxis({ ticks: { ...TICK, font: { size: 12 } } }),
           },
         }),
