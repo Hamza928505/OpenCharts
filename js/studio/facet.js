@@ -216,7 +216,9 @@ const AXIS_LABEL = /^(axis|scale)\s+(maximum|minimum)$/i;
 export function boundKeys(def) {
   const out = { max: null, min: null };
   for (const c of (def && def.controls) || []) {
-    if (!c || c.type !== 'slider' || !c.key) continue;
+    // A slider always qualified; the shared axis block's bounds are text
+    // boxes, blank meaning auto, and qualify the same way.
+    if (!c || (c.type !== 'slider' && c.type !== 'text') || !c.key) continue;
     if (!AXIS_LABEL.test(String(c.label || ''))) continue;
     if (/minimum/i.test(c.label)) { if (!out.min) out.min = c.key; }
     else if (!out.max) out.max = c.key;

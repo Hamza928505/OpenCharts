@@ -757,6 +757,13 @@ export class StudioApp {
     if (this.captionHeadEl) this.captionHeadEl.innerHTML = captionHead(this.spec);
     if (this.captionFootEl) this.captionFootEl.innerHTML = captionFoot(this.spec);
 
+    // An axis that could not do what it was asked says so — once per reason,
+    // not on every rebuild. `valueAxis` leaves the note when a log scale meets
+    // a zero; a refused request that is silently downgraded reads as a bug.
+    const axisNote = this.spec._axisNote || '';
+    if (axisNote && axisNote !== this._saidAxisNote) toast(axisNote, 'bad', 4200);
+    this._saidAxisNote = axisNote;
+
     // A note is placed by dragging it, not by typing two numbers, so the
     // binding is re-made whenever the plate under it is. Torn down first:
     // four of the five renderers draw into the host itself, which outlives

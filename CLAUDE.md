@@ -1637,6 +1637,42 @@ Everything is UTC end to end: `2024-01-01` must draw and read as the first
 of January wherever the page is opened, and local time would make it New
 Year's Eve for half the world.
 
+### The value axis
+
+Thirty-odd charts had an axis and none could go logarithmic; bounds were an
+`opts.max` slider on fourteen and no `min` anywhere; the format was a prefix,
+a suffix and a thousands toggle, each chart's own copy. `valueAxisControls`
+in `chartjs-base.js` is one block — prefix, suffix, a format (plain / 1,234 /
+1.2K), a locale, the scale (linear / log) and both bounds, blank meaning auto
+so a bound is a decision and never a default — and `valueAxis(spec, values,
+extra)` is the scale it builds. The bar and line families carry it, nine
+charts; `opts.axis` on their specs holds `AXIS_DEFAULTS`.
+
+Four rules, each checked:
+
+- **Everything is a literal in the export.** `tickFormat` bakes the locale
+  and the compact notation in — `new Intl.NumberFormat('de-DE', { notation:
+  'compact' })` — so an export formats numbers the way the author saw them,
+  not the way the reader's browser happens to. Blank locale means the
+  browser's own, as before.
+- **A log scale is refused where the data cannot take it, out loud.** Zero
+  and negatives have no logarithm, and Chart.js would draw those points
+  nowhere and say nothing. `valueAxis` is handed the values being plotted;
+  where any is at or below zero the axis stays linear and `spec._axisNote`
+  says why, which the studio toasts once per reason. A `min` at or below
+  zero is dropped on a log axis for the same cause.
+- **A spec from before the block keeps its thousands separators.** The old
+  `opts.separator` toggle is honoured when `opts.axis.format` is unset; the
+  default must not shadow it, or every such share link would lose them.
+- **`Axis minimum` / `Axis maximum` are the labels `boundKeys` reads**, so a
+  facet still writes the union extent into these charts — the text box
+  qualifies now as a slider always did. Nine charts moved from the config
+  route to the control route and the total stayed forty-five.
+
+The date axis (`timeaxis.js`) does not read the locale yet: the adapter
+formats with the browser's own. That is the next thing this block should
+reach.
+
 ### Text colour
 
 Every canvas chart draws its labels through `ink(alpha)`, which resolves
@@ -2294,7 +2330,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **812 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **823 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

@@ -5545,6 +5545,152 @@ check(/^Coloured each row's value at or above 30/.test(byValue.toast), 'and says
 check(byValue.undone, 'undo takes the whole recolouring back as one step');
 console.log(`  ${green('✓')} colour by value — threshold, gradient and diverging, applied as an edit`);
 
+/* Suite — the value axis, as the reader wants it.
+ *
+ * Thirty-odd charts had an axis and none could go logarithmic; bounds were a
+ * `max` slider on fourteen and no `min`; the format was a prefix, a suffix and
+ * a thousands toggle, per chart. One block now — format, locale, scale, min
+ * and max — on the bar and line families, every value baked into the export
+ * as a literal so it formats the way the author saw it. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const axis = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { generateCode } = await import('/js/studio/engines.js');
+  const { tickFormat } = await import('/js/studio/serialize.js');
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const { applyData } = await import('/js/studio/dataio.js');
+  const app = window.openCharts;
+  const set = (path, v) => {
+    const ks = path.split('.');
+    let o = app.spec;
+    ks.slice(0, -1).forEach((k) => { o = o[k]; });
+    o[ks[ks.length - 1]] = v;
+    app._onEdit();
+  };
+  const ticks = () => app.inst.chart.scales.y.ticks.map((t) => t.label);
+  const labels = [...document.querySelectorAll('.controls .field-label span')].map((s) => s.textContent)
+    .filter((l) => /Number format|Number locale|Value scale|Axis minimum|Axis maximum/.test(l));
+
+  // Big numbers, so a format has something to do.
+  applyData(app.def, app.spec, 'Q,2024,2023\nQ1,1250000,980000\nQ2,1680000,1120000\nQ3,2040000,1310000');
+  app.spec.opts.prefix = '';
+  app.spec.opts.suffix = '';
+  app._onEdit();
+  await sleep(300);
+  const plain = ticks();
+  set('opts.axis.format', 'thousands');
+  await sleep(300);
+  const thousands = ticks();
+  set('opts.axis.format', 'compact');
+  await sleep(300);
+  const compact = ticks();
+  set('opts.axis.locale', 'de-DE');
+  set('opts.axis.format', 'thousands');
+  await sleep(300);
+  const german = ticks();
+  const jsGerman = generateCode(app.def, app.spec).js;
+
+  set('opts.axis.min', '500000');
+  set('opts.axis.max', '3000000');
+  await sleep(300);
+  const bounded = [app.inst.chart.scales.y.min, app.inst.chart.scales.y.max];
+  const jsBounded = generateCode(app.def, app.spec).js;
+
+  set('opts.axis.min', '');
+  set('opts.axis.max', '');
+  set('opts.axis.scale', 'log');
+  await sleep(300);
+  const log = { type: app.inst.chart.scales.y.type, note: app.spec._axisNote || null };
+  app.spec.series[0].data[0] = 0;
+  app._onEdit();
+  await sleep(300);
+  const logZero = {
+    type: app.inst.chart.scales.y.type,
+    note: app.spec._axisNote || null,
+    toast: (document.querySelector('.toast') || {}).textContent || '',
+  };
+  app.spec.series[0].data[0] = 1250000;
+  set('opts.axis.scale', 'linear');
+  await sleep(300);
+  const back = { type: app.inst.chart.scales.y.type, note: app.spec._axisNote || null };
+
+  // A share link from before the block still formats as it did.
+  const def = CHARTS.find((c) => c.id === 'bar-vertical');
+  const old = newSpec(def);
+  delete old.opts.axis;
+  old.opts.separator = true;
+  const oldJs = generateCode(def, old).js;
+
+  // Every chart that carries the block also draws through it.
+  const carriers = CHARTS.filter((c) => (c.controls || []).some((k) => k.key === 'opts.axis.scale')).map((c) => c.id);
+  const drawn = carriers.filter((id) => {
+    const d = CHARTS.find((c) => c.id === id);
+    const s = newSpec(d);
+    s.opts.axis = { ...s.opts.axis, scale: 'log', min: '1', max: '' };
+    const cfg = d.chartjs.build(s, { width: 800, height: 340 });
+    const scales = cfg.options.scales;
+    const v = scales.y && scales.y.type === 'logarithmic' ? scales.y : (scales.x && scales.x.type === 'logarithmic' ? scales.x : null);
+    return v && v.min === 1;
+  });
+
+  const standalone = generateCode(app.def, {
+    ...app.spec, opts: { ...app.spec.opts, axis: { ...app.spec.opts.axis, format: 'compact', locale: 'de-DE', scale: 'log' } },
+  }).standalone;
+
+  return {
+    labels, plain: plain[1], thousands: thousands[1], compact: compact[1], german: german[1],
+    jsGerman: /toLocaleString\('de-DE'\)/.test(jsGerman),
+    bounded, jsBounded: /min: 500000/.test(jsBounded) && /max: 3000000/.test(jsBounded),
+    log, logZero, back,
+    oldSeparator: /toLocaleString\(\)/.test(oldJs),
+    tf: [
+      String(tickFormat({ compact: true })),
+      String(tickFormat({ separator: true, locale: 'fr-FR', decimals: 1 })),
+      String(tickFormat({ prefix: '$', compact: true, locale: 'hi-IN' })),
+    ],
+    carriers: carriers.length, drawn: drawn.length,
+    standalone,
+  };
+});
+check(axis.labels.join(',') === 'Number format,Number locale,Value scale,Axis minimum,Axis maximum',
+  'the axis block offers a format, a locale, a scale and both bounds', axis.labels.join(','));
+check(axis.carriers === 9 && axis.drawn === 9,
+  'every chart carrying the block draws its value axis through it', `${axis.drawn} of ${axis.carriers}`);
+check(axis.plain === '500000' && axis.thousands === '500,000' && axis.compact === '500K',
+  'plain, thousands and compact each read as they say', `${axis.plain} / ${axis.thousands} / ${axis.compact}`);
+check(axis.german === '500.000' && axis.jsGerman,
+  'a locale formats the ticks its way, and is baked into the export as a literal', axis.german);
+check(axis.bounded[0] === 500000 && axis.bounded[1] === 3000000 && axis.jsBounded,
+  'typed bounds set the axis and travel into the export', axis.bounded.join('–'));
+check(axis.log.type === 'logarithmic' && !axis.log.note, 'a log scale is drawn where every value is above zero');
+check(axis.logZero.type === 'linear' && /needs every value above zero — 1 is not/.test(axis.logZero.note)
+  && axis.logZero.toast === axis.logZero.note,
+  'and refused, out loud, where one is not', axis.logZero.note);
+check(axis.back.type === 'linear' && !axis.back.note, 'the note goes when the reason does');
+check(axis.oldSeparator, 'a share link from before the block keeps its thousands separators');
+check(axis.tf[0] === "(v) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(v)"
+  && axis.tf[1] === "(v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })"
+  && axis.tf[2].startsWith("(v) => '$' + new Intl.NumberFormat('hi-IN'"),
+  'tickFormat bakes compact notation, decimals and the locale in as literals', axis.tf.join(' | '));
+
+generated.set('/export-axis.html', axis.standalone);
+{
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(`${base}/export-axis.html`, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(600);
+  const shown = await probe.evaluate(() => {
+    const c = Chart.getChart(document.querySelector('canvas'));
+    return { type: c.scales.y.type, tick: c.scales.y.ticks.map((t) => t.label).find((l) => /Mio|M/.test(l)) || c.scales.y.ticks[1].label };
+  });
+  await probe.close();
+  check(!errs.length && shown.type === 'logarithmic' && /^\d+(,\d+)?\s?(Mio\.?|M)$/.test(shown.tick),
+    'an export runs on a log axis with German compact ticks', errs[0] || JSON.stringify(shown));
+}
+console.log(`  ${green('✓')} axis — format, locale, scale and bounds on nine charts, refused where log cannot`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data
@@ -6267,8 +6413,9 @@ const facetScales = await page.evaluate(async () => {
     && cfg.options.scales.y && cfg.options.scales.y.max;
 
   // A Chart.js chart with no axis-bound control of its own — so any sharing
-  // that happens here came from the config route.
-  const def = reg.getChart('bar-vertical');
+  // that happens here came from the config route. The bar and line families
+  // carry the shared axis block now, bounds included, so it is the step area.
+  const def = reg.getChart('step-area');
   out.noBoundControl = !f.boundKeys(def).max && !f.boundKeys(def).min;
   out.saysYes = f.scaleSharing(def);
 
@@ -6338,8 +6485,10 @@ check(!facetScales.pieSays.can && /own axis|scaled to itself/i.test(facetScales.
   'a chart with no cartesian axis still says panels do not compare',
   facetScales.pieSays.why);
 check(facetScales.pinnedKept, 'a chart that pins its own axis keeps it');
-check(facetScales.byConfig >= 25,
-  'the config route roughly triples how many charts can share an axis',
+// Nine charts moved from the config route to the control route when the
+// axis block gave them bounds; the two routes together are what matters.
+check(facetScales.byConfig >= 16 && facetScales.byControl + facetScales.byConfig >= 45,
+  'the two routes together put forty-five charts on a shared axis',
   `${facetScales.byControl} by control + ${facetScales.byConfig} by config`);
 
 /* And it works in the studio, on a real page, without leaking a chart per
