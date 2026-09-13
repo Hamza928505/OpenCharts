@@ -100,6 +100,21 @@ the link *is* the document.
 the studio stripped away — no rail, no controls, no code panel, just the chart
 and its title. It is the same page and the same renderer, one URL flag apart.
 
+## Printing a chart, or saving it as a PDF
+
+**Print / PDF** in the studio opens your browser's own print dialog, where
+**Save as PDF** is one of the destinations. There is no PDF exporter here and
+there does not need to be: the browser's writes real text and a crisp plate,
+where a rasterised canvas would write pixels that blur when someone zooms in.
+
+What it prints is the chart, not the studio — the rail, the controls, the code
+panel and the stage bar all come off, and the sheet carries the plate at full
+width, the title and source you gave it, and the data table underneath. A grid
+of small multiples prints as the grid. If you are working in dark mode the
+chart is switched to light ink first, because a chart drawn in pale grey on
+white paper is a chart nobody can read; the studio goes back to dark when the
+dialog closes.
+
 ## Installing it
 
 Published to GitHub Packages as
@@ -579,7 +594,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **854 checks**, and it fails if
+spreadsheet, printing a chart, and refusing six hostile ones. **870 checks**, and it fails if
 anything writes to the console.
 
 ```bash

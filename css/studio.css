@@ -3507,9 +3507,82 @@ body[data-focus="1"] .stage-data { display: none; }
   }
 }
 
+/* ── Print, which is also how a chart becomes a PDF ──────────────────────────
+ *
+ * There is no PDF exporter here and there does not need to be: every browser
+ * ships one behind Save as PDF, and it writes vector text and a crisp plate
+ * where a rasterised canvas would write pixels. What it needs is a page that
+ * prints, and the studio is mostly chrome — a rail, a controls column, a code
+ * panel and a stage bar, none of which anyone wants on paper.
+ *
+ * So the sheet is the plate, its caption and its data table, and nothing else.
+ * The table is deliberately kept: a printed chart with the numbers under it is
+ * the document people actually circulate, and it is the same table `a11y.js`
+ * already writes for a reader who cannot see the picture.
+ *
+ * The one thing no rule here can fix is the ink. A canvas chart resolves its
+ * label colour from these tokens at *render* time, so a dark studio has
+ * already painted pale grey into the bitmap. `StudioApp._print` switches to
+ * light and re-renders before opening the dialog — see the comment there.
+ *
+ * This is also the one block below the token blocks that names a raw colour,
+ * and deliberately: the rest of the stylesheet is themed because a screen has
+ * a theme, and paper does not. A reader who reaches for Ctrl+P instead of the
+ * button gets whatever theme they were in, so the sheet states white itself
+ * rather than trusting a token that may have resolved to slate. */
 @media print {
-  .rail, .toolbar, .controls, .code-bar, .stage-actions { display: none !important; }
-  .stage, .codepanel { box-shadow: none; border-color: #ccc; }
+  /* The chrome. `.topbar`, `.gallery-hero`, `.matchbar`, `.shelf`, `.toolbar`
+     and `.site-foot` are the gallery's; the rest are the studio's. Listed
+     together because a reader may reach for print on either page. */
+  .rail, .rail-scrim, .controls, .controls-grip, .page-head, .help,
+  .stage-bar, .stage-tools, .sources, .codepanel, .toast-stack,
+  .topbar, .gallery-hero, .matchbar, .shelf, .toolbar,
+  .site-foot { display: none !important; }
+
+  /* The studio is a grid with a fixed first column; with the column gone, the
+     grid would still reserve it. Everything collapses to ordinary flow. */
+  .app, .main, .studio, .stage-wrap { display: block !important; }
+
+  html, body { background: #fff !important; }
+
+  /* The plate is the print: no mat, no shadow, no border, full width — and
+     never broken across two sheets. */
+  .stage {
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  .stage-body {
+    padding: 0 !important;
+    min-height: 0 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .legend, .metrics { padding-left: 0 !important; padding-right: 0 !important; }
+  .chart-caption { display: block; }
+
+  /* A facet grid prints as the grid it is on screen. `--oc-facet-cols` is
+     written on the element by `facetMarkup`, and the narrow-screen rule that
+     stacks panels into one column must not fire against a paper width. */
+  .oc-facets {
+    display: grid !important;
+    grid-template-columns: repeat(var(--oc-facet-cols, 2), minmax(0, 1fr)) !important;
+  }
+  .oc-facet { break-inside: avoid; page-break-inside: avoid; }
+
+  /* On screen the table is its own scroll box so a 40-column table cannot
+     widen the page. Paper has no scrollbar, so it is let out of the box. */
+  .stage-data:not(:empty) { padding: .6rem 0 0 !important; }
+  .stage-data .chart-data-scroll {
+    max-height: none !important;
+    overflow: visible !important;
+    border-color: #ddd !important;
+  }
+  .stage-data .chart-data thead th { position: static !important; }
+  .stage-data .chart-data th,
+  .stage-data .chart-data td { white-space: normal !important; }
 }
 
 /* Reference lines — the annotation rows' vocabulary, with a kind name, a

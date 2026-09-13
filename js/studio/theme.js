@@ -42,6 +42,18 @@ export function isDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+/**
+ * The explicit choice on record, or null while the OS is deciding.
+ *
+ * `isDark()` answers what the page is painting, which is not the same thing:
+ * a caller that borrows the theme for a moment — printing switches to light,
+ * because a canvas has already painted its ink by then — has to put back the
+ * *preference*, not the colour it happened to resolve to. Writing 'light' over
+ * a reader who had chosen nothing would make their studio stop following the
+ * OS, which is a setting they never touched.
+ */
+export function storedTheme() { return read(); }
+
 /** Apply the stored preference. Call before first paint. */
 export function applyTheme() {
   const stored = read();

@@ -7077,6 +7077,159 @@ check(reportUi.firstHref && reportUi.stillOffersAll > reportUi.picks,
   JSON.stringify(reportUi));
 console.log(`  ${green('✓')} report — ${reportUi.picks} suggestions with reasons, quality and relationships`);
 
+/* Suite 31 — the sheet: what comes out of the printer, and out of Save as PDF.
+ *
+ * There is no PDF exporter here; the browser's own is the export, and it is
+ * only as good as the page it is given. So the checks are what a reader would
+ * see in the preview: the plate at full width, none of the studio around it,
+ * the caption still attached, and nothing running off the side of the paper.
+ *
+ * The ink is the part CSS cannot reach. A canvas chart resolves its label
+ * colour from the page's tokens at render time, so a dark studio has already
+ * painted pale grey into the bitmap by the time a print rule could object —
+ * which is why the button switches to light, re-renders, and switches back. */
+await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1200);
+
+const printPress = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const theme = await import('/js/studio/theme.js');
+  const btn = document.querySelector('#btn-print');
+  if (!btn) return { present: false };
+
+  // A caption and a data table, so the sheet has everything it should carry.
+  window.openCharts.spec.caption = { title: 'Revenue by region', source: 'Finance, 2024' };
+  window.openCharts.rebuild();
+
+  const real = window.print;
+  const calls = [];
+  // What the page looked like at the moment the dialog would have opened —
+  // which is the only moment that decides what lands on the paper.
+  window.print = () => calls.push({
+    theme: document.documentElement.getAttribute('data-theme'),
+    dataOpen: !!document.querySelector('#chart-data details[open]'),
+  });
+
+  theme.setTheme('light');
+  await sleep(300);
+  btn.click();
+  await sleep(500);
+  const fromLight = calls[calls.length - 1];
+
+  theme.setTheme('dark');
+  await sleep(400);
+  btn.click();
+  await sleep(800);
+  const fromDark = calls[calls.length - 1];
+  await sleep(300);
+  const themeAfter = document.documentElement.getAttribute('data-theme');
+  const storedAfter = theme.storedTheme();
+
+  window.print = real;
+  theme.setTheme(null);
+  await sleep(300);
+  return { present: true, calls: calls.length, fromLight, fromDark, themeAfter, storedAfter };
+});
+check(printPress.present, 'the stage bar offers Print / PDF');
+check(printPress.calls === 2, 'and pressing it opens the browser\'s print dialog',
+  `${printPress.calls} of 2 presses reached window.print`);
+check(printPress.fromDark && printPress.fromDark.theme === 'light',
+  'a dark studio prints in light ink — the canvas has already painted it, so the switch has to come first',
+  JSON.stringify(printPress.fromDark));
+check(printPress.themeAfter === 'dark' && printPress.storedAfter === 'dark',
+  'and the studio is dark again afterwards, preference and all',
+  `${printPress.themeAfter} / ${printPress.storedAfter}`);
+check(printPress.fromLight && printPress.fromLight.theme === 'light',
+  'a light studio is left alone', JSON.stringify(printPress.fromLight));
+check(printPress.fromDark && printPress.fromDark.dataOpen,
+  'the data table is opened for the sheet — no stylesheet can open a <details>');
+
+/* And the sheet itself, under the print stylesheet the dialog would apply. */
+await page.emulateMedia({ media: 'print' });
+await page.waitForTimeout(400);
+const sheet = await page.evaluate(() => {
+  const disp = (sel) => {
+    const el = document.querySelector(sel);
+    return el ? getComputedStyle(el).display : 'missing';
+  };
+  const shows = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return getComputedStyle(el).display !== 'none' && r.width > 1 && r.height > 1;
+  };
+  const plate = document.querySelector('#stage-body');
+  return {
+    plate: shows('#stage-body'),
+    plateWidth: Math.round(plate.getBoundingClientRect().width),
+    unbroken: getComputedStyle(plate).breakInside,
+    head: shows('#chart-caption-head'),
+    foot: shows('#chart-caption-foot'),
+    table: shows('#chart-data'),
+    controls: disp('.controls'),
+    rail: disp('.rail'),
+    code: disp('.codepanel'),
+    bar: disp('.stage-bar'),
+    tools: disp('.stage-tools'),
+    sources: disp('.sources'),
+    pageHead: disp('.page-head'),
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    window: window.innerWidth,
+  };
+});
+check(sheet.plate, 'the plate is on the sheet');
+check(sheet.plateWidth > sheet.window * 0.85,
+  'at the full width of the paper', `${sheet.plateWidth}px of ${sheet.window}px`);
+check(sheet.unbroken === 'avoid', 'and never split across two sheets', sheet.unbroken);
+check(sheet.head && sheet.foot, 'the caption prints with it — a chart with its source torn off is not the chart',
+  `head ${sheet.head}, foot ${sheet.foot}`);
+check(sheet.table, 'and so do the numbers under it');
+check(['controls', 'rail', 'code', 'bar', 'tools', 'sources', 'pageHead']
+  .every((k) => sheet[k] === 'none'),
+  'none of the studio around it prints', JSON.stringify(sheet));
+check(sheet.overflow <= 1, 'and nothing runs off the side of the page',
+  `${sheet.overflow}px past ${sheet.window}px`);
+
+/* A grid of small multiples prints as the grid. The rule that stacks panels
+ * into one column is a narrow-*screen* rule, and paper is not narrow. */
+const sheetFacets = await page.evaluate(async () => {
+  const f = await import('/js/studio/facet.js');
+  const app = window.openCharts;
+  const table = {
+    headers: ['Region', 'Month', 'Sales'],
+    rows: [
+      ['North', 'Jan', '12'], ['North', 'Feb', '18'], ['North', 'Mar', '15'],
+      ['South', 'Jan', '9'], ['South', 'Feb', '14'], ['South', 'Mar', '11'],
+      ['East', 'Jan', '20'], ['East', 'Feb', '16'], ['East', 'Mar', '22'],
+    ],
+  };
+  const applied = f.facetByColumn(app.def, app.spec, table, 0);
+  app.rebuild();
+  await new Promise((r) => setTimeout(r, 600));
+  const grid = document.querySelector('.oc-facets');
+  const cs = grid ? getComputedStyle(grid) : null;
+  return {
+    applied: !!(applied && applied.ok !== false),
+    panels: document.querySelectorAll('.oc-facet').length,
+    display: cs ? cs.display : 'missing',
+    columns: cs ? cs.gridTemplateColumns.trim().split(/\s+/).length : 0,
+  };
+});
+check(sheetFacets.panels >= 2 && sheetFacets.display === 'grid',
+  'a faceted chart prints as a grid', JSON.stringify(sheetFacets));
+check(sheetFacets.columns >= 2, 'with the columns it has on screen, not one',
+  `${sheetFacets.columns} columns`);
+
+await page.emulateMedia({ media: 'screen' });
+await page.waitForTimeout(300);
+const backOnScreen = await page.evaluate(() => ({
+  controls: getComputedStyle(document.querySelector('.controls')).display,
+  code: getComputedStyle(document.querySelector('.codepanel')).display,
+}));
+check(backOnScreen.controls !== 'none' && backOnScreen.code !== 'none',
+  'and the studio is all there again on screen', JSON.stringify(backOnScreen));
+console.log(`  ${green('✓')} print — plate ${sheet.plateWidth}px, ${sheetFacets.columns}-column panels, dark prints light`);
+
 /* Suite 29 — libraries arrive when something needs them.
  *
  * The whole point is that a reader opening a bar chart does not pay for the
