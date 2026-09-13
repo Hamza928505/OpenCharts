@@ -8,6 +8,46 @@ A library of **<!-- count:charts -->115<!-- /count --> chart types**. Every one 
 colours and options are live controls, and the HTML, CSS and JavaScript behind
 it update as you edit — so the code you copy is the chart you built.
 
+Two ways in, and they meet in the middle. **Open the gallery** and bring a
+table — the page narrows to the charts that can read it, and the one you pick
+opens on your rows. Or **`import` the library** and draw one from a program:
+the same registry, the same renderers, the same charts.
+
+## Using it in your own page
+
+```bash
+npm install @hamza928505/opencharts
+```
+
+GitHub Packages authenticates every read, including public packages, so that
+needs a token and a one-off `.npmrc` — see [Installing it](#installing-it),
+which also lists the two ways in that need no auth at all.
+
+```html
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/d3.min.js"></script>
+<script type="module">
+  import { render } from './js/opencharts.js';   // or '@hamza928505/opencharts'
+  render(document.querySelector('#host'), {
+    chart: 'bar-vertical',
+    data: [{ quarter: 'Q1', sales: 520 }, { quarter: 'Q2', sales: 680 }],
+  });
+</script>
+
+<open-chart chart="pie" data='[{"slice":"A","value":3},{"slice":"B","value":1}]'></open-chart>
+```
+
+`render()` takes a chart id, a table — CSV text or JSON records — and an
+optional `spec`, and hands back `update()`, `destroy()` and `whenReady`. It
+throws when a chart cannot read the data rather than drawing its example
+under your heading. The element does the same from attributes, redraws when
+they change, and cleans up when removed. Every library beyond Chart.js and D3
+arrives on demand.
+
+JSON reads everywhere a table does — the matcher, the paste tab, a `.json`
+file, a link — as long as it holds rows: an array of records, records under a
+key, columns as arrays, or JSON Lines.
+
 ## Start from your data
 
 The gallery asks the question the other way round too. **Match my data** at the
@@ -48,33 +88,6 @@ its title. The gallery shows what you kept as **My charts** — open one, rename
 it, remove it — and **Export all** writes them as one JSON file that
 **Import…** reads back on another browser. Nothing leaves your machine; there
 is no account. Forty charts fit, and the oldest go first when they do not.
-
-## Using it in your own page
-
-```html
-<script src="lib/chart.umd.min.js"></script>
-<script src="lib/d3.min.js"></script>
-<script type="module">
-  import { render } from './js/opencharts.js';   // or '@hamza928505/opencharts'
-  render(document.querySelector('#host'), {
-    chart: 'bar-vertical',
-    data: [{ quarter: 'Q1', sales: 520 }, { quarter: 'Q2', sales: 680 }],
-  });
-</script>
-
-<open-chart chart="pie" data='[{"slice":"A","value":3},{"slice":"B","value":1}]'></open-chart>
-```
-
-`render()` takes a chart id, a table — CSV text or JSON records — and an
-optional `spec`, and hands back `update()`, `destroy()` and `whenReady`. It
-throws when a chart cannot read the data rather than drawing its example
-under your heading. The element does the same from attributes, redraws when
-they change, and cleans up when removed. Every library beyond Chart.js and D3
-arrives on demand.
-
-JSON reads everywhere a table does — the matcher, the paste tab, a `.json`
-file, a link — as long as it holds rows: an array of records, records under a
-key, columns as arrays, or JSON Lines.
 
 ## Sharing a chart
 
@@ -145,6 +158,34 @@ Server, and so on. There is no build step and nothing to install.
 |---|---|
 | `index.html` | The gallery. Every chart rendered live, searchable and filterable by category. |
 | `studio.html?chart=<id>` | The editor. Controls on the left, live preview top right, generated code below. |
+
+## What this deliberately is not
+
+This is Datawrapper for people who want the code: publishing-grade single
+charts, an honest reader, and an export that stands on its own. Four things a
+BI platform has are missing on purpose, and each one is the same trade.
+
+- **A semantic model or a query language.** No DAX, no measures, no
+  relationships between tables. A chart here is handed literal values in its
+  spec and draws them — that is the one rule the whole library is built on, and
+  it is what makes an export a file you can open rather than a client for a
+  server. Aggregating happens in the **Shape** tab, in front of you, and what
+  comes out is written into the table as numbers you can read.
+- **Scheduled refresh and live connectors.** A chart never keeps the address it
+  came from. Reading a published CSV from a link is one fetch, into the grid,
+  where it becomes literal values — so a chart you exported last year cannot
+  break because somebody else's server moved. A live, re-fetching chart is a
+  different product with a different promise.
+- **Cross-filtering and drill-down.** Clicking a bar filters nothing. Wiring
+  charts to each other needs one query engine holding all of them at run time,
+  which every exported chart would then have to carry — and a chart that only
+  means something inside its own dashboard is the opposite of one you can paste
+  into your page. Small multiples give you the comparison instead, and they do
+  it by splitting the data once, here, into complete independent specs.
+- **Accounts, permissions, row-level security.** There is no server to hold
+  them. Nothing is uploaded: your table is read in this browser, saved charts
+  live in this browser's storage, and a share link *is* the document. That is
+  also why there is nobody to ask for access — and nobody to lock you out.
 
 ## Code output
 
@@ -538,7 +579,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **848 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **854 checks**, and it fails if
 anything writes to the console.
 
 ```bash

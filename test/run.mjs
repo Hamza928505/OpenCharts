@@ -141,6 +141,43 @@ check(counts.status === 0, 'README, CLAUDE.md and package.json quote the registr
 check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
   'and the checker itself counts what the page counts', counts.stdout.trim());
 
+/* The README answers two readers, and says what this is not.
+ *
+ * A developer arriving at a chart library wants to know how to import it, and
+ * the answer sat below a reader-facing tour of the gallery and two sections on
+ * saving and sharing — so the first instruction they met was how to start a
+ * static file server. The order is the check, because prose drifts and an
+ * ordering does not: `render()` and the package name come before
+ * `python -m http.server`, and there is exactly one copy of each.
+ *
+ * The positioning section is checked for existence rather than for wording. A
+ * tool that will not say what it is not gets judged as a worse version of
+ * something it never tried to be, and the four things this rules out are the
+ * ones a reader would otherwise go looking for. */
+const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
+const guide = await readFile(join(ROOT, 'CLAUDE.md'), 'utf8');
+const at = (needle) => readme.indexOf(needle);
+const serveAt = at('python -m http.server');
+const renderAt = at('import { render }');
+const installAt = at('npm install @hamza928505/opencharts');
+
+check(/^## What this deliberately is not/m.test(readme),
+  'the README says what this deliberately is not');
+check(['semantic model', 'refresh', 'Cross-filtering', 'row-level security']
+  .every((phrase) => new RegExp(phrase, 'i').test(readme)),
+  'and names the four BI features it rules out, each with its reason');
+check(/^## Position/m.test(guide) && /Datawrapper for people who want the code/.test(guide),
+  'CLAUDE.md states the lane in one paragraph before the architecture');
+check(renderAt > 0 && serveAt > 0 && renderAt < serveAt,
+  'the README shows render() before it shows how to serve the folder',
+  `render() at ${renderAt}, http.server at ${serveAt}`);
+check(installAt > 0 && installAt < serveAt,
+  'and names the package before it too', `npm install at ${installAt}`);
+check(readme.split('import { render }').length === 2,
+  'with one copy of the usage, not two',
+  `${readme.split('import { render }').length - 1} copies`);
+console.log(`  ${green('✓')} positioning — the lane stated, the developer entry first`);
+
 /* Suite 2 — every chart renders, takes data, and generates code. */
 const targets = only ? meta.ids.filter((id) => id.includes(only)) : meta.ids;
 if (only) console.log(dim(`  filtered to "${only}" — ${targets.length} charts`));
