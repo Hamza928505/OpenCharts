@@ -5,6 +5,13 @@
   "license": "MIT",
   "author": "Hamza Salameh",
   "type": "module",
+  "main": "js/opencharts.js",
+  "exports": {
+    ".": "./js/opencharts.js",
+    "./studio/*": "./js/studio/*",
+    "./css/studio.css": "./css/studio.css",
+    "./package.json": "./package.json"
+  },
   "homepage": "https://github.com/Hamza928505/OpenCharts#readme",
   "repository": {
     "type": "git",

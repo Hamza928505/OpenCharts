@@ -669,6 +669,54 @@ and offers that as a third button (`ask({ alt })`), handing the table over
 through the same door a gallery tile uses. The offer is a number, not a hope:
 if nothing reads it, the button is not there.
 
+### JSON is a table when it holds rows
+
+Developers arrive with `[{ region: 'North', sales: 520 }, …]` from an API,
+and the matcher read only delimited text: the paste box turned it away as
+"JSON, not a table", which was true of the syntax and false of the content.
+`jsonAsCsv` in `dataio.js` reads four shapes and JSON Lines — an array of
+records (nested objects flatten to `parent.child`, arrays of values join
+with `; `), an array of arrays, an object holding either under some key
+(`rows`, `data`, or the first array of records), and a columnar object of
+equal-length arrays — and hands back CSV text plus whether the header is
+known. `parseTable` calls it first, so JSON enters through the door every
+table takes and nothing downstream knows it was JSON. A record's keys are
+its header **by construction**, so that guess is never made.
+
+JSON holding no rows — a config, a manifest — is still refused, as JSON,
+with a message saying what would read. `looksLikeTable` settles JSON before
+it counts lines: an API answers with its rows on one line, and the old
+single-line guard turned every such answer away. The impostor suite moved
+its two JSON-of-records samples to the tables side and kept a manifest on
+the impostor side.
+
+### The library as something a page imports
+
+`js/opencharts.js` is the package's entry point (`main` and `exports` in
+`package.json`). It is thin on purpose: `render(host, { chart, spec, data,
+header, height })` is `newSpec` + `applyData` + `renderChart`, the same
+three calls the studio makes, returning `{ spec, instance, whenReady,
+update(), resize(), destroy() }`; `charts()` lists the ids; and
+`<open-chart chart data spec height header>` is `render` on connect,
+again on any attribute change, `destroy` on disconnect. Nothing here draws.
+
+Two places it is deliberately stricter than the studio, because a program
+is not a person who will see the result:
+
+- **It throws.** A chart id that names nothing, or data the chart cannot
+  read, is an exception — not the example drawn quietly under the caller's
+  heading. Too few columns counts as "cannot read" here, where the studio's
+  `checkTableShape` is advisory; an extra column still passes. The element
+  puts the message in itself as text.
+- **`header` defaults to true.** A program's CSV nearly always starts with
+  its header, and `Q,2024` cannot be told from data by looking — the studio
+  asks a person; this takes the caller's word. JSON knows its own.
+
+The consumer page needs the two eager libraries the site itself needs —
+Chart.js and D3 from `lib/` — and nothing else; `loader.js` fetches the
+rest when a chart first wants them, resolving `lib/` paths from its own
+module URL so the package works from wherever it is served.
+
 ### Certainty about the header row
 
 **A spreadsheet written for people does not start at its header.** It starts
@@ -2363,7 +2411,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **834 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **848 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

@@ -49,6 +49,33 @@ it, remove it — and **Export all** writes them as one JSON file that
 **Import…** reads back on another browser. Nothing leaves your machine; there
 is no account. Forty charts fit, and the oldest go first when they do not.
 
+## Using it in your own page
+
+```html
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/d3.min.js"></script>
+<script type="module">
+  import { render } from './js/opencharts.js';   // or '@hamza928505/opencharts'
+  render(document.querySelector('#host'), {
+    chart: 'bar-vertical',
+    data: [{ quarter: 'Q1', sales: 520 }, { quarter: 'Q2', sales: 680 }],
+  });
+</script>
+
+<open-chart chart="pie" data='[{"slice":"A","value":3},{"slice":"B","value":1}]'></open-chart>
+```
+
+`render()` takes a chart id, a table — CSV text or JSON records — and an
+optional `spec`, and hands back `update()`, `destroy()` and `whenReady`. It
+throws when a chart cannot read the data rather than drawing its example
+under your heading. The element does the same from attributes, redraws when
+they change, and cleans up when removed. Every library beyond Chart.js and D3
+arrives on demand.
+
+JSON reads everywhere a table does — the matcher, the paste tab, a `.json`
+file, a link — as long as it holds rows: an array of records, records under a
+key, columns as arrays, or JSON Lines.
+
 ## Sharing a chart
 
 Once you have a chart the way you want it, **Share** copies a link that
@@ -511,7 +538,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **834 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **848 checks**, and it fails if
 anything writes to the console.
 
 ```bash

@@ -280,7 +280,106 @@ const num = (v, fallback = 0) => {
  *   table, so a caller can say so rather than leave the reader wondering where
  *   the first rows of their file went.
  */
+/**
+ * JSON, read as a table — where it is one.
+ *
+ * Developers arrive with `[{ region: 'North', sales: 520 }, …]` from an API,
+ * and the matcher read only delimited text: the paste box turned it away as
+ * "JSON, not a table", which was true of the syntax and false of the content.
+ * Rows of records are a table whatever punctuation they came wrapped in.
+ *
+ * Four shapes are read, and only these:
+ *   - an array of flat objects — the common API answer; nested objects
+ *     flatten to `parent.child` keys, arrays of primitives join with `; `
+ *   - an array of arrays — rows, with the header worked out as for CSV
+ *   - an object wrapping one of those under some key — `{ rows: [...] }`,
+ *     `{ data: [...] }`, or whichever property is the first array of records
+ *   - a columnar object — `{ region: [...], sales: [...] }`, equal lengths
+ * and JSON Lines, one object per line. Anything else — a config file, a
+ * package.json, a lone number — is not a table and is refused as before.
+ *
+ * Returns the table as CSV text plus whether its header is known, so it
+ * enters through `parseTable` and every later step is the one a paste takes.
+ *
+ * @returns {{ text: string, header: boolean } | null}
+ */
+export function jsonAsCsv(text) {
+  const raw = String(text || '').trim();
+  if (!/^[[{]/.test(raw)) return null;
+  let value;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    // JSON Lines: one record per line, no brackets around the lot.
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2 || !lines.every((l) => /^\{.*\}$/.test(l))) return null;
+    try { value = lines.map((l) => JSON.parse(l)); } catch { return null; }
+  }
+  const isRecord = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const isRow = (v) => Array.isArray(v) || isRecord(v);
+
+  // Unwrap: an object holding the rows under some key, or holding columns.
+  if (isRecord(value)) {
+    const keys = Object.keys(value);
+    const preferred = ['rows', 'data', 'items', 'results', 'records', 'values'];
+    const holder = preferred.find((k) => Array.isArray(value[k]) && value[k].length && value[k].every(isRow))
+      || keys.find((k) => Array.isArray(value[k]) && value[k].length && value[k].every(isRow));
+    if (holder) {
+      value = value[holder];
+    } else if (keys.length >= 2 && keys.every((k) => Array.isArray(value[k]))
+      && new Set(keys.map((k) => value[k].length)).size === 1 && value[keys[0]].length) {
+      // Columnar: turn the columns on their side.
+      const n = value[keys[0]].length;
+      const rows = Array.from({ length: n }, (_, i) => keys.map((k) => value[k][i]));
+      return { text: toCSV(keys, rows.map((r) => r.map(cellText))), header: true };
+    } else {
+      return null;
+    }
+  }
+  if (!Array.isArray(value) || !value.length || !value.every(isRow)) return null;
+
+  if (value.every(Array.isArray)) {
+    return { text: toCSV(null, value.map((r) => r.map(cellText))), header: false };
+  }
+  if (!value.every(isRecord)) return null;
+
+  // Records: flatten, with keys in the order they were first seen.
+  const flat = value.map((rec) => flattenRecord(rec));
+  const headers = [];
+  flat.forEach((rec) => Object.keys(rec).forEach((k) => { if (!headers.includes(k)) headers.push(k); }));
+  if (!headers.length) return null;
+  const rows = flat.map((rec) => headers.map((h) => cellText(rec[h])));
+  return { text: toCSV(headers, rows), header: true };
+}
+
+/** A JSON value as one cell. */
+function cellText(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map(cellText).join('; ');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+/** `{ a: { b: 1 } }` → `{ 'a.b': 1 }`, three levels down at most. */
+function flattenRecord(rec, prefix = '', depth = 0, out = {}) {
+  Object.keys(rec).forEach((k) => {
+    const v = rec[k];
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object' && !Array.isArray(v) && depth < 3) flattenRecord(v, key, depth + 1, out);
+    else out[key] = v;
+  });
+  return out;
+}
+
 export function parseTable(text, expected) {
+  // JSON comes in through the same door and leaves as CSV: what follows is
+  // the one path every table takes, so a record's header row is a header row
+  // by construction and needs no guessing.
+  const asJson = jsonAsCsv(text);
+  if (asJson) {
+    text = asJson.text;
+    if (asJson.header) expected = true;
+  }
   const body = String(text || '').replace(/\r\n?/g, '\n');
   const lines = body.split('\n').map((l) => l.trim()).filter((l) => l.length);
 
@@ -1200,6 +1299,24 @@ export function looksLikeTable(text) {
 
   if (!lines.length) return { ok: false, looksLike: null, message: 'There is nothing in that file.' };
 
+  // JSON first, before any counting of lines: an API answers with its rows
+  // on one line, and a single line of records is a table all the same.
+  // Proven by parsing rather than guessed from braces — brace-counting
+  // mistook every C-family language for JSON. Rows of records read as a
+  // table whatever punctuation they came in; JSON holding no rows, a config
+  // or a manifest, is refused as JSON.
+  if (/^[[{]/.test(whole.trim())) {
+    if (jsonAsCsv(whole)) return { ok: true, looksLike: null, message: '' };
+    try {
+      const parsed = JSON.parse(whole.trim());
+      if (parsed && typeof parsed === 'object') {
+        return { ok: false, looksLike: 'JSON',
+          message: 'That is JSON, but not rows of records — an array of objects, '
+            + 'or an object holding one, is what reads as a table.' };
+      }
+    } catch { /* not JSON after all — keep going */ }
+  }
+
   // A table is at least a header and a row. One line has nothing to chart,
   // and is how a minified bundle or a base64 blob arrives.
   if (lines.length < 2) {
@@ -1218,18 +1335,7 @@ export function looksLikeTable(text) {
     }
   }
 
-  /* 2. JSON, proven rather than guessed. Brace-counting mistook every C-family
-   *    language for JSON; parsing it does not. */
-  const trimmed = whole.trim();
-  if (/^[[{]/.test(trimmed)) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === 'object') {
-        return no('JSON', 'That looks like JSON, not a table. '
-          + 'Convert it to CSV, or paste the rows you want into the table.');
-      }
-    } catch { /* not JSON after all — keep going */ }
-  }
+  /* 2. JSON was settled above, before the line count. */
 
   /* 3. The shape. A file with a separator on nearly every line and a
    *    consistent width is a table, whatever words are in it — so this runs

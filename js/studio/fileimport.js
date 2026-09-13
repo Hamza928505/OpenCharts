@@ -524,7 +524,7 @@ async function readCapped(res, limit) {
 }
 
 /** Everything this accepts, for an <input accept="…">. */
-export const ACCEPTED = '.csv,.tsv,.txt,.xlsx,.xlsm,text/csv,text/plain,'
+export const ACCEPTED = '.csv,.tsv,.txt,.json,.xlsx,.xlsm,text/csv,text/plain,application/json,'
   + 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
