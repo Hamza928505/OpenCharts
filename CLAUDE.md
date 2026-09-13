@@ -24,6 +24,27 @@ Charts run on <!-- count:renderers-word -->six<!-- /count --> renderers — <!--
 other present-tense count in this file and the README, are written by
 `tools/build-counts.mjs` from the registry; the suite fails if they disagree.)
 
+## Position
+
+**Datawrapper for people who want the code.** The lane is publishing-grade
+single charts: one chart made well, a reader that tells you honestly what it
+can and cannot draw from your table, and an export that stands on its own —
+a file you open, not a client for a server that has to still be running. Every
+feature is checked against that sentence, and the ones a BI platform has and
+this deliberately does not are the four it rules out: a semantic model or query
+language, scheduled refresh and live connectors, cross-filtering and
+drill-down, and accounts with permissions and row-level security. Each is out
+for the same reason rather than for want of time — a renderer reads its data
+from the spec and nothing else, nothing is uploaded, and a chart that
+re-fetches breaks the day somebody else's server moves. Where a BI feature has
+an honest single-chart shape it is built in that shape instead: aggregation is
+an *edit* the reader watches happen (`transform.js`), conditional formatting is
+an *edit* that writes colours (`colourby.js`), and comparison is small
+multiples rather than a filter that reaches across charts. The README states
+the same four out loud under "What this deliberately is not", because a tool
+that will not say what it is not gets judged as a worse version of something
+it never tried to be.
+
 ## Architecture
 
 ### The registry is the source of truth
@@ -2411,7 +2432,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **848 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **854 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
