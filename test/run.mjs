@@ -5691,6 +5691,125 @@ generated.set('/export-axis.html', axis.standalone);
 }
 console.log(`  ${green('✓')} axis — format, locale, scale and bounds on nine charts, refused where log cannot`);
 
+/* Suite — a line at a value.
+ *
+ * Annotations are a fraction of the plate, so "a line at the average" was
+ * impossible: the overlay knows where 42% down is and not what 612 is. On
+ * Chart.js a config is data, so a reference line is one more dataset — a
+ * dashed line whose every point is the mean — computed from the spec at build
+ * time, emitted as literals, and placed by the axis that places everything
+ * else. Nine charts carry it; the rest do not pretend to. */
+await page.goto(`${base}/studio.html?chart=line-multi`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+const refs = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const r = await import('/js/studio/reference.js');
+  const { generateCode } = await import('/js/studio/engines.js');
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const app = window.openCharts;
+
+  const unit = {
+    mean: r.meanOf([1, 2, 3, 4]),
+    median: r.medianOf([1, 2, 3, 10]),
+    moving: r.movingAverage([1, 2, 3, 4, 5], 3).join(','),
+    clamped: r.movingAverage([1, 2], 9).join(','),
+    trend: r.trendLine([1, 3, 5, 7]).join(','),
+    trendFit: r.trendLine([2, 4, 6, 8, 100])[4] > 8,
+  };
+
+  const before = generateCode(app.def, app.spec);
+  const groups = [...document.querySelectorAll('.stage-tools .stage-tools-label')].map((l) => l.textContent);
+  const adder = (label) => [...document.querySelectorAll('.stage-tools .refs-add .btn')].find((b) => b.textContent.trim() === `+ ${label}`);
+  for (const k of ['Mean', 'Target', 'Trend', 'Moving avg']) { adder(k).click(); await sleep(250); }
+
+  const chart = app.inst.chart;
+  const ds = chart.data.datasets.filter((d) => d.ocReference);
+  const meanDs = ds.find((d) => /^Mean/.test(d.label));
+  const all = app.spec.series.flatMap((s) => s.data);
+  const expectedMean = Math.round((all.reduce((a, b) => a + b, 0) / all.length) * 100) / 100;
+  const legend = [...document.querySelectorAll('#legend .legend-item')].map((l) => l.textContent.trim());
+  const code = generateCode(app.def, app.spec);
+  const desc = code.html.match(/chart-desc" class="visually-hidden">([^<]*)</)[1];
+
+  // Read one series rather than all of them.
+  const sel = document.querySelector('.stage-tools .refs-row .refs-series');
+  sel.value = '1';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(300);
+  const meanOne = app.inst.chart.data.datasets.find((d) => /^Mean of/.test(d.label));
+  const oneExpected = Math.round(app.spec.series[1].data.reduce((a, b) => a + b, 0) / app.spec.series[1].data.length * 100) / 100;
+
+  // The whole thing undoes in steps and leaves the export as it was.
+  const n = app.spec.references.length;
+  for (let i = 0; i < n; i++) app.undo();
+  await sleep(300);
+  const undone = generateCode(app.def, app.spec).js === before.js;
+
+  const carriers = CHARTS.filter((c) => (c.controls || []).some((k) => k.type === 'references')).map((c) => c.id);
+  const canvasHasNone = !['violin', 'histogram', 'sankey', 'choropleth'].some((id) =>
+    (CHARTS.find((c) => c.id === id).controls || []).some((k) => k.type === 'references'));
+  // A horizontal bar has one series of values and no legend of its own — until a line gives it one.
+  const hb = CHARTS.find((c) => c.id === 'bar-horizontal');
+  const hs = newSpec(hb);
+  const plainLegend = hb.legend(hs);
+  hs.references = [{ kind: 'mean', series: 'all' }, { kind: 'target', value: 100 }];
+  const hLegend = hb.legend(hs).map((l) => `${l.label}${l.toggleable === false ? '' : '!'}`);
+
+  return {
+    unit, groups, hasAdder: !!adder('Mean'),
+    refDatasets: ds.map((d) => d.label),
+    meanValue: meanDs && meanDs.data[0], expectedMean,
+    meanFlat: !!meanDs && new Set(meanDs.data).size === 1 && meanDs.data.length === app.spec.labels.length,
+    legend,
+    jsHasMean: code.js.includes(`Mean ${expectedMean}`) && /borderDash/.test(code.js),
+    jsNoRule: !/references|meanOf|trendLine|movingAverage/.test(code.js),
+    beforeFree: !/borderDash|ocReference/.test(before.js),
+    descMean: new RegExp(`A dashed line marks the mean, ${expectedMean}\\.`).test(desc),
+    descTarget: /A dotted line marks the target, \d+\./.test(desc),
+    descTrend: /A dashed line shows Direct(&#39;|')s trend, (rising|falling|flat) from [\d.]+ to [\d.]+\./.test(desc),
+    meanOne: meanOne && meanOne.data[0], oneExpected,
+    undone, carriers: carriers.length, canvasHasNone,
+    plainLegend, hLegend,
+    standalone: code.standalone,
+  };
+});
+check(refs.unit.mean === 2.5 && refs.unit.median === 2.5 && refs.unit.moving === ',,2,3,4' && refs.unit.clamped === ',1.5'
+  && refs.unit.trend === '1,3,5,7' && refs.unit.trendFit,
+  'mean, median, moving average and least-squares trend compute as they say', JSON.stringify(refs.unit));
+check(refs.groups.join(' | ') === 'Title & source | Reference lines | Small multiples | Notes' && refs.hasAdder,
+  'the control sits under the plate, after the caption', refs.groups.join(' | '));
+check(refs.refDatasets.length === 4 && refs.meanValue === refs.expectedMean && refs.meanFlat,
+  'a mean is a flat dashed dataset at the mean, one point per label', `${refs.meanValue} vs ${refs.expectedMean}`);
+check(refs.legend.length === 7 && refs.legend.some((l) => l === `Mean ${refs.expectedMean}`),
+  'each line joins the legend with the number it landed on', refs.legend.join(','));
+check(refs.jsHasMean && refs.jsNoRule && refs.beforeFree,
+  'the export carries the computed line as literals and no rule; a chart without one carries nothing');
+check(refs.descMean && refs.descTarget && refs.descTrend,
+  'the accessible description says each number', refs.descTrend ? '' : 'trend sentence missing');
+check(refs.meanOne === refs.oneExpected, 'a line can read one series rather than all', `${refs.meanOne} vs ${refs.oneExpected}`);
+check(refs.undone, 'each added line is an undo step, and undoing them all restores the export');
+check(refs.carriers === 9 && refs.canvasHasNone,
+  'nine Chart.js charts carry the control, and the canvas charts do not pretend to', String(refs.carriers));
+check(refs.plainLegend === null && refs.hLegend.join(',') === 'Mean 95.25,Target 100',
+  'a horizontal bar gains a legend only for its lines, none of them toggleable', refs.hLegend.join(','));
+
+generated.set('/export-reference.html', refs.standalone);
+{
+  const probe = await browser.newPage();
+  const errs = [];
+  probe.on('pageerror', (e) => errs.push(String(e.message)));
+  await probe.goto(`${base}/export-reference.html`, { waitUntil: 'networkidle' });
+  await probe.waitForTimeout(600);
+  const shown = await probe.evaluate(() => {
+    const c = Chart.getChart(document.querySelector('canvas'));
+    return { dashed: c.data.datasets.filter((d) => d.borderDash).length, legend: document.querySelectorAll('.legend-item').length };
+  });
+  await probe.close();
+  check(!errs.length && shown.dashed === 4 && shown.legend === 7,
+    'an export runs with its four dashed lines and their legend entries', errs[0] || JSON.stringify(shown));
+}
+console.log(`  ${green('✓')} reference lines — mean, median, target, moving average and trend on nine charts`);
+
 /* Suite 25 — a chart that says what it means.
  *
  * Annotations are positioned as a fraction of the plate rather than in data

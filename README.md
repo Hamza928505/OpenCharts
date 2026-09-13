@@ -296,6 +296,15 @@ with every export — the HTML carries a `<header>` and a `<figcaption>`, the
 PNG and SVG carry the words in the picture, and the accessible description
 leads with the title. A chart with none of them exports exactly as before.
 
+## A line at the mean
+
+On the bar and line charts, **Reference lines** puts a dashed line at the
+mean or the median, a dotted one at a target you set, a moving average over a
+window you choose, or a straight trend through a series — placed on the axis
+at the value itself, computed from your data, and named in the legend with
+the number it landed on. Only the Chart.js charts can do this, which is why
+the control is not on every chart.
+
 ## Notes on the chart
 
 A label on the peak, a rule at the target, a shaded band over the quarter that
@@ -502,7 +511,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, and refusing six hostile ones. **823 checks**, and it fails if
+spreadsheet, and refusing six hostile ones. **834 checks**, and it fails if
 anything writes to the console.
 
 ```bash

@@ -8,6 +8,7 @@
 
 import { C, MONTHS, MONTHS6, withAlpha } from '../palette.js';
 import { baseOpts, xAxisFor, axisLabels, yAxis, TICK, seriesLegend, valueAxisControls, valueAxis, AXIS_DEFAULTS } from '../chartjs-base.js';
+import { REFERENCE_CONTROL, referenceDatasets, referenceLegend } from '../reference.js';
 import { tickFormat } from '../serialize.js';
 
 const CURVE = [
@@ -53,6 +54,7 @@ const lineControls = (extra = []) => [
     format: (v) => v + 'px' },
   ...extra,
   ...valueAxisControls,
+  { ...REFERENCE_CONTROL },
 ];
 
 /** Build a standard line config from a spec. */
@@ -60,7 +62,7 @@ function buildLine(spec, { stacked = false, yExtra = {} } = {}) {
   const o = spec.opts;
   return {
     type: 'line',
-    data: { labels: axisLabels(spec.labels), datasets: lineDatasets(spec) },
+    data: { labels: axisLabels(spec.labels), datasets: [...lineDatasets(spec), ...referenceDatasets(spec, spec.series)] },
     options: baseOpts({
       scales: {
         x: xAxisFor(spec.labels, { ticks: { ...TICK, maxTicksLimit: o.maxLabels || 12 } }),
@@ -84,7 +86,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -104,7 +106,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -120,7 +122,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -140,7 +142,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -160,7 +162,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -181,7 +183,7 @@ export const lineCharts = [
     },
     controls: lineControls(),
     chartjs: { build: (spec) => buildLine(spec, { stacked: true }) },
-    legend: (spec) => seriesLegend(spec, true),
+    legend: (spec) => [...seriesLegend(spec, true), ...referenceLegend(spec, spec.series)],
   },
 
   {

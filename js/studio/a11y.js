@@ -30,6 +30,7 @@ import { parseTable, looksNumeric } from './dataio.js';
 import { describeAnnotations } from './annotate.js';
 import { facetSource, describeFacet } from './facet.js';
 import { describeCaption, captionOf } from './caption.js';
+import { describeReferences } from './reference.js';
 
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -140,6 +141,10 @@ export function chartSummary(def, spec) {
   // available only to the people who can see it.
   const marked = describeAnnotations(spec && spec.annotations);
   if (marked) parts.push(marked);
+  // A dashed line at the mean is a number the author put on the chart; the
+  // number itself is what a reader who cannot see the line is owed.
+  const ruled = describeReferences(def, spec);
+  if (ruled) parts.push(ruled);
   if (said.tail) parts.push(said.tail);
 
   parts.push('The underlying data follows as a table.');
