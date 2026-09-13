@@ -3731,3 +3731,73 @@ body[data-focus="1"] .stage-data { display: none; }
   .board-grid { grid-template-columns: minmax(0, 1fr); }
   .board-pick { max-width: 100%; }
 }
+
+/* ── The AI Analyst tab ──────────────────────────────────────────────────────
+ *
+ * The eighth code view and the third that is not code. Like the Colours tab it
+ * mounts a component into `.code-body`, which is a `pre` — so it re-declares
+ * the face and the white-space rather than inheriting the monospace the code
+ * tabs need.
+ */
+.analyst {
+  font-family: var(--sans);
+  white-space: normal;
+  padding: 1.1rem 1.2rem 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
+}
+
+.analyst-lead {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 66ch;
+}
+
+.analyst-input {
+  font: inherit;
+  font-size: 13px;
+  min-height: 62px;
+  resize: vertical;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r-sm);
+  padding: .55rem .65rem;
+}
+.analyst-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.analyst-row { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
+
+.analyst-status { margin: 0; font-size: 12.5px; color: var(--ink-soft); max-width: 66ch; line-height: 1.55; }
+.analyst-status.is-ok { color: var(--accent); }
+.analyst-status.is-bad { color: var(--bad); }
+
+.analyst-diff {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+/* The answer, and — when it was not one — the text that came back instead.
+   Kept rather than swallowed: a reader can only correct what they can see. */
+.analyst-preview,
+.analyst-raw {
+  margin: 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: .7rem .8rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--code-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.analyst-raw { color: var(--ink-soft); }

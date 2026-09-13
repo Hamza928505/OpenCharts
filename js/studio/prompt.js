@@ -86,7 +86,7 @@ const WHERE_DATA_LIVES = {
  * three fields, and an assistant told only "four columns" will write it as one
  * hop and lose the middle stage.
  */
-const SHAPE_GUIDE = {
+export const SHAPE_GUIDE = {
   labelSeries: 'One row per category. The first column is the category name; every column after it is a separate series, named by its heading.',
   rowSeries: 'One row per series — the transpose of the usual spreadsheet. The first column names the series and every column after it is one of its points, in order. Do not transpose this into columns.',
   labelValue: 'One row per category: a name and a single number.',
