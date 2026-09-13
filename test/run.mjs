@@ -7230,6 +7230,196 @@ check(backOnScreen.controls !== 'none' && backOnScreen.code !== 'none',
   'and the studio is all there again on screen', JSON.stringify(backOnScreen));
 console.log(`  ${green('✓')} print — plate ${sheet.plateWidth}px, ${sheetFacets.columns}-column panels, dark prints light`);
 
+/* Suite 32 — a board: several saved charts on one page.
+ *
+ * Not a dashboard, and the checks are shaped by the difference. Nothing here
+ * asks whether one card can filter another, because none of them can; what has
+ * to be true is that several complete exports co-exist in one document without
+ * colliding — one library tag between them, no id claimed twice, and a
+ * stylesheet that cannot reach out of its own card — and that the board itself
+ * survives being reordered, thinned and reloaded. */
+await page.goto(`${base}/board.html`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1400);
+
+const boardBuilt = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const shelf = await import('/js/studio/shelf.js');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  shelf.clearShelf();
+  const app = window.openChartsBoard;
+  app.state.items = [];
+  app._save();
+  app.render();
+
+  const names = () => [...document.querySelectorAll('.board-card-name')].map((n) => n.textContent);
+
+  // An empty board is the first thing anybody sees, so it has to say what to
+  // do rather than sit there being a heading over nothing.
+  await sleep(200);
+  const emptyText = (document.querySelector('.board-empty') || {}).textContent || '';
+
+  const savedIds = ['bar-vertical', 'line-basic', 'pie'].map((id) => {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.caption = { title: `${def.title} on a board`, source: 'The suite' };
+    return shelf.saveChart({ name: def.title, chart: id, spec }).entry.id;
+  });
+  savedIds.forEach((sid) => app.add(sid));
+  await sleep(1400);
+
+  const placed = {
+    cards: document.querySelectorAll('.board-card').length,
+    marks: document.querySelectorAll('.board-card canvas, .board-card svg').length,
+    captions: document.querySelectorAll('.board-card .oc-caption-title').length,
+    names: names(),
+    columns: getComputedStyle(document.querySelector('.board-grid'))
+      .gridTemplateColumns.trim().split(/\s+/).length,
+  };
+
+  app.move(0, 1);
+  await sleep(700);
+  const reordered = names();
+
+  app.remove(1);
+  await sleep(700);
+  const thinned = { items: app.state.items.length, names: names() };
+
+  // A picture of the board is a picture of the *board*, not of card one.
+  const comp = app.composite();
+  const grid = document.querySelector('.board-grid').getBoundingClientRect();
+
+  return {
+    emptyText,
+    placed,
+    reordered,
+    thinned,
+    comp: comp ? { kind: comp.kind, w: Math.round(comp.width), h: Math.round(comp.height) } : null,
+    grid: { w: Math.round(grid.width), h: Math.round(grid.height) },
+  };
+});
+
+check(/Save/.test(boardBuilt.emptyText) && /My charts/.test(boardBuilt.emptyText),
+  'an empty board says how to fill it rather than sitting there empty',
+  boardBuilt.emptyText.slice(0, 80));
+check(boardBuilt.placed.cards === 3 && boardBuilt.placed.marks === 3,
+  'three saved charts become three cards, each drawing', JSON.stringify(boardBuilt.placed));
+check(boardBuilt.placed.captions === 3,
+  'and each carries its own caption, so a board reads as a page');
+check(boardBuilt.placed.columns === 2, 'laid on the grid the board asks for',
+  `${boardBuilt.placed.columns} columns`);
+check(boardBuilt.reordered[0] === boardBuilt.placed.names[1]
+  && boardBuilt.reordered[1] === boardBuilt.placed.names[0],
+  'a card can be moved past its neighbour',
+  `${boardBuilt.placed.names.join(', ')} → ${boardBuilt.reordered.join(', ')}`);
+check(boardBuilt.thinned.items === 2 && boardBuilt.thinned.names.length === 2,
+  'and removing one leaves two', JSON.stringify(boardBuilt.thinned));
+check(boardBuilt.comp && boardBuilt.comp.kind === 'png',
+  'a board of canvases composites to one PNG', JSON.stringify(boardBuilt.comp));
+check(boardBuilt.comp
+  && boardBuilt.comp.w === boardBuilt.grid.w + 36
+  && boardBuilt.comp.h === boardBuilt.grid.h + 36,
+  'the size of the grid on screen, not the size of one card',
+  `${JSON.stringify(boardBuilt.comp)} vs ${JSON.stringify(boardBuilt.grid)}`);
+
+/* A board is state, so it has to survive the tab being closed. */
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(1600);
+const boardReloaded = await page.evaluate(() => ({
+  items: window.openChartsBoard.state.items.length,
+  cards: document.querySelectorAll('.board-card').length,
+  marks: document.querySelectorAll('.board-card canvas, .board-card svg').length,
+  names: [...document.querySelectorAll('.board-card-name')].map((n) => n.textContent),
+}));
+check(boardReloaded.items === 2 && boardReloaded.cards === 2 && boardReloaded.marks === 2,
+  'the board is still there after a reload, in the order it was left',
+  JSON.stringify(boardReloaded));
+check(boardReloaded.names.join() === boardBuilt.thinned.names.join(),
+  'with the same charts on it', boardReloaded.names.join(', '));
+
+/* The export. Four cards on four different renderers, because the whole
+ * difficulty is that each one's code was written to own a document. */
+const boardExport = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const shelf = await import('/js/studio/shelf.js');
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  shelf.clearShelf();
+  const app = window.openChartsBoard;
+  const ids = ['bar-vertical', 'funnel', 'sunburst', 'engine-line'];
+  app.state.items = ids.map((id) => {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.caption = { title: `${def.title} on a board` };
+    return { shelfId: shelf.saveChart({ name: def.title, chart: id, spec }).entry.id };
+  });
+  app._save();
+  app.render();
+  await sleep(1600);
+
+  const out = app.standalone();
+  const styles = (out.html.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  return {
+    html: out.html,
+    charts: out.charts,
+    skipped: out.skipped,
+    libraries: out.libraries.map((l) => l.key),
+    // One tag per library however many cards want it: two of these four are on
+    // Chart.js, and a board that shipped it twice would run it twice.
+    chartTags: (out.html.match(/<script src="[^"]*chart\.umd[^"]*"><\/script>/g) || []).length,
+    // Nothing in the stylesheet may still select the id every export claims.
+    bareChartRule: /(^|[\s,{}])#chart[\s{,]/.test(styles),
+    scoped: (styles.match(/#c\d+-card /g) || []).length,
+  };
+});
+check(boardExport.charts === 4 && !boardExport.skipped.length,
+  'the export carries every card', JSON.stringify({ charts: boardExport.charts, skipped: boardExport.skipped }));
+check(boardExport.libraries.join() === 'chart,d3' && boardExport.chartTags === 1,
+  'with one script tag per library however many cards want it',
+  `${boardExport.libraries.join(', ')} · ${boardExport.chartTags} Chart.js tags`);
+check(!boardExport.bareChartRule && boardExport.scoped > 10,
+  'and a stylesheet that cannot reach out of its own card',
+  `${boardExport.scoped} scoped rules, bare #chart: ${boardExport.bareChartRule}`);
+
+generated.set('/board-export.html', boardExport.html);
+const boardProbe = await browser.newPage();
+const boardErrs = [];
+boardProbe.on('pageerror', (e) => boardErrs.push(String(e.message)));
+boardProbe.on('console', (m) => { if (m.type() === 'error') boardErrs.push('console: ' + m.text()); });
+await boardProbe.goto(`${base}/board-export.html`, { waitUntil: 'networkidle' });
+await boardProbe.waitForTimeout(2200);
+const boardRan = await boardProbe.evaluate(() => {
+  const drew = [...document.querySelectorAll('.oc-board-card')].map((card) => {
+    const c = card.querySelector('canvas');
+    if (c && c.width) {
+      const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let ink = 0;
+      for (let i = 3; i < px.length; i += 4 * 197) if (px[i] > 10) ink++;
+      return ink >= 5;
+    }
+    const svg = card.querySelector('svg');
+    return !!svg && svg.querySelectorAll('path,circle,rect,line').length > 3;
+  });
+  const ids = [...document.querySelectorAll('[id]')].map((n) => n.id);
+  return { cards: drew.length, drew: drew.filter(Boolean).length, ids: ids.length, unique: new Set(ids).size };
+});
+await boardProbe.close();
+const boardNoise = boardErrs.filter((e) => !/net::ERR_|favicon/i.test(e));
+check(boardRan.cards === 4 && boardRan.drew === 4 && !boardNoise.length,
+  'and the exported board runs clean and draws every chart',
+  `${boardRan.drew}/${boardRan.cards} drew · ${boardNoise.slice(0, 2).join(' | ')}`);
+check(boardRan.ids > 0 && boardRan.ids === boardRan.unique,
+  'with no id claimed twice, on four renderers in one document',
+  `${boardRan.unique} unique of ${boardRan.ids}`);
+console.log(`  ${green('✓')} board — ${boardRan.cards} independent charts in one page, ${boardExport.libraries.length} libraries`);
+
+// Leave storage as it was found: a shelf of four and a board would follow this
+// page into whatever suite runs next.
+await page.evaluate(async () => {
+  const shelf = await import('/js/studio/shelf.js');
+  const board = await import('/js/studio/board.js');
+  shelf.clearShelf();
+  board.clearBoard();
+});
+
 /* Suite 29 — libraries arrive when something needs them.
  *
  * The whole point is that a reader opening a bar chart does not pay for the

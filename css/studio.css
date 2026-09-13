@@ -3594,3 +3594,140 @@ body[data-focus="1"] .stage-data { display: none; }
 .refs-value { font-size: 11.5px; color: var(--ink-soft); margin-left: auto; padding: 0 .25rem; }
 .refs-add { flex-wrap: wrap; }
 .refs-add .annot-new { flex: 1 1 30%; }
+/* ── The board ───────────────────────────────────────────────────────────────
+ *
+ * Several saved charts on one page. A card is a plate with its own caption and
+ * legend, and nothing on the page reaches into anything else — see `board.js`
+ * for why that is the design rather than a limitation.
+ */
+.board {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 1.6rem var(--gutter) 4rem;
+}
+
+.board-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1.4rem;
+}
+
+.board-titles { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: .3rem; }
+
+/* The title is typed where it is shown, so the box is the heading rather than
+   a form field that happens to set one. */
+.board-title-input {
+  border: 0;
+  background: none;
+  padding: .1rem 0;
+  font-family: var(--sans);
+  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -.015em;
+  color: var(--ink);
+}
+.board-byline-input {
+  border: 0;
+  background: none;
+  padding: .1rem 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.board-title-input:focus-visible,
+.board-byline-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.board-title-input::placeholder,
+.board-byline-input::placeholder { color: var(--ink-faint); }
+
+.board-tools { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+.board-pick-wrap { display: flex; align-items: center; gap: .4rem; }
+.board-pick-label,
+.board-cols {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex; align-items: center; gap: .4rem;
+}
+.board-pick { max-width: 230px; }
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--oc-board-cols, 2), minmax(0, 1fr));
+  gap: 1.3rem;
+  align-items: start;
+}
+.board-grid.is-empty { display: block; }
+
+.board-card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.board-card.is-missing { box-shadow: none; border-style: dashed; }
+
+.board-card-head {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .55rem .9rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-2);
+}
+.board-card-name {
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board-card-open {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.board-card-open:hover { color: var(--accent); }
+.board-card-tools { display: flex; align-items: center; gap: .15rem; }
+
+.board-card-btn {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.board-card-btn:hover:not(:disabled) { color: var(--ink); background: var(--surface); border-color: var(--rule); }
+.board-card-btn:active:not(:disabled) { transform: scale(.92); }
+.board-card-btn:disabled { opacity: .3; cursor: default; }
+
+.board-card-body { padding: 1rem 1rem .2rem; }
+.board-card .legend { padding: .6rem 1rem 0; }
+.board-card-meta {
+  margin: 0;
+  padding: .6rem 1rem .8rem;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+}
+.board-card-gone { margin: 0; padding: 1.1rem 1rem; font-size: 12.5px; color: var(--ink-soft); }
+
+.board-empty {
+  border: 1px dashed var(--rule-firm);
+  border-radius: var(--r-lg);
+  padding: 2.4rem 1.6rem;
+  text-align: center;
+}
+.board-empty-lead { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.board-empty-help {
+  margin: .6rem auto 0; max-width: 56ch;
+  font-size: 13px; line-height: 1.62; color: var(--ink-soft);
+}
+
+@media (max-width: 760px) {
+  .board-grid { grid-template-columns: minmax(0, 1fr); }
+  .board-pick { max-width: 100%; }
+}
