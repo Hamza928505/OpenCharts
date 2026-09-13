@@ -1,7 +1,7 @@
 # OpenCharts
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-6C63D8.svg)](LICENSE)
-[![Charts](https://img.shields.io/badge/charts-115-16916A.svg)](#the-two-pages)
+[![Charts](https://img.shields.io/badge/charts-115-16916A.svg)](#the-three-pages)
 [![No build step](https://img.shields.io/badge/build-none-2F76C9.svg)](#running-it)
 
 A library of **<!-- count:charts -->115<!-- /count --> chart types**. Every one opens in a studio where the data,
@@ -133,7 +133,7 @@ so installing needs a one-off `.npmrc` and a personal access token with the
 npm install @hamza928505/opencharts
 ```
 
-That gives you the whole site — `index.html`, `studio.html`, `css/`, `js/`,
+That gives you the whole site — `index.html`, `studio.html`, `board.html`, `css/`, `js/`,
 `lib/` and `data/` — which is the same thing the repository holds, because
 there is no build step. Serve the folder over HTTP and the gallery runs.
 
@@ -167,12 +167,13 @@ python -m http.server 8000
 Any static server works — `npx serve`, `php -S localhost:8000`, VS Code Live
 Server, and so on. There is no build step and nothing to install.
 
-## The two pages
+## The three pages
 
 | Page | What it is |
 |---|---|
 | `index.html` | The gallery. Every chart rendered live, searchable and filterable by category. |
 | `studio.html?chart=<id>` | The editor. Controls on the left, live preview top right, generated code below. |
+| `board.html` | Several charts you saved, on one page — and that page as one file. |
 
 ## What this deliberately is not
 
@@ -369,6 +370,27 @@ Where a chart can put every panel on **one axis**, it does, and says so. Where
 it cannot — most charts work their scale out from their own data, privately —
 it says that too, in words, under the control. A grid of panels that looks
 comparable and is not would be worse than one that admits it.
+
+## A board of several charts
+
+`board.html` puts what you kept in **My charts** on one page — one to four
+columns, each card drawing its own saved chart with its own title and source,
+reorder them, take one off. **Download .html** writes the whole board as one
+file that runs anywhere, with one `<script>` per library however many cards
+want it.
+
+**There is no cross-filtering, and that is the design rather than a gap.**
+Clicking a bar on one card does nothing to the others: every card is an
+independent chart, exportable on its own, drawing literal values out of its own
+spec. Wiring them together needs a query engine holding all of them while the
+page is open — which the exported file would then have to carry, and a chart
+that only means something inside its own dashboard is the opposite of one you
+can paste into your page. If what you want is the same chart split by a column,
+that is **Small multiples**, one section up.
+
+**Share** copies a link that rebuilds the board. It names your saved charts
+rather than carrying them, so it rebuilds on the browser that has them; a card
+whose chart is not on this browser says so instead of drawing a stale copy.
 
 ## A title and a source on every chart
 
@@ -594,7 +616,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, printing a chart, and refusing six hostile ones. **870 checks**, and it fails if
+spreadsheet, printing a chart, putting three charts on a board, and refusing six hostile ones. **885 checks**, and it fails if
 anything writes to the console.
 
 ```bash

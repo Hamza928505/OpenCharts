@@ -523,7 +523,7 @@ const BASE_CSS = `.chart-card {
  * appears — including inside a string or a comment. Escaping the slash is the
  * standard idiom and stays readable in the emitted source.
  */
-function safeForInlineScript(text) {
+export function safeForInlineScript(text) {
   // The replacement needs a real backslash in the output, so the literal is
   // escaped here: '<\\/' produces the two characters `<` and `\` then `/`.
   return String(text).replace(/<\/(script)/gi, '<\\/$1');
