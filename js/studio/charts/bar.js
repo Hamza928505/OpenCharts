@@ -7,6 +7,7 @@
 
 import { C, MONTHS, QUARTERS, withAlpha, paletteAt } from '../palette.js';
 import { baseOpts, xAxis, yAxis, TICK, seriesLegend, valueAxisControls, valueAxis, AXIS_DEFAULTS } from '../chartjs-base.js';
+import { REFERENCE_CONTROL, referenceDatasets, referenceLegend } from '../reference.js';
 import { tickFormat } from '../serialize.js';
 
 /** Controls shared by the plain grouped/stacked bars. */
@@ -18,7 +19,9 @@ const barStyleControls = [
 ];
 
 // The axis block is shared with the line family — see `valueAxisControls`.
-const axisControls = valueAxisControls;
+// Reference lines ride with it: only a chart that places values on an axis
+// through a Chart.js config can draw a line at a value.
+const axisControls = [...valueAxisControls, { ...REFERENCE_CONTROL }];
 
 function barDatasets(spec, { stack = false } = {}) {
   const o = spec.opts;
@@ -80,7 +83,7 @@ export const barCharts = [
     chartjs: {
       build: (spec) => ({
         type: 'bar',
-        data: { labels: spec.labels, datasets: barDatasets(spec) },
+        data: { labels: spec.labels, datasets: [...barDatasets(spec), ...referenceDatasets(spec, spec.series)] },
         options: baseOpts({
           scales: {
             x: xAxis(),
@@ -89,7 +92,7 @@ export const barCharts = [
         }),
       }),
     },
-    legend: (spec) => seriesLegend(spec),
+    legend: (spec) => [...seriesLegend(spec), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -116,7 +119,7 @@ export const barCharts = [
     chartjs: {
       build: (spec) => ({
         type: 'bar',
-        data: { labels: spec.labels, datasets: barDatasets(spec, { stack: true }) },
+        data: { labels: spec.labels, datasets: [...barDatasets(spec, { stack: true }), ...referenceDatasets(spec, spec.series)] },
         options: baseOpts({
           scales: {
             x: xAxis({ stacked: true }),
@@ -125,7 +128,7 @@ export const barCharts = [
         }),
       }),
     },
-    legend: (spec) => seriesLegend(spec),
+    legend: (spec) => [...seriesLegend(spec), ...referenceLegend(spec, spec.series)],
   },
 
   {
@@ -160,7 +163,7 @@ export const barCharts = [
             borderRadius: spec.opts.radius,
             borderSkipped: false,
             categoryPercentage: spec.opts.thickness,
-          }],
+          }, ...referenceDatasets(spec, [{ label: spec.opts.label, color: spec.colors[0], data: spec.values }])],
         },
         options: baseOpts({
           indexAxis: 'y',
@@ -172,7 +175,10 @@ export const barCharts = [
         }),
       }),
     },
-    legend: () => null,
+    legend: (spec) => {
+      const refs = referenceLegend(spec, [{ label: spec.opts.label, color: spec.colors[0], data: spec.values }]);
+      return refs.length ? refs : null;
+    },
   },
 
   {

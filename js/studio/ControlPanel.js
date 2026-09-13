@@ -27,6 +27,7 @@ import { simulate, paletteOf } from './cvd.js';
 import { colourWarning } from './palette-ui.js';
 import { ANNOTATION_TYPES, newAnnotation, defaultArrow, PANEL_ALL } from './annotate.js';
 import { CAPTION_FIELDS, tidyCaption } from './caption.js';
+import { REFERENCE_KINDS, newReference, ALL_SERIES, meanOf, medianOf } from './reference.js';
 import {
   isFaceted, facetSource, facetableColumns, facetBySeries, facetByColumn,
   seriesKeyOf, scaleSharing, panelCount, panelColumns, facetNote, panelNames,
@@ -1390,9 +1391,137 @@ function widgetCaption(ctrl, spec, notify) {
   return host;
 }
 
+/**
+ * Reference lines: the mean, a target, a moving average, a trend.
+ *
+ * A row per line — its kind, which series it reads (or all of them), the
+ * value or window where the kind takes one, a colour, ✕ — and a button per
+ * kind to add one. What it writes is `spec.references`; the numbers are
+ * computed by `referenceDatasets` at build time and shown here beside the
+ * kind so the reader sees what the line will say before it is drawn.
+ */
+function widgetReferences(ctrl, spec, notify, def) {
+  const key = ctrl.key || 'references';
+  const host = el('div', 'ctrl-group refs');
+  host.style.gap = '.45rem';
+
+  // The series this chart plots, for the picker and the preview number.
+  const seriesOf = () => {
+    if (Array.isArray(spec.series) && spec.series.length) {
+      return spec.series.map((s) => ({ label: s.label, data: s.data || [] }));
+    }
+    if (Array.isArray(spec.values)) return [{ label: (spec.opts && spec.opts.label) || 'Value', data: spec.values }];
+    return [];
+  };
+
+  function paint() {
+    host.innerHTML = '';
+    const list = Array.isArray(spec[key]) ? spec[key] : (spec[key] = []);
+    const series = seriesOf();
+    const rows = el('div', 'annot-list');
+
+    list.forEach((ref, i) => {
+      const row = el('div', 'annot-row refs-row');
+      const kind = REFERENCE_KINDS.find((k) => k.kind === ref.kind) || REFERENCE_KINDS[0];
+      const glyph = el('span', 'annot-kind', kind.glyph);
+      glyph.title = kind.label;
+      row.appendChild(glyph);
+      row.appendChild(el('span', 'refs-kind', kind.label));
+
+      // Which series. Flat lines can read all of them; a moving average or a
+      // trend follows one line and offers one, or every series each in turn.
+      if (series.length > 1) {
+        const sel = el('select', 'input refs-series');
+        sel.setAttribute('aria-label', 'Series');
+        sel.appendChild(new Option(ref.kind === 'moving' || ref.kind === 'trend' ? 'Every series' : 'All series', ALL_SERIES, false, ref.series === ALL_SERIES || ref.series == null));
+        series.forEach((s, si) => sel.appendChild(new Option(s.label || `Series ${si + 1}`, String(si), false, String(ref.series) === String(si))));
+        sel.addEventListener('change', () => {
+          ref.series = sel.value === ALL_SERIES ? ALL_SERIES : Number(sel.value);
+          notify();
+          paint();
+        });
+        row.appendChild(sel);
+      }
+
+      if (ref.kind === 'target') {
+        const box = el('input', 'input mono refs-num');
+        box.type = 'number';
+        box.step = 'any';
+        box.value = ref.value;
+        box.setAttribute('aria-label', 'Target value');
+        box.addEventListener('input', () => { ref.value = Number(box.value); notify(); });
+        row.appendChild(box);
+      } else if (ref.kind === 'moving') {
+        const box = el('input', 'input mono refs-num');
+        box.type = 'number';
+        box.min = '2';
+        box.step = '1';
+        box.value = ref.window || 3;
+        box.setAttribute('aria-label', 'Window, in points');
+        box.title = 'How many points each average covers';
+        box.addEventListener('input', () => { ref.window = Math.max(2, Number(box.value) || 2); notify(); });
+        row.appendChild(box);
+        row.appendChild(el('span', 'refs-unit', 'pts'));
+      } else if (ref.kind === 'mean' || ref.kind === 'median') {
+        // The number the line will sit on, said before it is drawn.
+        const pick = ref.series === ALL_SERIES || ref.series == null ? null : series[Number(ref.series)];
+        const values = pick ? pick.data : series.flatMap((s) => s.data);
+        const v = ref.kind === 'mean' ? meanOf(values) : medianOf(values);
+        row.appendChild(el('span', 'refs-value mono', Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '—'));
+      }
+
+      const dot = el('button', 'annot-dot' + (ref.color ? '' : ' is-auto'));
+      dot.type = 'button';
+      if (ref.color) dot.style.background = ref.color;
+      dot.title = ref.color ? 'Line colour' : 'Line colour (auto — the series’ own, or grey)';
+      dot.setAttribute('aria-label', 'Line colour');
+      attachColourPicker(dot, () => ref.color || paletteAt(6), (hex) => { ref.color = hex; notify(); paint(); });
+      row.appendChild(dot);
+
+      const del = el('button', 'annot-btn annot-del', '✕');
+      del.type = 'button';
+      del.title = 'Remove this line';
+      del.setAttribute('aria-label', `Remove ${kind.label.toLowerCase()} line`);
+      del.addEventListener('click', () => { list.splice(i, 1); notify(); paint(); });
+      row.appendChild(del);
+      rows.appendChild(row);
+    });
+    if (!list.length) rows.appendChild(el('p', 'annot-empty', 'No reference lines yet. Add one below — the number it lands on is computed from the data.'));
+    host.appendChild(rows);
+
+    const adder = el('div', 'annot-add refs-add');
+    REFERENCE_KINDS.forEach((k) => {
+      const b = el('button', 'btn btn-sm annot-new', `+ ${k.label}`);
+      b.type = 'button';
+      b.title = k.hint;
+      b.addEventListener('click', () => {
+        const ref = newReference(k.kind, series.length);
+        if (k.kind === 'target') {
+          // A target starts at the mean rather than at zero, so the first
+          // line drawn is somewhere on the chart rather than on its floor.
+          const m = meanOf(series.flatMap((s) => s.data));
+          ref.value = Number.isFinite(m) ? Math.round(m) : 0;
+        }
+        list.push(ref);
+        notify();
+        paint();
+      });
+      adder.appendChild(b);
+    });
+    host.appendChild(adder);
+    host.appendChild(el('p', 'annot-hint',
+      'Placed on the axis at the value itself, unlike a note. Only charts drawn by Chart.js can do this, which is why the control is not on every chart.'));
+  }
+
+  paint();
+  host._repaint = paint;
+  return host;
+}
+
 const WIDGETS = {
   data:    widgetData,
   caption: widgetCaption,
+  references: widgetReferences,
   facet:   widgetFacet,
   toggle:  widgetToggle,
   seg:     widgetSeg,
@@ -1429,7 +1558,7 @@ export function buildControls(container, def, spec, onChange) {
   // state laid over whatever the chart turned out to be, not knobs that shape
   // it. `buildStageTools` picks them up from the same definition.
   const controls = (def.controls || []).filter(
-    (c) => c.type !== 'facet' && c.type !== 'annotations' && c.type !== 'caption');
+    (c) => c.type !== 'facet' && c.type !== 'annotations' && c.type !== 'caption' && c.type !== 'references');
 
   if (!controls.length) {
     const note = el('p', 'lede');
@@ -1493,9 +1622,10 @@ export function buildStageTools(container, def, spec, onChange) {
   container.innerHTML = '';
   // The caption leads: it is the first thing a publisher writes about a
   // finished chart, whatever order the registry attached the three in.
-  const entries = (def.controls || []).filter(
-    (c) => c.type === 'caption' || c.type === 'facet' || c.type === 'annotations')
-    .sort((a, b) => (a.type === 'caption' ? -1 : 0) - (b.type === 'caption' ? -1 : 0));
+  // Caption first, then the lines at a value, then the split and the notes.
+  const ORDER = { caption: 0, references: 1, facet: 2, annotations: 3 };
+  const entries = (def.controls || []).filter((c) => c.type in ORDER)
+    .sort((a, b) => ORDER[a.type] - ORDER[b.type]);
   if (!entries.length) { container.hidden = true; return; }
   container.hidden = false;
 

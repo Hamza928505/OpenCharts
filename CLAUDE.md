@@ -1673,6 +1673,38 @@ The date axis (`timeaxis.js`) does not read the locale yet: the adapter
 formats with the browser's own. That is the next thing this block should
 reach.
 
+### A line at a value
+
+Annotations are a fraction of the plate, which is what let all 115 charts
+have them at once — and why "a line at the average" was impossible: the
+overlay knows where 42% down is and has no idea what 612 is. Every renderer
+computes its scales privately, inside the very function that gets
+serialised, so nothing outside can ask where a value falls.
+
+Chart.js is the exception, and it is the same one `facet.js` found: `build()`
+returns a config, and a config is data. `reference.js` makes a reference line
+**one more dataset** — a dashed line whose every point is the mean — computed
+from the spec at build time, emitted as literals, and placed by the axis that
+is placing everything else. Five kinds: mean and median (across every series
+or one), a target the reader typed, a moving average over a window, and a
+least-squares trend; the first three are flat, the last two follow one
+series in its own colour. Each joins the legend with the number it landed
+on, never toggleable — it is not data — and `describeReferences` says the
+number in the accessible description, so a reader who cannot see the dashed
+line still learns what the mean was.
+
+**It is on the nine charts that carry the axis block and on nothing else.**
+The 76 charts on the other renderers do not get it, and the control does not
+appear on them rather than appearing and doing nothing; the control's own
+hint says why. The `references` control renders under the plate with the
+caption, the facet and the notes — state laid over a finished chart — and
+the row for a mean shows the number before the line is drawn.
+
+Two smaller rules. A new target starts at the mean rather than at zero, so
+the first line drawn is somewhere on the chart. And a moving average's
+window is clamped to the series' length, so a window longer than the data
+is one average rather than a line of nothing.
+
 ### Text colour
 
 Every canvas chart draws its labels through `ink(alpha)`, which resolves
@@ -2211,7 +2243,7 @@ is `d3.geoOrthographic`. Two rules for it:
 `js/studio/ControlPanel.js` renders widgets from `controls: []`. Each entry has
 a `group` (heading), a `type`, and a dot-path `key` into the spec. Types:
 `series`, `colors`, `values`, `labels`, `toggle`, `seg`, `slider`, `select`,
-`text`, `countries`, `cities`, `color`, `annotations`, `facet`, `caption`. Consecutive entries
+`text`, `countries`, `cities`, `color`, `annotations`, `facet`, `caption`, `references`. Consecutive entries
 sharing a `group`
 are drawn under one numbered heading.
 
@@ -2271,6 +2303,7 @@ the values it changed are shown by the series widget next door.
 | `colorpicker.js` | The swatch popover, portalled so nothing can clip it |
 | `palette-ui.js` | The colour-vision warning, the whole-palette editor, and the colour-by-value panel |
 | `colourby.js` | Threshold, gradient and diverging rules — the ramps, the arithmetic, and which value belongs to which colour |
+| `reference.js` | Lines at a value — mean, median, target, moving average, trend — as extra Chart.js datasets, and the sentences that say their numbers |
 | `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
 | `StudioApp.js` | Studio page orchestration |
@@ -2330,7 +2363,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **823 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **834 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
