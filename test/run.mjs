@@ -1595,10 +1595,10 @@ const notTables = await page.evaluate(async () => {
     TOML: '[package]\nname = "sales"\nversion = "0.1.0"\n\n[dependencies]\ncsv = "1.3"',
     'a .env file': 'DATABASE_URL=postgres://localhost/sales\nAPI_KEY=abc123\nDEBUG=true\n'
       + 'PORT=8080\nLOG_LEVEL=info',
-    JSON: '{\n  "rows": [\n    { "region": "North", "amount": 5200 },\n'
-      + '    { "region": "South", "amount": 4410 }\n  ]\n}',
-    'JSON Lines': '{"region":"North","amount":5200}\n{"region":"South","amount":4410}\n'
-      + '{"region":"East","amount":6100}\n{"region":"West","amount":3800}',
+    // JSON that holds no rows. Rows of records, in any JSON dress, are a
+    // table now and sit on the other list.
+    JSON: '{\n  "name": "sales-report",\n  "version": "1.0.0",\n  "scripts": { "test": "node t.mjs" },\n'
+      + '  "dependencies": { "d3": "^7" }\n}',
     Markdown: '# Sales\n- North did well\n- South lagged\n## Notes\nSome detail here.',
     LaTeX: '\\documentclass{article}\n\\usepackage{booktabs}\n\n\\begin{document}\n'
       + '\\section{Sales}\nRevenue grew.\n\\end{document}',
@@ -1623,6 +1623,12 @@ const notTables = await page.evaluate(async () => {
   /* Real tables, including every awkward shape that tripped an earlier pass. */
   const TABLES = {
     'plain csv': 'region,q1,q2\nNorth,520,680\nSouth,440,575\nEast,610,720\nWest,380,495',
+    // Rows of records are a table whatever punctuation they came wrapped in.
+    'JSON records': '[{"region":"North","amount":5200},{"region":"South","amount":4410},{"region":"East","amount":6100}]',
+    'JSON under a key': '{\n  "rows": [\n    { "region": "North", "amount": 5200 },\n'
+      + '    { "region": "South", "amount": 4410 }\n  ]\n}',
+    'JSON Lines': '{"region":"North","amount":5200}\n{"region":"South","amount":4410}\n'
+      + '{"region":"East","amount":6100}\n{"region":"West","amount":3800}',
     tsv: 'region\tq1\tq2\nNorth\t520\t680\nSouth\t440\t575\nEast\t610\t720',
     'semicolon csv': 'region;q1;q2\nNorth;520;680\nSouth;440;575\nEast;610;720',
     'pipe table': 'region|q1|q2\nNorth|520|680\nSouth|440|575\nEast|610|720',
@@ -5809,6 +5815,111 @@ generated.set('/export-reference.html', refs.standalone);
     'an export runs with its four dashed lines and their legend entries', errs[0] || JSON.stringify(shown));
 }
 console.log(`  ${green('✓')} reference lines — mean, median, target, moving average and trend on nine charts`);
+
+/* Suite — JSON in, and the library as something a page imports.
+ *
+ * Developers arrive with `[{ region: 'North', sales: 520 }, …]` from an API,
+ * and the matcher read only delimited text. On the way out, the package
+ * published source but no entry point. `render()` and `<open-chart>` are the
+ * same three calls the studio makes — newSpec, applyData, renderChart — with
+ * nothing new drawn. */
+await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const jsonIn = await page.evaluate(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const d = await import('/js/studio/dataio.js');
+  const f = await import('/js/studio/fileimport.js');
+  const flat = (t) => { const x = d.parseTable(t); return `${x.headers.join(',')}|${x.rows.map((r) => r.join(',')).join('|')}`; };
+  const out = {
+    records: flat('[{"region":"North","sales":520},{"region":"South","sales":440}]'),
+    nested: flat('[{"who":{"name":"A","org":{"team":"x"}},"n":1,"tags":["a","b"]},{"who":{"name":"B"},"n":2}]'),
+    wrapped: flat('{"status":"ok","data":[{"q":"Q1","v":1},{"q":"Q2","v":2}]}'),
+    columnar: flat('{"region":["N","S"],"sales":[1,2]}'),
+    arrays: flat('[["region","sales"],["N",1],["S",2]]'),
+    lines: flat('{"region":"N","amount":1}\n{"region":"S","amount":2}'),
+    csvStill: flat('a,b\n1,2'),
+    config: d.looksLikeTable('{"name":"x","version":"1.0.0","scripts":{"test":"node t.mjs"}}'),
+    oneLine: d.looksLikeTable('[{"region":"North","sales":520},{"region":"South","sales":440}]').ok,
+    accepts: /\.json/.test(f.ACCEPTED) && /application\/json/.test(f.ACCEPTED),
+  };
+  const file = await f.readDataFile(new File(['[{"region":"North","sales":520},{"region":"South","sales":440}]'], 'rows.json', { type: 'application/json' }));
+  out.fileRead = file.ok;
+  const box = document.querySelector('#match-text');
+  box.value = '[{"region":"North","sales":520},{"region":"South","sales":440},{"region":"East","sales":610}]';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(500);
+  out.matched = Number((document.querySelector('#match-status').textContent.match(/^(\d+) of/) || [])[1]);
+  out.matchedHeaders = window.openChartsGallery.table.headers.join(',');
+  box.value = '';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  return out;
+});
+check(jsonIn.records === 'region,sales|North,520|South,440', 'an array of records reads as a table with the keys as its header', jsonIn.records);
+check(jsonIn.nested === 'who.name,who.org.team,n,tags|A,x,1,a; b|B,,2,',
+  'nested objects flatten to dotted keys, arrays of values join, a missing key is a blank', jsonIn.nested);
+check(jsonIn.wrapped === 'q,v|Q1,1|Q2,2' && jsonIn.columnar === 'region,sales|N,1|S,2',
+  'records under a key, and columns as arrays, both read', `${jsonIn.wrapped} / ${jsonIn.columnar}`);
+check(jsonIn.arrays === 'region,sales|N,1|S,2' && jsonIn.lines === 'region,amount|N,1|S,2',
+  'an array of arrays and JSON Lines both read', `${jsonIn.arrays} / ${jsonIn.lines}`);
+check(jsonIn.csvStill === 'a,b|1,2', 'and CSV reads exactly as before');
+check(!jsonIn.config.ok && /not rows of records/.test(jsonIn.config.message) && jsonIn.oneLine,
+  'JSON holding no rows is refused as JSON; a single line of records is a table', jsonIn.config.message);
+check(jsonIn.accepts && jsonIn.fileRead, 'a .json file is accepted by the file readers');
+check(jsonIn.matched > 50 && jsonIn.matchedHeaders === 'region,sales',
+  'the matcher reads pasted JSON and names its columns', `${jsonIn.matched} charts, ${jsonIn.matchedHeaders}`);
+
+// A consumer page: the two eager libraries and the entry module, nothing else.
+generated.set('/consumer.html', `<!doctype html><html><head><meta charset="utf-8">
+<script src="/lib/chart.umd.min.js"></script><script src="/lib/d3.min.js"></script></head><body>
+<div id="host" style="width:600px"></div>
+<open-chart id="el" chart="pie" data='[{"slice":"A","value":3},{"slice":"B","value":1}]' height="260"></open-chart>
+<open-chart id="bad" chart="nope"></open-chart>
+<script type="module">
+  import { render, charts } from '/js/opencharts.js';
+  window.n = charts().length;
+  window.h = render(document.querySelector('#host'), { chart: 'bar-vertical', data: 'Q,2024\\nQ1,5\\nQ2,7', height: 300 });
+  try { render(document.querySelector('#host'), { chart: 'bar-vertical', data: 'nonsense' }); } catch (e) { window.err = e.message; }
+  window.done = true;
+</script></body></html>`);
+{
+  const consumer = await browser.newPage();
+  const errs = [];
+  consumer.on('pageerror', (e) => errs.push(String(e.message)));
+  await consumer.goto(`${base}/consumer.html`, { waitUntil: 'networkidle' });
+  await consumer.waitForFunction(() => window.done, { timeout: 8000 }).catch(() => {});
+  await consumer.waitForTimeout(500);
+  const api = await consumer.evaluate(async () => {
+    const h = window.h;
+    await h.whenReady;
+    const drew = !!document.querySelector('#host canvas');
+    const labels = h.spec.labels.join(',');
+    h.update({ labels: ['A', 'B'] });
+    const updated = h.spec.labels.join(',');
+    const el = document.querySelector('#el');
+    const elCanvas = !!el.querySelector('canvas');
+    const heightSet = Math.round(el.querySelector('.chart-wrap').getBoundingClientRect().height);
+    el.setAttribute('data', '[{"slice":"A","value":3},{"slice":"B","value":1},{"slice":"C","value":2}]');
+    await new Promise((r) => setTimeout(r, 300));
+    const slices = el.chart.spec.labels.length;
+    const badText = document.querySelector('#bad').textContent;
+    el.remove();
+    await new Promise((r) => setTimeout(r, 100));
+    return { n: window.n, drew, labels, updated, elCanvas, heightSet, slices, badText, err: window.err || '', gone: !el.chart };
+  });
+  await consumer.close();
+  check(!errs.length && api.n === 115 && api.drew && api.labels === 'Q1,Q2',
+    'render() draws a chart from CSV text into a host, in a page with only the two eager libraries', errs[0] || JSON.stringify(api));
+  check(api.updated === 'A,B', 'and update() redraws with new spec fields');
+  check(api.elCanvas && api.heightSet === 260 && api.slices === 3,
+    '<open-chart> draws from its attributes, honours height, and redraws when data changes', JSON.stringify({ h: api.heightSet, s: api.slices }));
+  check(api.gone && /No chart called "nope"/.test(api.badText),
+    'removing the element tears it down, and a bad chart id lands as text in the element', api.badText);
+  check(/needs at least 2 columns/.test(api.err),
+    'render() refuses data the chart cannot read, loudly, rather than drawing the example', api.err);
+}
+const manifest = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+check(manifest.main === 'js/opencharts.js' && manifest.exports && manifest.exports['.'] === './js/opencharts.js',
+  'the package names its entry point', JSON.stringify(manifest.exports));
+console.log(`  ${green('✓')} json & api — records, keys, columns and lines read; render() and <open-chart> draw`);
 
 /* Suite 25 — a chart that says what it means.
  *
