@@ -15,7 +15,7 @@ import { renderHelp } from './HelpPanel.js';
 import { buildPrompt } from './prompt.js';
 import { openDataDialog } from './DataDialog.js';
 import { prefetchLibraries } from './loader.js';
-import { mountThemeToggle, onThemeChange } from './theme.js';
+import { mountThemeToggle, onThemeChange, isDark, setTheme, storedTheme } from './theme.js';
 import { toast } from './toast.js';
 import { decodeSpec, buildShareUrl, URL_COMFORTABLE } from './share.js';
 import { takeHandOff } from './DataMatch.js';
@@ -347,6 +347,7 @@ export class StudioApp {
       toast('Reset to defaults', 'ok');
     });
     $('#btn-png')?.addEventListener('click', () => this._exportPNG());
+    $('#btn-print')?.addEventListener('click', () => this._print());
     $('#btn-share')?.addEventListener('click', () => this._share());
     $('#btn-save')?.addEventListener('click', () => this._save());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
@@ -726,6 +727,59 @@ export class StudioApp {
     } catch {
       toast('Could not copy the prompt', 'bad');
     }
+  }
+
+  /**
+   * Print the chart — which is also how it becomes a PDF.
+   *
+   * No PDF exporter ships here and none needs to: every browser has one behind
+   * Save as PDF, and it writes vector text where a rasterised canvas would
+   * write pixels. What that needs is a page that prints, and `@media print` in
+   * `studio.css` is the whole of it — the chrome goes, the plate, its caption
+   * and its data table stay.
+   *
+   * Two things CSS cannot do, and this does:
+   *
+   * **The ink.** A canvas chart resolves its label colour from the page's
+   * tokens at *render* time, so a studio in dark mode has already painted pale
+   * grey into the bitmap and no print rule can reach inside it. A dark studio
+   * is switched to light first, which re-renders every chart through
+   * `onThemeChange`, and switched back when the dialog closes. What goes back
+   * is the stored *preference*, not the colour it resolved to: a reader who
+   * had chosen nothing must keep following their OS.
+   *
+   * **The table.** It is a `<details>`, and no stylesheet can open one. It is
+   * opened for the sheet and left as it was found — and opened *after* the
+   * theme switch, because `rebuild` replaces that markup wholesale and would
+   * throw an earlier one away along with the chart it re-rendered.
+   */
+  _print() {
+    const before = storedTheme();
+    const wasDark = isDark();
+    if (wasDark) setTheme('light');
+
+    let details = null;
+    let wasOpen = false;
+    const restore = () => {
+      window.removeEventListener('afterprint', restore);
+      if (details) details.open = wasOpen;
+      if (wasDark) setTheme(before);
+    };
+    window.addEventListener('afterprint', restore);
+
+    // A beat, so the re-render the theme switch just asked for is on screen
+    // before the dialog freezes the page. Printing a chart caught mid-redraw
+    // is the one failure this button could not explain to anybody.
+    setTimeout(() => {
+      details = this.dataEl ? this.dataEl.querySelector('details') : null;
+      wasOpen = !!(details && details.open);
+      if (details) details.open = true;
+      try { window.print(); } catch { toast('This browser would not open the print dialog', 'bad'); }
+      // Chrome and Firefox fire `afterprint`; a browser that does not would
+      // leave the studio light for good, so the restore is not left to it
+      // alone. Running twice is harmless — it puts back the same two values.
+      setTimeout(restore, 0);
+    }, wasDark ? 260 : 0);
   }
 
   /** The same link, as an <iframe> somebody can paste into a page. */

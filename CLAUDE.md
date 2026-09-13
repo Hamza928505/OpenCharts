@@ -1485,6 +1485,61 @@ Three rules, each checked:
   the same lines are painted into the PNG, into an outer `<svg>` around an
   SVG chart, and into a facet grid's composite.
 
+### The sheet
+
+A PDF was the one export people asked for that nothing here produced. The
+obvious answer is a PDF writer — jsPDF and a rasterised canvas, 300KB of
+dependency to turn a chart into a picture of a chart. The browser already has
+a better one: Save as PDF is a destination in every print dialog, it writes
+the caption as real text rather than pixels, and it costs nothing to ship.
+
+**So the export is `window.print()`, and the work is making the page print.**
+The `@media print` block at the foot of `css/studio.css` is the whole feature:
+the rail, the controls column, the code panel, the stage bar, the stage tools,
+the sources panel, the toasts and the page head all go, the grid collapses to
+ordinary flow, and the plate takes the paper's full width with its caption
+above and below it and the accessible data table underneath. `break-inside:
+avoid` keeps a chart off two sheets. The gallery's own chrome is in the same
+list, because a reader may reach for print on either page.
+
+Three things a stylesheet cannot do, which is why there is a button at all
+rather than only a rule:
+
+- **The ink.** A canvas chart resolves its label colour from the page's tokens
+  at *render* time, so a studio in dark mode has already painted pale grey into
+  the bitmap and no print rule can reach inside it. `StudioApp._print` switches
+  to light — which re-renders every chart through `onThemeChange` — waits a
+  beat for that render, prints, and switches back on `afterprint`. What goes
+  back is the **stored preference**, not the colour it resolved to, which is
+  why `theme.js` gained `storedTheme()`: writing `'light'` over a reader who
+  had chosen nothing would silently stop their studio following their OS.
+- **The table.** It is a `<details>`, and no stylesheet can open one. It is
+  opened for the sheet and left as it was found.
+- **The restore.** `afterprint` is not universal, so the same restore runs on a
+  timeout as well. It puts back two values it already holds, so running twice
+  costs nothing — and leaving a studio permanently light because one browser
+  stayed quiet would.
+
+**The print block is the one place below the token blocks that names a raw
+colour**, against the rule the design system states everywhere else — because
+the rest of the stylesheet is themed and paper has no theme. A reader who
+reaches for Ctrl+P rather than the button prints from whatever theme they were
+in, so the sheet states white itself rather than trusting a token that may have
+resolved to slate.
+
+The narrow-screen rule that stacks a facet grid into one column is a *screen*
+rule, and paper is not narrow, so the print block restates the grid with
+`--oc-facet-cols` intact. The data table is let out of its scroll box for the
+same reason: on screen that box stops a 40-column table widening the page, and
+paper has no scrollbar to offer instead.
+
+The suite checks it with `page.emulateMedia({ media: 'print' })` — the plate is
+there at full width and unbroken, the studio around it is not, the caption and
+the table are, and nothing runs off the side — then restores `screen` and
+checks the studio came back. The dark-ink rule is checked by stubbing
+`window.print` and reading the theme at the moment the dialog would have
+opened, which is the only moment that decides what lands on the paper.
+
 ### Small multiples
 
 Vega-Lite's `facet`, and the reason the file most people have is still not a
@@ -2432,7 +2487,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **854 checks**. Thirty suites cover the registry, every chart (render + non-blank canvas +
+The suite is **870 checks**. Thirty-one suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -2445,7 +2500,8 @@ output, reading a table from a link, reshaping a table (and turning it, rows
 for columns), annotating a chart,
 queued previews and forgiving hover, splitting one table into small
 multiples, editing a colour wherever it is shown, undo and redo across the
-whole spec, a resizable controls column, and console cleanliness.
+whole spec, a resizable controls column, what comes out of the printer, and
+console cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
