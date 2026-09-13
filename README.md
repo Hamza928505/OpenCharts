@@ -205,7 +205,7 @@ BI platform has are missing on purpose, and each one is the same trade.
 
 ## Code output
 
-Each chart emits seven views:
+Each chart emits eight views:
 
 - **HTML** — the markup fragment (`<canvas>` / `<div>` plus the legend slot)
 - **CSS** — only the rules that chart actually uses
@@ -219,6 +219,8 @@ Each chart emits seven views:
   the wrong studio opens the chart it belongs to.
 - **Colours** — not code at all: the whole palette at once, a swatch and a name
   per series, with a warning if two of them merge for a colour-blind reader.
+- **AI Analyst** — ask for a chart in a sentence and get a spec back, previewed
+  before it is applied. Needs your own Anthropic key; see below.
 
 Undo and redo sit in that same bar and cover the whole chart — every colour,
 slider, toggle, note and split, not just the data table.
@@ -294,6 +296,37 @@ from memory.
 The prompt follows whatever is on screen. Edit the colours, swap the data,
 change the axis — copy it afterwards and the brief describes that chart, not
 the library default.
+
+## Asking for a chart in a sentence
+
+The **AI Analyst** tab in the code panel takes one line — *"revenue by region,
+highlight the North"* — and answers with a chart. It sends the table you are
+looking at, the list of charts this library has, and your sentence; what comes
+back is previewed as JSON with a line saying what it would change, and nothing
+happens until you press **Apply**. Apply goes through the same door a pasted
+spec does, so it joins the undo history like any other edit and you can take it
+back.
+
+Three things worth knowing before you use it:
+
+- **You bring your own key, and you pay for the calls.** Put an Anthropic API
+  key in **AI Settings** in the bar above the chart. There is no server in this
+  project, so the request goes straight from your browser to `api.anthropic.com`
+  with your key in a header — it is never in the request body, never in a spec,
+  never in a share link and never in an export.
+- **The key stays on this browser.** Tick the box and it is kept between
+  visits, sealed rather than written as plain text — which hides it from a
+  glance at devtools or a shared screen, not from anyone who can read the page.
+  It is obfuscation, not a secret store. Leave the box unticked on a shared
+  machine and the key lives in memory for that session only. **Clear Key**
+  removes it.
+- **Nothing is applied until you look at it.** A reply that is not a chart spec
+  changes nothing and is shown to you as it came back, with what was wrong with
+  it. No key, a refused key and a blocked request each say which.
+
+If you would rather not hand over a key at all, the **AI Prompt** tab does the
+same job the other way round: it writes the whole brief for you to paste into
+whatever assistant you already use.
 
 ## Not sure how to read a chart?
 
@@ -616,7 +649,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, printing a chart, putting three charts on a board, and refusing six hostile ones. **885 checks**, and it fails if
+spreadsheet, printing a chart, putting three charts on a board, asking an assistant for a chart, and refusing six hostile ones. **903 checks**, and it fails if
 anything writes to the console.
 
 ```bash

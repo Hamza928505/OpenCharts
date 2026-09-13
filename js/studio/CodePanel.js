@@ -1,8 +1,12 @@
 /**
- * CodePanel.js — the HTML / CSS / JS / Standalone / AI Prompt viewer.
+ * CodePanel.js — the eight views under the chart.
  *
- * Holds all five generated views, renders the active one with line numbers and
- * syntax colouring, and owns the copy and download actions.
+ * Five are generated source — HTML, CSS, JS, Standalone and the AI Prompt —
+ * rendered with line numbers and syntax colouring, with copy and download.
+ * Three are not: Spec is the chart as JSON and takes a paste back, Colours is
+ * the palette as a set, and AI Analyst asks for a chart in a sentence. Those
+ * mount a component instead of highlighted text (`view` on the tab), and Copy
+ * and Download stand down where there is nothing to copy.
  *
  * The prompt is prose rather than code, so it is the one tab that wraps and
  * drops the line numbers — numbering a paragraph helps nobody, and `pre` would
@@ -13,6 +17,7 @@ import { highlight } from './highlight.js';
 import { toast } from './toast.js';
 import { PROMPT_MODES, readPromptMode, writePromptMode } from './prompt.js';
 import { paletteEditor } from './palette-ui.js';
+import { analystPanel } from './analyst-ui.js';
 import { attachColourPicker } from './colorpicker.js';
 
 const TABS = [
@@ -32,7 +37,13 @@ const TABS = [
   // its series and the data table edits one against its column, and neither
   // answers "do these twelve work together", which is the question a palette
   // raises. `view: true` means it renders a component rather than source.
-  { id: 'colours',    label: 'Colours',    lang: 'text', view: true },
+  { id: 'colours',    label: 'Colours',    lang: 'text', view: 'colours' },
+  // The eighth view, and the third that is not code: a sentence in, a spec
+  // back, previewed before anything is applied. It lives here rather than in
+  // the sidebar because what it produces is a *spec*, which is what the two
+  // tabs beside it print — and because the answer lands through `onApplySpec`,
+  // the same door a pasted spec uses.
+  { id: 'analyst',    label: 'AI Analyst', lang: 'text', view: 'analyst' },
 ];
 
 /** What the copy toast calls each view. */
@@ -266,9 +277,17 @@ export class CodePanel {
       this.body.innerHTML = '';
       this.body.classList.remove('prose');
       if (this.def && this.spec) {
-        this.body.appendChild(paletteEditor(this.def, this.spec, () => {
-          if (this.onSpecEdit) this.onSpecEdit();
-        }));
+        this.body.appendChild(tab.view === 'analyst'
+          // The analyst never touches the spec itself; it hands back what a
+          // paste would, through the function a paste goes through.
+          ? analystPanel(this.def, this.spec, {
+            onApply: (parsed) => (this.onApplySpec
+              ? this.onApplySpec(parsed)
+              : { ok: false, message: 'Nothing to apply to.' }),
+          })
+          : paletteEditor(this.def, this.spec, () => {
+            if (this.onSpecEdit) this.onSpecEdit();
+          }));
       }
       this.gutter.hidden = true;
       this.gutter.innerHTML = '';
@@ -276,8 +295,11 @@ export class CodePanel {
       this.copyBtn.style.display = 'none';
       this.dlBtn.style.display = 'none';
       this.editBtn.hidden = true;
-      this.note.textContent = 'Every colour this chart draws with. '
-        + 'Changing one here is the same edit as changing it in the sidebar.';
+      this.note.textContent = tab.view === 'analyst'
+        ? 'Your table and your sentence go straight from this browser to Anthropic, '
+          + 'with your own key. Nothing is applied until you press Apply.'
+        : 'Every colour this chart draws with. '
+          + 'Changing one here is the same edit as changing it in the sidebar.';
       return;
     }
     this.copyBtn.style.display = '';

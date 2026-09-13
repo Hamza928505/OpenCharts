@@ -1119,7 +1119,7 @@ palette, and a second copy of that statement is a second thing to keep true.
 
 ### The Spec view
 
-The sixth of seven code views is the chart as *data*: `{ chart, spec }` as
+The sixth of eight code views is the chart as *data*: `{ chart, spec }` as
 indented JSON.
 Nothing new is computed for it — the share link already proves every spec
 round-trips through serialisation — it is simply exposed where a person can
@@ -1143,7 +1143,7 @@ Two things the editor has to get right, both checked:
 
 ### The Colours tab
 
-The seventh view in the code panel, and the only other one that is not code.
+The seventh view in the code panel, and one of the three that are not code.
 The sidebar edits a colour beside its series and the data table edits one
 against its column or row — both answer *what colour is this one*. Neither
 answers *do these twelve work together*, which is the question a palette
@@ -2055,7 +2055,7 @@ chart is neutral.
 
 ### The AI prompt
 
-The **AI Prompt** tab is the fifth of seven code views, and one of the two that
+The **AI Prompt** tab is the fifth of eight code views, and one of the three that
 are not
 code: it is the whole chart written as a brief to hand to an assistant along
 with somebody's own spreadsheet. `prompt.js` assembles it from what the studio
@@ -2172,6 +2172,73 @@ Three things it has to get right, each checked:
   opening the tile would carry into the studio. The format *example* stays put
   either way: it illustrates the shape, and replacing it with the reader's own
   rows would leave the brief with no statement of the format at all.
+
+### The AI Analyst
+
+The AI Prompt tab hands a brief to an assistant somewhere else and asks the
+reader to carry the answer back by hand. This closes that loop inside the
+studio: the table already on screen, the catalogue of what this library can
+draw and one sentence from the reader go to the Anthropic Messages API, and
+what comes back is a `{ chart, spec }` — the object the Spec view already
+prints.
+
+**It is about a hundred lines because of two decisions, not because it does
+little.**
+
+- **The answer lands through the door a pasted spec uses.** `_applySpec` merges
+  over `newSpec`, opens another chart when the id differs, and banks an undo
+  step. So there is no second way into the studio's state, and nothing a model
+  says can reach past that one function. The panel calls it and nothing else.
+- **Nothing is applied unseen.** The reply is previewed as JSON with a line
+  saying what applying it would change — which chart it opens, which top-level
+  fields differ — and `Apply` is a button beside `Discard`. A model that quietly
+  renamed every series would otherwise do exactly that.
+
+`analyst.js` is the brief, the call and the parse, with no DOM in it;
+`analyst-ui.js` is the panel, the way `palette-ui.js` is `cvd.js`'s. The brief
+reuses what the prompt already maintains — `SHAPE_GUIDE` (now exported) and
+`expectedFormat(def)` — so the model is told each chart's data shape from the
+same table `checkTableShape` enforces, and the catalogue is derived from the
+registry rather than written out. A faceted spec sends `facetSource`, the same
+substitution `a11y.js` and the prompt make, because `toText` on one writes a
+table with the split already spent.
+
+**One contract, enforced.** The reply must be one JSON object naming a chart
+this registry has and carrying a `spec` object; a markdown fence is tolerated
+because models add them, and everything else is refused **with the raw text
+kept on screen**. A reader can only correct what they can see, and a panel that
+went blank would be indistinguishable from a broken feature.
+
+**The request goes straight from the browser to Anthropic**, with
+`anthropic-dangerous-direct-browser-access`, because there is no server in this
+project and adding one to hold a key would be a different product. Four
+failures are four messages: no key links to AI Settings, a 401 says the key was
+refused, a fetch that never left says the cause is usually a network, a proxy
+or an extension rather than the API, and a malformed answer keeps the chart.
+
+#### The key
+
+`ai-config.js` came back for this. It was removed once, and rightly: the stage
+bar had an AI Settings button that sealed a key into `localStorage` and nothing
+anywhere read it, so a reader was handing a credential to a feature that did
+not exist. The suite check written for that removal is now **inverted rather
+than deleted** — what it asserts is the rule that made the removal right, that
+`getStoredApiKey` has a caller outside the module defining it. The sweep in
+`StudioApp` that deleted a stored key on every visit is gone with it: correct
+while nothing read the key, data loss now.
+
+**"Encrypted" here means obfuscated, and the dialog says so.** The key is
+AES-GCM sealed under a passphrase that is a constant in `ai-config.js`, so
+anything that can read the page can derive it. What that buys is real and
+narrow: the key is not sitting in storage as plain text where a glance at
+devtools, a screen share or a synced profile would show it. It is not a secret
+store, and a browser is not one — which is why the unticked default keeps the
+key in memory for the session only. The key leaves the browser in exactly one
+place, the `x-api-key` header, and the suite checks it is in no request body.
+
+The reader pays for their own calls. That is stated in the dialog, in the
+panel and in the README, because a feature that spends somebody's money has to
+say so before it does.
 
 ### The data dialog
 
@@ -2508,8 +2575,11 @@ the values it changed are shown by the series widget next door.
 | `palette-ui.js` | The colour-vision warning, the whole-palette editor, and the colour-by-value panel |
 | `colourby.js` | Threshold, gradient and diverging rules — the ramps, the arithmetic, and which value belongs to which colour |
 | `reference.js` | Lines at a value — mean, median, target, moving average, trend — as extra Chart.js datasets, and the sentences that say their numbers |
-| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours/AI Analyst tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
+| `analyst.js` | The brief, the call to Anthropic and the parse — a sentence in, one `{ chart, spec }` back |
+| `analyst-ui.js` | The AI Analyst tab — the request box, the preview, and Apply through `_applySpec` |
+| `ai-config.js` | The Anthropic API key: the dialog, and where it is kept on this browser |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |
@@ -2569,7 +2639,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **885 checks**. Thirty-two suites cover the registry, every chart (render + non-blank canvas +
+The suite is **903 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -2583,7 +2653,8 @@ for columns), annotating a chart,
 queued previews and forgiving hover, splitting one table into small
 multiples, editing a colour wherever it is shown, undo and redo across the
 whole spec, a resizable controls column, what comes out of the printer, several
-saved charts on one board, and console cleanliness.
+saved charts on one board, asking an assistant for a chart, and console
+cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be
 able to read.** `toText` produces the table the data editor opens on, so
