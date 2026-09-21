@@ -16,7 +16,7 @@
  */
 
 import { askAnalyst, diffSummary } from './analyst.js';
-import { openAiConfigDialog, getStoredApiKey } from './ai-config.js';
+import { openAiConfigDialog, getAiSettings } from './ai-config.js';
 import { highlight } from './highlight.js';
 import { toast } from './toast.js';
 
@@ -62,7 +62,7 @@ export function analystPanel(def, spec, { onApply } = {}) {
 
   root.appendChild(el('p', 'analyst-lead',
     'Say what you want this chart to show. Your table, the chart list and your '
-    + 'sentence go straight from this browser to Anthropic — there is no server here.'));
+    + 'sentence go straight from this browser to the provider in AI Settings — there is no server here.'));
 
   const box = el('textarea', 'analyst-input');
   box.placeholder = 'revenue by region, and highlight the North';
@@ -165,12 +165,12 @@ export function analystPanel(def, spec, { onApply } = {}) {
   // Whether there is a key at all is the first thing a reader needs to know,
   // and it is answered asynchronously — so the panel renders without it and
   // says so when the answer arrives.
-  getStoredApiKey().then((key) => {
-    if (key || !root.isConnected || state.node !== root) return;
+  getAiSettings().then((settings) => {
+    if (settings.key || settings.provider === 'openai' || !root.isConnected || state.node !== root) return;
     const note = el('p', 'analyst-status is-bad',
       'No API key on this browser yet. Add one in AI Settings — it stays on this '
       + 'browser, sealed rather than in plain text, and leaves it only as a header '
-      + 'on the request to Anthropic.');
+      + 'on the request to the provider you chose.');
     root.insertBefore(note, row.nextSibling);
     status.hidden = true;
   }).catch(() => { /* storage refused; the Ask button says so instead */ });

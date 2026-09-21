@@ -748,6 +748,12 @@ img, canvas, svg { max-width: 100%; display: block; }
 .matchbar-lead { min-width: 0; }
 .matchbar-title { font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; }
 .matchbar-sub { font-size: 13px; color: var(--ink-soft); margin-top: .25rem; max-width: 62ch; }
+.matchbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: .65rem; margin-top: .75rem; }
+.match-local {
+  display: inline-flex; align-items: center; min-height: 32px;
+  padding: 0 .65rem; border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-soft); font-size: 11.5px;
+}
 .matchbar-body {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.4rem; margin-top: .8rem;
@@ -758,11 +764,11 @@ img, canvas, svg { max-width: 100%; display: block; }
 /* The upload area: click or keyboard to browse, drag a file onto it to drop. */
 .match-drop {
   display: flex; flex-direction: column; align-items: center; gap: .2rem;
-  text-align: center;
-  padding: .7rem 1rem;
+  justify-content: center; min-height: 126px; text-align: center;
+  padding: 1.15rem 1rem;
   border: 1.5px dashed var(--rule-firm);
   border-radius: var(--r);
-  background: var(--paper);
+  background: linear-gradient(135deg, var(--paper), var(--surface-2));
   cursor: pointer;
   transition: border-color .14s var(--ease), background .14s var(--ease);
 }
@@ -793,6 +799,10 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .match-text:focus { outline: none; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
 .match-tools { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.match-ai-note {
+  margin: .15rem 0 0; max-width: 66ch;
+  color: var(--ink-soft); font-size: 11.5px; line-height: 1.5;
+}
 .match-check {
   display: inline-flex; align-items: center; gap: .35rem;
   font-size: 12.5px; color: var(--ink-soft); cursor: pointer; user-select: none;
@@ -854,6 +864,8 @@ img, canvas, svg { max-width: 100%; display: block; }
   .matchbar { padding-top: 1rem; padding-bottom: 1rem; }
   .matchbar-head { align-items: flex-start; }
   .matchbar-head .btn { width: 100%; justify-content: center; }
+  .matchbar-actions { justify-content: stretch; }
+  .matchbar-actions .btn { flex: 1; justify-content: center; }
 }
 
 /* ── Embed mode: the chart, in somebody else's page ──────────────────────── */

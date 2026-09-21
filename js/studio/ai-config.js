@@ -16,9 +16,8 @@
  * secret store, and a browser is not one. The honest alternative — keeping the
  * key in memory for the session only — is the unticked default here.
  *
- * The key leaves this browser in exactly one place: the `x-api-key` header of
- * the request `analyst.js` makes to Anthropic. It is never in a request body,
- * never in a spec, never in a share link and never in an export.
+ * The key is sent only to the provider the reader chooses. It never enters a
+ * spec, share link or export.
  */
 
 import { toast } from './toast.js';
@@ -32,10 +31,27 @@ const el = (tag, cls, text) => {
 
 // Keep it in memory if they don't want to save to localStorage
 let sessionApiKey = null;
+let sessionSettings = null;
 
 const STORAGE_KEY = 'opencharts.ai-key';
+const SETTINGS_KEY = 'opencharts.ai-settings';
 const ENC_PREFIX = 'enc:v1:';
 const PASSPHRASE = 'opencharts-ai-config-local';
+
+const DEFAULT_SETTINGS = {
+  provider: 'anthropic',
+  endpoint: 'http://localhost:11434/v1/chat/completions',
+  model: '',
+};
+
+function normaliseSettings(value) {
+  const raw = value && typeof value === 'object' ? value : {};
+  return {
+    provider: ['anthropic', 'openai', 'gemini'].includes(raw.provider) ? raw.provider : 'anthropic',
+    endpoint: String(raw.endpoint || DEFAULT_SETTINGS.endpoint).trim(),
+    model: String(raw.model || '').trim(),
+  };
+}
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -105,6 +121,18 @@ export async function getStoredApiKey() {
   }
 }
 
+/** The provider choice is browser preference data; its key remains sealed separately. */
+export async function getAiSettings() {
+  if (!sessionSettings) {
+    try {
+      sessionSettings = normaliseSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'));
+    } catch (e) {
+      sessionSettings = { ...DEFAULT_SETTINGS };
+    }
+  }
+  return { ...sessionSettings, key: await getStoredApiKey() };
+}
+
 /**
  * Put a key in place, for the session or for this browser.
  *
@@ -132,10 +160,29 @@ export async function setApiKey(key, { persist = false } = {}) {
   }
 }
 
+/** Save an Anthropic, Gemini, or OpenAI-compatible/local provider selection. */
+export async function setAiSettings(settings, { persist = false } = {}) {
+  sessionSettings = normaliseSettings(settings);
+  const result = await setApiKey(settings && settings.key, { persist });
+  try {
+    if (persist) localStorage.setItem(SETTINGS_KEY, JSON.stringify(sessionSettings));
+    else localStorage.removeItem(SETTINGS_KEY);
+  } catch (e) {
+    return { ok: false, persisted: false, message: e.message };
+  }
+  return result.ok ? { ...result, persisted: persist } : result;
+}
+
 /** Forget it, in memory and on disk. */
 export function clearApiKey() {
   sessionApiKey = null;
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* not fatal */ }
+}
+
+export function clearAiSettings() {
+  sessionSettings = { ...DEFAULT_SETTINGS };
+  clearApiKey();
+  try { localStorage.removeItem(SETTINGS_KEY); } catch (e) { /* not fatal */ }
 }
 
 /** Whether a key is persisted in localStorage. Storage access can throw. */
@@ -159,7 +206,7 @@ export function openAiConfigDialog() {
     icon.setAttribute('aria-hidden', 'true');
 
     const main = el('div', 'ask-main');
-    main.appendChild(el('h2', 'ask-title', 'AI Analyst — your Anthropic API key'));
+    main.appendChild(el('h2', 'ask-title', 'AI Analyst — choose a provider'));
     main.appendChild(el('p', 'ask-text',
       'The AI Analyst calls the Anthropic Messages API straight from this page — '
       + 'there is no server in this project to route it through, so the key is yours '
@@ -167,6 +214,31 @@ export function openAiConfigDialog() {
 
     const inputWrap = el('div', 'dlg-col');
     inputWrap.style.marginTop = '16px';
+    const provider = el('select', 'input');
+    provider.setAttribute('aria-label', 'AI provider');
+    [['anthropic', 'Anthropic API key'], ['gemini', 'Gemini API key'], ['openai', 'OpenAI-compatible or local model']]
+      .forEach(([value, label]) => {
+        const option = el('option', null, label);
+        option.value = value;
+        provider.appendChild(option);
+      });
+    inputWrap.append(el('label', 'dlg-label', 'Provider'), provider);
+
+    const endpoint = el('input', 'link-input');
+    endpoint.type = 'url';
+    endpoint.spellcheck = false;
+    endpoint.setAttribute('aria-label', 'OpenAI-compatible endpoint');
+    endpoint.style.width = '100%';
+    const endpointLabel = el('label', 'dlg-label', 'Endpoint');
+    endpointLabel.style.marginTop = '12px';
+
+    const model = el('input', 'link-input');
+    model.type = 'text';
+    model.spellcheck = false;
+    model.setAttribute('aria-label', 'Model name');
+    model.style.width = '100%';
+    const modelLabel = el('label', 'dlg-label', 'Model (optional)');
+    modelLabel.style.marginTop = '12px';
     const input = el('input', 'link-input');
     input.type = 'password';
     input.placeholder = 'sk-ant-…';
@@ -177,7 +249,23 @@ export function openAiConfigDialog() {
     }).catch(() => {});
     input.style.width = '100%';
     input.style.marginBottom = '12px';
-    inputWrap.appendChild(input);
+    inputWrap.append(endpointLabel, endpoint, modelLabel, model, input);
+
+    const paintProvider = () => {
+      const local = provider.value === 'openai';
+      endpointLabel.hidden = endpoint.hidden = !local;
+      input.placeholder = provider.value === 'anthropic' ? 'sk-ant-â€¦' : provider.value === 'gemini' ? 'AIzaâ€¦' : 'optional';
+      model.placeholder = provider.value === 'gemini' ? 'gemini-2.5-flash' : local ? 'llama3.2' : 'Use the default model';
+    };
+    provider.addEventListener('change', paintProvider);
+    getAiSettings().then((settings) => {
+      provider.value = settings.provider;
+      endpoint.value = settings.endpoint;
+      model.value = settings.model;
+      input.value = settings.key || '';
+      paintProvider();
+    }).catch(paintProvider);
+    paintProvider();
 
     const checkboxWrap = el('label', 'shape-col');
     checkboxWrap.style.display = 'flex';
@@ -203,11 +291,11 @@ export function openAiConfigDialog() {
     const cancelBtn = el('button', 'btn', 'Cancel');
     cancelBtn.type = 'button';
     
-    const clearBtn = el('button', 'btn', 'Clear Key');
+    const clearBtn = el('button', 'btn', 'Clear provider');
     clearBtn.type = 'button';
     clearBtn.style.marginRight = 'auto';
 
-    const saveBtn = el('button', 'btn btn-primary', 'Save Key');
+    const saveBtn = el('button', 'btn btn-primary', 'Save provider');
     saveBtn.type = 'button';
     
     foot.append(clearBtn, cancelBtn, saveBtn);
@@ -229,23 +317,32 @@ export function openAiConfigDialog() {
 
     cancelBtn.addEventListener('click', () => done(false));
     clearBtn.addEventListener('click', () => {
-      clearApiKey();
+      clearAiSettings();
       input.value = '';
-      toast('Key cleared', 'ok');
+      toast('AI provider cleared', 'ok');
     });
 
     saveBtn.addEventListener('click', async () => {
       const key = input.value.trim();
-      if (!key) {
-        toast('Enter a key, or press Clear Key to remove the one stored', 'bad');
+      if (provider.value !== 'openai' && !key) {
+        toast('Enter an API key, or choose a local OpenAI-compatible model.', 'bad');
+        return;
+      }
+      if (provider.value === 'openai' && !endpoint.value.trim()) {
+        toast('Enter an OpenAI-compatible endpoint.', 'bad');
         return;
       }
       
-      const res = await setApiKey(key, { persist: checkbox.checked });
+      const res = await setAiSettings({
+        provider: provider.value,
+        endpoint: endpoint.value,
+        model: model.value,
+        key,
+      }, { persist: checkbox.checked });
       if (!res.ok) {
-        toast('This browser refused to store the key — it will work for this session only', 'bad', 4200);
+        toast('This browser refused to store the provider — it will work for this session only', 'bad', 4200);
       } else {
-        toast(res.persisted ? 'Key saved on this browser' : 'Key kept for this session only', 'ok');
+        toast(res.persisted ? 'Provider saved on this browser' : 'Provider kept for this session only', 'ok');
       }
       done(true);
     });

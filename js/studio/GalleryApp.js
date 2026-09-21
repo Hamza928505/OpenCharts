@@ -24,6 +24,7 @@ import { recommendCharts } from './recommend.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
 import { ask } from './confirm.js';
+import { openAiConfigDialog } from './ai-config.js';
 import { listSaved, removeSaved, renameSaved, exportShelf, importShelf, whenSaved } from './shelf.js';
 
 /**
@@ -142,6 +143,7 @@ export class GalleryApp {
     const drop = bar.querySelector('#match-drop');
     const urlInput = bar.querySelector('#match-url');
     const urlGo = bar.querySelector('#match-url-go');
+    bar.querySelector('#match-ai-settings')?.addEventListener('click', () => openAiConfigDialog());
     this.matchStatus = status;
 
     // `region,2023,2024` over `North,520,680` cannot be settled by looking at
