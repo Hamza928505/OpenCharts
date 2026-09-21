@@ -138,9 +138,9 @@
 <section class="matchbar" id="matchbar">
   <div class="matchbar-head">
     <div class="matchbar-lead">
-      <h2 class="matchbar-title">Have a table? Find the charts that can read it.</h2>
-      <p class="matchbar-sub">Drop a file, paste rows, or fetch a link. Nothing is uploaded — the
-      data is read in this browser and never sent anywhere.</p>
+      <h2 class="matchbar-title">Your data. A conversation. A clearer chart.</h2>
+      <p class="matchbar-sub">Bring a table, ask a question, then refine your chart together.
+      Imports stay on this device. Sending a message shares data with your selected AI provider.</p>
     </div>
   </div>
 
@@ -175,15 +175,28 @@
           <input type="checkbox" id="match-swap">
           Swap rows and columns</label>
       </div>
-      <p class="match-ai-note">Suggestions and chart matching run locally. Connect a free-tier key or local model in <b>AI provider</b> to refine a selected chart in the studio.</p>
-      <span class="match-status" id="match-status">Commas, tabs and semicolons all work.</span>
+      <span class="match-status" id="match-status" role="status">Commas, tabs and semicolons all work.</span>
+      <details class="match-reading">
+        <summary>What was read <span id="match-read-summary">No table yet</span></summary>
+        <div class="match-read" id="match-read">
+          <p class="dlg-note">Bring a table to see its columns and chart suggestions.</p>
+        </div>
+      </details>
     </div>
-    <div class="match-col">
-      <label class="dlg-label">What was read</label>
-      <div class="match-read" id="match-read">
-        <p class="dlg-note">Bring a table and the gallery below narrows to the
-        charts that can draw it.</p>
+    <div class="match-col match-chat">
+      <div class="match-chat-head"><h3>Chat with your data</h3><button class="btn btn-sm btn-ghost" id="match-chat-clear" type="button">New chat</button></div>
+      <div id="match-chat-log" class="match-chat-log" role="log" aria-label="Conversation" aria-live="polite"></div>
+      <div class="match-chat-suggestions" aria-label="Suggested questions">
+        <button class="btn btn-sm" type="button">Suggest a chart</button>
+        <button class="btn btn-sm" type="button">What stands out?</button>
+        <button class="btn btn-sm" type="button">Show a comparison</button>
       </div>
+      <form id="match-chat-form" class="match-chat-form">
+        <label for="match-message">Message</label>
+        <textarea id="match-message" rows="3" maxlength="12000" placeholder="Ask about your data, or describe the chart you need…" aria-describedby="match-chat-note"></textarea>
+        <div class="match-chat-controls"><span id="match-chat-provider">Choose a provider to start</span><button class="btn btn-sm" id="match-chat-stop" type="button" hidden>Stop</button><button class="btn" id="match-chat-send" type="submit">Send</button></div>
+        <p id="match-chat-note" class="dlg-note">Enter to send · Shift+Enter for a new line. AI receives up to 40 rows and recent messages.</p>
+      </form>
     </div>
   </div>
 </section>

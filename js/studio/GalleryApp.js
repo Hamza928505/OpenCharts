@@ -25,6 +25,7 @@ import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
 import { ask } from './confirm.js';
 import { openAiConfigDialog } from './ai-config.js';
+import { mountMatchChat } from './match-chat.js';
 import { listSaved, removeSaved, renameSaved, exportShelf, importShelf, whenSaved } from './shelf.js';
 
 /**
@@ -145,6 +146,7 @@ export class GalleryApp {
     const urlGo = bar.querySelector('#match-url-go');
     bar.querySelector('#match-ai-settings')?.addEventListener('click', () => openAiConfigDialog());
     this.matchStatus = status;
+    const chat = mountMatchChat(bar, () => this.table);
 
     // `region,2023,2024` over `North,520,680` cannot be settled by looking at
     // it — the header row is numeric, because the columns are years. So the
@@ -195,11 +197,13 @@ export class GalleryApp {
 
     let timer = null;
     const run = () => {
+      chat.reset();
       const raw = text.value.trim();
       if (!raw) {
         this.table = null;
         this.projected = new Map();
         this.fit = null;
+        bar.querySelector('#match-read-summary').textContent = 'No table yet';
         read.innerHTML = '<p class="dlg-note">Paste something on the left and the gallery '
           + 'below narrows to the charts that can draw it.</p>';
         setStatus('Commas, tabs and semicolons all work.');
@@ -211,12 +215,14 @@ export class GalleryApp {
       if (!headerAnswered) headerBox.checked = parsed.hadHeader;
       const table = oriented(parsed);
       if (!table.rows.length) {
+        this.table = null;
         setStatus('Nothing readable in that yet.', 'bad');
         return;
       }
 
       const ranked = rankCharts(table);
       this.table = table;
+      bar.querySelector('#match-read-summary').textContent = `${table.rows.length} rows · ${table.headers.length} columns`;
       // A chart that cannot read all forty-five of somebody's columns can very
       // often read four of them, and which four is worth keeping: it is what
       // the tile says, what the studio opens on, and what the prompt quotes.
