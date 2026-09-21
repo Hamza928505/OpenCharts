@@ -28,7 +28,7 @@ import { CHARTS, getChart } from './registry.js';
 import { expectedFormat, toCSV } from './dataio.js';
 import { SHAPE_GUIDE } from './prompt.js';
 import { facetSource } from './facet.js';
-import { getStoredApiKey } from './ai-config.js';
+import { getAiSettings, getStoredApiKey } from './ai-config.js';
 
 export const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 export const MODEL = 'claude-sonnet-5';
@@ -127,6 +127,55 @@ export function buildAnalystMessage(def, spec, request) {
   ].filter((line) => line !== '').join('\n');
 }
 
+function safeEndpoint(value) {
+  const url = new URL(value);
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol === 'https:' || (url.protocol === 'http:' && local)) return url.href;
+  throw new Error('Use HTTPS, or an HTTP endpoint on this device.');
+}
+
+async function askAlternateProvider(settings, apiKey, def, spec, sentence) {
+  const message = buildAnalystMessage(def, spec, sentence);
+  let res;
+  try {
+    if (settings.provider === 'gemini') {
+      const model = settings.model || 'gemini-2.5-flash';
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: 'user', parts: [{ text: message }] }],
+        }),
+      });
+    } else {
+      const endpoint = safeEndpoint(settings.endpoint || 'http://localhost:11434/v1/chat/completions');
+      const headers = { 'content-type': 'application/json' };
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      res = await fetch(endpoint, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          model: settings.model || 'llama3.2', max_tokens: MAX_TOKENS,
+          messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: message }],
+        }),
+      });
+    }
+  } catch (err) {
+    return { ok: false, reason: 'network', error: `Could not reach this AI provider â€” ${err.message}. Check its address and browser-access setting.` };
+  }
+  if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', error: `The API key was refused (${res.status}). Check AI Settings.` };
+  if (res.status === 429) return { ok: false, reason: 'limit', error: 'This provider is out of free capacity. Try again later, or switch to your own API key or local model in AI Settings.' };
+  if (!res.ok) return { ok: false, reason: 'http', error: `The AI provider answered ${res.status}.` };
+
+  let payload;
+  try { payload = await res.json(); } catch { return { ok: false, reason: 'malformed', error: 'That answer was not JSON.', raw: '' }; }
+  const text = settings.provider === 'gemini'
+    ? (payload.candidates || []).flatMap((c) => (c.content && c.content.parts) || []).map((p) => p.text || '').join('')
+    : ((((payload.choices || [])[0] || {}).message || {}).content || '');
+  const parsed = parseAnswer(text);
+  return parsed.ok ? { ok: true, answer: parsed.answer, raw: text } : { ok: false, reason: 'malformed', error: parsed.error, raw: text };
+}
+
 /* ── the call ────────────────────────────────────────────────────────────── */
 
 /**
@@ -138,14 +187,17 @@ export async function askAnalyst({ def, spec, request, key }) {
   const sentence = String(request || '').trim();
   if (!sentence) return { ok: false, reason: 'empty', error: 'Say what you want the chart to show.' };
 
-  const apiKey = key || await getStoredApiKey();
-  if (!apiKey) {
+  const settings = await getAiSettings();
+  const apiKey = key || settings.key || await getStoredApiKey();
+  if (!apiKey && settings.provider !== 'openai') {
     return {
       ok: false,
       reason: 'no-key',
       error: 'No API key on this browser. Add one in AI Settings — it is stored here and sent only to Anthropic.',
     };
   }
+
+  if (settings.provider !== 'anthropic') return askAlternateProvider(settings, apiKey, def, spec, sentence);
 
   const body = {
     model: MODEL,
@@ -179,6 +231,9 @@ export async function askAnalyst({ def, spec, request, key }) {
 
   if (res.status === 401 || res.status === 403) {
     return { ok: false, reason: 'auth', error: `The key was refused (${res.status}). Check it in AI Settings.` };
+  }
+  if (res.status === 429) {
+    return { ok: false, reason: 'limit', error: 'Anthropic is out of free capacity. Try again later, or switch to your own API key or local model in AI Settings.' };
   }
   if (!res.ok) {
     let detail = '';
