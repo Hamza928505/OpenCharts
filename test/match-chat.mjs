@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, resolve } from 'node:path';
+import { extname, resolve, relative } from 'node:path';
 import { chromium } from 'playwright';
 import { parseChatAnswer } from '../js/studio/analyst.js';
 
@@ -11,8 +11,13 @@ assert.equal(parseChatAnswer('null').ok, false);
 const root = resolve('.');
 const server = createServer(async (req, res) => {
   try {
-    const path = resolve(root, '.' + (req.url === '/' ? '/index.html' : req.url.split('?')[0]));
-    if (!path.startsWith(root + '/') && !path.startsWith(root + '\\')) { res.writeHead(403).end(); return; }
+    const pathname = req.url === '/'
+      ? '/index.html'
+      : new URL(req.url, 'http://127.0.0.1').pathname;
+    const decodedPathname = decodeURIComponent(pathname);
+    const path = resolve(root, '.' + decodedPathname);
+    const rel = relative(root, path);
+    if (rel.startsWith('..') || rel === '..' || rel.includes('\\..') || rel.includes('/..')) { res.writeHead(403).end(); return; }
     res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' })[extname(path)] || 'application/octet-stream');
     res.end(await readFile(path));
   } catch { res.writeHead(404).end(); }
