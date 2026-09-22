@@ -29,6 +29,7 @@ import { expectedFormat, toCSV } from './dataio.js';
 import { SHAPE_GUIDE } from './prompt.js';
 import { facetSource } from './facet.js';
 import { getAiSettings, getStoredApiKey } from './ai-config.js';
+import { generateGemini } from './gemini.js';
 
 export const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 export const MODEL = 'claude-sonnet-5';
@@ -138,15 +139,7 @@ async function askAlternateProvider(settings, apiKey, message, system, signal, c
   let res;
   try {
     if (settings.provider === 'gemini') {
-      const model = settings.model || 'gemini-2.5-flash';
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST', signal,
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: message }] }],
-        }),
-      });
+      res = await generateGemini({ key: apiKey, model: settings.model, system, message, signal });
     } else {
       const endpoint = safeEndpoint(settings.endpoint || 'http://localhost:11434/v1/chat/completions');
       const headers = { 'content-type': 'application/json' };
@@ -160,6 +153,7 @@ async function askAlternateProvider(settings, apiKey, message, system, signal, c
       });
     }
   } catch (err) {
+    if (settings.provider === 'gemini') return { ok: false, reason: 'provider', error: err instanceof TypeError ? 'Could not reach Gemini. Check your network and browser access.' : err.message };
     return { ok: false, reason: 'network', error: `Could not reach this AI provider â€” ${err.message}. Check its address and browser-access setting.` };
   }
   if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', error: `The API key was refused (${res.status}). Check AI Settings.` };
