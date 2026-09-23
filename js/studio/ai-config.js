@@ -21,7 +21,6 @@
  */
 
 import { toast } from './toast.js';
-import { listGeminiModels } from './gemini.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -252,45 +251,19 @@ export function openAiConfigDialog() {
     input.style.marginBottom = '12px';
     inputWrap.append(endpointLabel, endpoint, modelLabel, model, input);
 
-    const loadModels = el('button', 'btn btn-sm', 'Load Gemini models');
-    loadModels.type = 'button';
-    const modelChoices = el('select', 'input');
-    modelChoices.setAttribute('aria-label', 'Available Gemini models');
-    modelChoices.hidden = true;
-    const modelStatus = el('p', 'dlg-note');
-    modelStatus.setAttribute('role', 'status');
-    inputWrap.append(loadModels, modelChoices, modelStatus);
-    modelChoices.addEventListener('change', () => { if (modelChoices.value) model.value = modelChoices.value; });
-    loadModels.addEventListener('click', async () => {
-      const key = input.value.trim();
-      if (!key) { modelStatus.textContent = 'Enter your Gemini API key first.'; return; }
-      loadModels.disabled = true;
-      modelStatus.textContent = 'Loading models from Google…';
-      try {
-        const names = await listGeminiModels(key, AbortSignal.timeout(15000));
-        if (provider.value !== 'gemini' || input.value.trim() !== key || !scrim.isConnected) return;
-        modelChoices.replaceChildren(new Option('Choose a model', ''), ...names.map((name) => new Option(name, name)));
-        modelChoices.hidden = names.length === 0;
-        modelStatus.textContent = names.length ? 'Select a model, then save. Model availability does not guarantee free quota.' : 'No compatible text models were listed for this key.';
-      } catch (error) { modelStatus.textContent = error.message; }
-      finally { loadModels.disabled = false; }
-    });
-
     const paintProvider = () => {
       const local = provider.value === 'openai';
       endpointLabel.hidden = endpoint.hidden = !local;
+      modelLabel.hidden = model.hidden = provider.value === 'gemini';
       input.placeholder = provider.value === 'anthropic' ? 'sk-ant-â€¦' : provider.value === 'gemini' ? 'AIzaâ€¦' : 'optional';
-      model.placeholder = provider.value === 'gemini' ? 'Auto-select an available Flash model' : local ? 'llama3.2' : 'Use the default model';
+      model.placeholder = local ? 'llama3.2' : 'Use the default model';
       input.setAttribute('aria-label', provider.value === 'gemini' ? 'Gemini API key' : local ? 'API key (optional)' : 'Anthropic API key');
-      loadModels.hidden = provider.value !== 'gemini';
-      modelChoices.hidden = true;
-      modelStatus.textContent = '';
     };
     provider.addEventListener('change', () => { model.value = ''; paintProvider(); });
     getAiSettings().then((settings) => {
       provider.value = settings.provider;
       endpoint.value = settings.endpoint;
-      model.value = settings.model;
+      model.value = settings.provider === 'gemini' ? '' : settings.model;
       input.value = settings.key || '';
       paintProvider();
     }).catch(paintProvider);
@@ -365,7 +338,7 @@ export function openAiConfigDialog() {
       const res = await setAiSettings({
         provider: provider.value,
         endpoint: endpoint.value,
-        model: model.value,
+        model: provider.value === 'gemini' ? '' : model.value,
         key,
       }, { persist: checkbox.checked });
       if (!res.ok) {

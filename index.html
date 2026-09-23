@@ -148,9 +148,8 @@
     <span class="match-local">Private analysis on this device</span>
     <button class="btn btn-sm" id="match-ai-settings" type="button">AI provider</button>
   </div>
-  <div class="matchbar-body" id="match-body">
-    <div class="match-col">
-      <div class="match-drop" id="match-drop" tabindex="0" role="button"
+  <div class="match-import">
+    <div class="match-drop" id="match-drop" tabindex="0" role="button"
            aria-label="Choose a data file, or drop one here">
         <span class="match-drop-icon" aria-hidden="true">⬆</span>
         <span class="match-drop-lead"><b>Drop a file here</b>, or <span class="match-drop-link">browse</span></span>
@@ -162,10 +161,6 @@
                placeholder="https://…/data.csv — a link to a published CSV or spreadsheet">
         <button class="btn btn-sm" id="match-url-go" type="button">Fetch</button>
       </div>
-
-      <label class="dlg-label" for="match-text">…or paste your table</label>
-      <textarea id="match-text" class="match-text" spellcheck="false"
-                placeholder="region,2023,2024&#10;North,520,680&#10;South,440,575"></textarea>
       <div class="match-tools">
         <button class="btn btn-sm" id="match-file" type="button">Open a file</button>
         <button class="btn btn-sm btn-ghost" id="match-clear" type="button">Clear</button>
@@ -182,6 +177,11 @@
           <p class="dlg-note">Bring a table to see its columns and chart suggestions.</p>
         </div>
       </details>
+  </div>
+  <div class="matchbar-body" id="match-body">
+    <div class="match-col match-table">
+      <textarea id="match-text" class="match-text" spellcheck="false" aria-label="Paste or edit your data table"
+                placeholder="Paste your data here…&#10;region,2023,2024&#10;North,520,680&#10;South,440,575"></textarea>
     </div>
     <div class="match-col match-chat">
       <div class="match-chat-head"><h3>Chat with your data</h3><button class="btn btn-sm btn-ghost" id="match-chat-clear" type="button">New chat</button></div>
