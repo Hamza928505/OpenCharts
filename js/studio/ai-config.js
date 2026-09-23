@@ -21,6 +21,7 @@
  */
 
 import { toast } from './toast.js';
+import { PROVIDERS, detectProvider, resolveProvider, listProviderModels } from './ai-providers.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -39,7 +40,7 @@ const ENC_PREFIX = 'enc:v1:';
 const PASSPHRASE = 'opencharts-ai-config-local';
 
 const DEFAULT_SETTINGS = {
-  provider: 'anthropic',
+  provider: 'auto',
   endpoint: 'http://localhost:11434/v1/chat/completions',
   model: '',
 };
@@ -47,7 +48,7 @@ const DEFAULT_SETTINGS = {
 function normaliseSettings(value) {
   const raw = value && typeof value === 'object' ? value : {};
   return {
-    provider: ['anthropic', 'openai', 'gemini'].includes(raw.provider) ? raw.provider : 'anthropic',
+    provider: Object.hasOwn(PROVIDERS, raw.provider) ? raw.provider : 'auto',
     endpoint: String(raw.endpoint || DEFAULT_SETTINGS.endpoint).trim(),
     model: String(raw.model || '').trim(),
   };
@@ -160,7 +161,7 @@ export async function setApiKey(key, { persist = false } = {}) {
   }
 }
 
-/** Save an Anthropic, Gemini, or OpenAI-compatible/local provider selection. */
+/** Save automatic key detection or an explicit provider/endpoint override. */
 export async function setAiSettings(settings, { persist = false } = {}) {
   sessionSettings = normaliseSettings(settings);
   const result = await setApiKey(settings && settings.key, { persist });
@@ -197,77 +198,149 @@ function hasPersistedKey() {
 export function openAiConfigDialog() {
   return new Promise((resolve) => {
     const scrim = el('div', 'dlg-scrim ask-scrim');
-    const box = el('div', 'ask');
-    box.setAttribute('role', 'alertdialog');
+    const box = el('div', 'ask ai-config');
+    box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-
-    const icon = el('div', 'ask-icon');
-    icon.textContent = '🤖';
-    icon.setAttribute('aria-hidden', 'true');
+    box.setAttribute('aria-labelledby', 'ai-config-title');
+    const returnFocus = document.activeElement;
+    let loading = null;
+    let closed = false;
+    let edited = false;
+    let lastDetected = null;
 
     const main = el('div', 'ask-main');
-    main.appendChild(el('h2', 'ask-title', 'AI Analyst — choose a provider'));
+    const title = el('h2', 'ask-title', 'Connect your AI');
+    title.id = 'ai-config-title';
+    main.appendChild(title);
     main.appendChild(el('p', 'ask-text',
-      'The AI Analyst calls your selected provider straight from this page — '
-      + 'there is no server in this project to route it through, so the key is yours '
-      + 'and the requests are billed to you.'));
+      'Paste your API key. We recognize Gemini, Anthropic, NVIDIA and xAI keys and select a model for you. '
+      + 'Requests go directly to that service and use your API quota or billing.'));
 
     const inputWrap = el('div', 'dlg-col');
     inputWrap.style.marginTop = '16px';
+    const input = el('input', 'link-input');
+    input.type = 'password';
+    input.id = 'ai-config-key';
+    input.placeholder = 'Paste your API key';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('aria-describedby', 'ai-config-destination ai-config-error');
+    const keyLabel = el('label', 'dlg-label', 'API key');
+    keyLabel.htmlFor = input.id;
+    const hint = el('p', 'ask-text');
+    hint.id = 'ai-config-destination';
+    hint.setAttribute('role', 'status');
+    const error = el('p', 'analyst-status is-bad');
+    error.id = 'ai-config-error';
+    error.setAttribute('role', 'alert');
+    inputWrap.append(keyLabel, input, hint, error);
+
+    const advanced = el('details', 'ai-config-advanced');
+    advanced.appendChild(el('summary', null, 'Advanced — provider, model or local endpoint'));
     const provider = el('select', 'input');
-    provider.setAttribute('aria-label', 'AI provider');
-    [['anthropic', 'Anthropic API key'], ['gemini', 'Gemini API key'], ['openai', 'OpenAI-compatible or local model']]
-      .forEach(([value, label]) => {
-        const option = el('option', null, label);
-        option.value = value;
-        provider.appendChild(option);
-      });
-    inputWrap.append(el('label', 'dlg-label', 'Provider'), provider);
+    provider.id = 'ai-config-provider';
+    const providerLabel = el('label', 'dlg-label', 'AI provider');
+    providerLabel.htmlFor = provider.id;
+    Object.entries(PROVIDERS).forEach(([value, entry]) => {
+      const option = el('option', null, entry.label);
+      option.value = value;
+      provider.appendChild(option);
+    });
+    advanced.append(providerLabel, provider);
 
     const endpoint = el('input', 'link-input');
     endpoint.type = 'url';
+    endpoint.id = 'ai-config-endpoint';
     endpoint.spellcheck = false;
     endpoint.setAttribute('aria-label', 'OpenAI-compatible endpoint');
-    endpoint.style.width = '100%';
-    const endpointLabel = el('label', 'dlg-label', 'Endpoint');
-    endpointLabel.style.marginTop = '12px';
+    endpoint.value = DEFAULT_SETTINGS.endpoint;
+    endpoint.placeholder = 'https://your-provider.example/v1';
+    const endpointLabel = el('label', 'dlg-label', 'API base URL or chat endpoint');
+    endpointLabel.htmlFor = endpoint.id;
 
     const model = el('input', 'link-input');
     model.type = 'text';
+    model.id = 'ai-config-model';
     model.spellcheck = false;
     model.setAttribute('aria-label', 'Model name');
-    model.style.width = '100%';
-    const modelLabel = el('label', 'dlg-label', 'Model (optional)');
-    modelLabel.style.marginTop = '12px';
-    const input = el('input', 'link-input');
-    input.type = 'password';
-    input.placeholder = 'sk-ant-…';
-    input.setAttribute('aria-label', 'Anthropic API key');
-    input.value = '';
-    getStoredApiKey().then((storedKey) => {
-      if (storedKey) input.value = storedKey;
-    }).catch(() => {});
-    input.style.width = '100%';
-    input.style.marginBottom = '12px';
-    inputWrap.append(endpointLabel, endpoint, modelLabel, model, input);
+    model.placeholder = 'Automatic (leave blank)';
+    model.setAttribute('list', 'ai-config-models');
+    const modelLabel = el('label', 'dlg-label', 'Model override (optional)');
+    modelLabel.htmlFor = model.id;
+    const models = el('datalist');
+    models.id = 'ai-config-models';
+    const loadBtn = el('button', 'btn', 'Load models');
+    loadBtn.type = 'button';
+    advanced.append(endpointLabel, endpoint, modelLabel, model, models, loadBtn,
+      el('p', 'ask-text', 'Use any chat model supported by this API. Other services need their endpoint; local models can use no key. Browser access (CORS) must be allowed. A trusted local proxy is needed when a service blocks browser requests.'));
+    inputWrap.appendChild(advanced);
+
+    const draft = () => ({ provider: provider.value, endpoint: endpoint.value, model: model.value.trim(), key: input.value.trim() });
 
     const paintProvider = () => {
       const local = provider.value === 'openai';
       endpointLabel.hidden = endpoint.hidden = !local;
-      modelLabel.hidden = model.hidden = provider.value === 'gemini';
-      input.placeholder = provider.value === 'anthropic' ? 'sk-ant-â€¦' : provider.value === 'gemini' ? 'AIzaâ€¦' : 'optional';
-      model.placeholder = local ? 'llama3.2' : 'Use the default model';
-      input.setAttribute('aria-label', provider.value === 'gemini' ? 'Gemini API key' : local ? 'API key (optional)' : 'Anthropic API key');
+      lastDetected = detectProvider(input.value);
+      const chosen = provider.value === 'auto' ? lastDetected : provider.value;
+      hint.textContent = chosen
+        ? `${PROVIDERS[chosen].label} · ${chosen === 'openai' ? endpoint.value : new URL(PROVIDERS[chosen].endpoint).host} · ${model.value.trim() ? 'Custom model' : 'Automatic model'}`
+        : input.value.trim() ? 'Unrecognized key format. Choose a service in Advanced; your key has not been sent.'
+          : 'Detection happens on your device. Nothing is sent until you chat or load models.';
+      loadBtn.disabled = !!loading || !chosen || (!input.value.trim() && !local);
     };
-    provider.addEventListener('change', () => { model.value = ''; paintProvider(); });
+    const changed = () => {
+      edited = true;
+      loading?.abort();
+      loading = null;
+      loadBtn.textContent = 'Load models';
+      models.replaceChildren();
+      error.textContent = '';
+      input.removeAttribute('aria-invalid');
+      paintProvider();
+    };
+    provider.addEventListener('change', () => { model.value = ''; changed(); });
+    input.addEventListener('input', () => {
+      const detected = detectProvider(input.value);
+      // A new recognizable key should not inherit the previous service/model.
+      // Preserve custom proxy destinations, which may intentionally use that key.
+      if (provider.value !== 'openai' && detected && detected !== lastDetected) {
+        provider.value = 'auto';
+        model.value = '';
+      }
+      changed();
+    });
+    endpoint.addEventListener('input', changed);
+    model.addEventListener('input', () => { edited = true; paintProvider(); });
     getAiSettings().then((settings) => {
+      if (closed || edited) return;
       provider.value = settings.provider;
       endpoint.value = settings.endpoint;
-      model.value = settings.provider === 'gemini' ? '' : settings.model;
+      model.value = settings.model;
       input.value = settings.key || '';
       paintProvider();
     }).catch(paintProvider);
     paintProvider();
+
+    loadBtn.addEventListener('click', async () => {
+      const controller = new AbortController();
+      loading = controller;
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Loading…';
+      error.textContent = '';
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      try {
+        const names = await listProviderModels(draft(), controller.signal);
+        if (closed || loading !== controller) return;
+        models.replaceChildren(...names.map((name) => { const option = el('option'); option.value = name; return option; }));
+        hint.textContent = `${names.length} chat models loaded. Leave the model blank for automatic selection, or type to choose.`;
+        model.focus();
+      } catch (err) {
+        if (!closed && loading === controller) error.textContent = controller.signal.aborted ? 'Model lookup timed out. Try again or enter a model manually.' : err.message;
+      } finally {
+        clearTimeout(timeout);
+        if (loading === controller) { loading = null; loadBtn.disabled = false; loadBtn.textContent = 'Load models'; }
+      }
+    });
 
     const checkboxWrap = el('label', 'shape-col');
     checkboxWrap.style.display = 'flex';
@@ -303,44 +376,50 @@ export function openAiConfigDialog() {
     foot.append(clearBtn, cancelBtn, saveBtn);
     main.appendChild(foot);
 
-    box.append(icon, main);
+    box.append(main);
     scrim.appendChild(box);
     document.body.appendChild(scrim);
 
     const done = (value) => {
+      closed = true;
+      loading?.abort();
       document.removeEventListener('keydown', onKey, true);
       scrim.remove();
+      returnFocus?.focus();
       resolve(value);
     };
 
     function onKey(e) {
       if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      if (e.key === 'Tab') {
+        const focusable = [...box.querySelectorAll('input, select, button, summary')].filter((node) => !node.disabled && node.getClientRects().length);
+        const first = focusable[0], last = focusable.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
 
     cancelBtn.addEventListener('click', () => done(false));
     clearBtn.addEventListener('click', () => {
       clearAiSettings();
       input.value = '';
+      provider.value = 'auto';
+      endpoint.value = DEFAULT_SETTINGS.endpoint;
+      model.value = '';
+      checkbox.checked = false;
+      changed();
       toast('AI provider cleared', 'ok');
     });
 
     saveBtn.addEventListener('click', async () => {
-      const key = input.value.trim();
-      if (provider.value !== 'openai' && !key) {
-        toast('Enter an API key, or choose a local OpenAI-compatible model.', 'bad');
+      try { resolveProvider(draft()); } catch (err) {
+        error.textContent = err.message;
+        if (!input.value.trim() && provider.value !== 'openai') { input.setAttribute('aria-invalid', 'true'); input.focus(); }
+        else { advanced.open = true; (provider.value === 'openai' ? endpoint : provider).focus(); }
         return;
       }
-      if (provider.value === 'openai' && !endpoint.value.trim()) {
-        toast('Enter an OpenAI-compatible endpoint.', 'bad');
-        return;
-      }
-      
-      const res = await setAiSettings({
-        provider: provider.value,
-        endpoint: endpoint.value,
-        model: provider.value === 'gemini' ? '' : model.value,
-        key,
-      }, { persist: checkbox.checked });
+      saveBtn.disabled = true;
+      const res = await setAiSettings(draft(), { persist: checkbox.checked });
       if (!res.ok) {
         toast('This browser refused to store the provider — it will work for this session only', 'bad', 4200);
       } else {
@@ -353,7 +432,7 @@ export function openAiConfigDialog() {
     document.addEventListener('keydown', onKey, true);
     
     // Focus input on load
-    setTimeout(() => input.focus(), 50);
+    input.focus();
   });
 }
 

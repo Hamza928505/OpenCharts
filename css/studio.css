@@ -2137,6 +2137,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .ask-list .ask-more { color: var(--ink-faint); list-style: none; margin-left: -1.1rem; }
 .ask-foot { display: flex; justify-content: flex-end; gap: .45rem; margin-top: .9rem; }
+.ai-config { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.ai-config .link-input, .ai-config select { width: 100%; min-width: 0; }
+.ai-config .ask-text { overflow-wrap: anywhere; }
+.ai-config-advanced { margin: 12px 0; }
+.ai-config-advanced summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; padding: 8px 0; }
+.ai-config-advanced .dlg-label:not([hidden]) { display: block; margin-top: 12px; }
+.ai-config-advanced .btn { margin-top: 8px; }
+.ai-config .ask-foot { flex-wrap: wrap; }
 .btn-danger { background: var(--bad); border-color: var(--bad); }
 
 @media (max-width: 720px) {

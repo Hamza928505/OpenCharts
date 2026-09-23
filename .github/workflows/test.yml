@@ -37,6 +37,12 @@ jobs:
       - name: Run the suite
         run: npm test
 
+      - name: Check AI provider routing and chat (mock APIs)
+        run: |
+          node test/ai-providers.mjs
+          node test/gemini.mjs
+          node test/match-chat.mjs
+
       # A failing run is far easier to diagnose with the screenshots the
       # suite leaves behind.
       - name: Upload failure artefacts

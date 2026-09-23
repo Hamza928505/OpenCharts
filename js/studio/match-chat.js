@@ -1,5 +1,6 @@
 import { askAnalyst } from './analyst.js';
 import { getAiSettings } from './ai-config.js';
+import { PROVIDERS, detectProvider } from './ai-providers.js';
 import { getChart, newSpec } from './registry.js';
 import { renderChart, destroyInstance } from './engines.js';
 
@@ -59,7 +60,8 @@ export function mountMatchChat(root, getTable) {
     try {
       const settings = await getAiSettings();
       if (turn !== revision) return;
-      provider.textContent = settings.model || ({ anthropic: 'Anthropic', gemini: 'Gemini', openai: 'OpenAI-compatible / local' }[settings.provider]);
+      const service = settings.provider === 'auto' ? detectProvider(settings.key) : settings.provider;
+      provider.textContent = settings.model || PROVIDERS[service]?.label || 'Add API key';
       const result = await askAnalyst({
         request, conversation: history, table: getTable(),
         def: current && getChart(current.chart), spec: current?.spec,

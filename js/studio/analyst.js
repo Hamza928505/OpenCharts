@@ -30,9 +30,9 @@ import { SHAPE_GUIDE } from './prompt.js';
 import { facetSource } from './facet.js';
 import { getAiSettings, getStoredApiKey } from './ai-config.js';
 import { generateGemini } from './gemini.js';
+import { resolveProvider, listProviderModels } from './ai-providers.js';
 
 export const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-export const MODEL = 'claude-sonnet-5';
 export const API_VERSION = '2023-06-01';
 const MAX_TOKENS = 4096;
 
@@ -128,37 +128,29 @@ export function buildAnalystMessage(def, spec, request) {
   ].filter((line) => line !== '').join('\n');
 }
 
-function safeEndpoint(value) {
-  const url = new URL(value);
-  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
-  if (url.protocol === 'https:' || (url.protocol === 'http:' && local)) return url.href;
-  throw new Error('Use HTTPS, or an HTTP endpoint on this device.');
-}
-
 async function askAlternateProvider(settings, apiKey, message, system, signal, chat, onStatus) {
   let res;
   try {
     if (settings.provider === 'gemini') {
-      res = await generateGemini({ key: apiKey, model: '', system, message, signal, onStatus });
+      res = await generateGemini({ key: apiKey, model: settings.model, system, message, signal, onStatus });
     } else {
-      const endpoint = safeEndpoint(settings.endpoint || 'http://localhost:11434/v1/chat/completions');
       const headers = { 'content-type': 'application/json' };
       if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-      res = await fetch(endpoint, {
-        method: 'POST', headers, signal,
+      res = await fetch(settings.endpoint, {
+        method: 'POST', headers, signal, credentials: 'omit', redirect: 'error',
         body: JSON.stringify({
-          model: settings.model || 'llama3.2', max_tokens: MAX_TOKENS,
+          model: settings.model, max_tokens: MAX_TOKENS,
           messages: [{ role: 'system', content: system }, { role: 'user', content: message }],
         }),
       });
     }
   } catch (err) {
     if (settings.provider === 'gemini') return { ok: false, reason: 'provider', error: err instanceof TypeError ? 'Could not reach Gemini. Check your network and browser access.' : err.message };
-    return { ok: false, reason: 'network', error: `Could not reach this AI provider â€” ${err.message}. Check its address and browser-access setting.` };
+    return { ok: false, reason: 'network', error: 'Could not reach this AI provider. Check its address and network. If it blocks browser access (CORS), use a trusted local proxy in Advanced settings.' };
   }
   if (res.status === 401 || res.status === 403) return { ok: false, reason: 'auth', error: `The API key was refused (${res.status}). Check AI Settings.` };
   if (res.status === 429) return { ok: false, reason: 'limit', error: 'This provider is out of free capacity. Try again later, or switch to your own API key or local model in AI Settings.' };
-  if (!res.ok) return { ok: false, reason: 'http', error: `The AI provider answered ${res.status}.` };
+  if (!res.ok) return { ok: false, reason: 'http', error: `The AI provider answered ${res.status}. Check this model’s availability and chat support; choose another model in Advanced settings if needed.` };
 
   let payload;
   try { payload = await res.json(); } catch { return { ok: false, reason: 'malformed', error: 'That answer was not JSON.', raw: '' }; }
@@ -180,14 +172,23 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
   const sentence = String(request || '').trim();
   if (!sentence) return { ok: false, reason: 'empty', error: 'Say what you want the chart to show.' };
 
-  const settings = await getAiSettings();
+  let settings = await getAiSettings();
   const apiKey = key || settings.key || await getStoredApiKey();
   if (!apiKey && settings.provider !== 'openai') {
     return {
       ok: false,
       reason: 'no-key',
-      error: 'Choose AI provider and add your API key, or configure a local model to start chatting.',
+      error: 'Add your API key in AI Settings, or configure a local model in Advanced settings to start chatting.',
     };
+  }
+  try {
+    settings = resolveProvider({ ...settings, key: apiKey });
+    if (!settings.model && settings.provider !== 'gemini') {
+      onStatus?.('Finding an available chat model…');
+      settings.model = (await listProviderModels(settings, signal))[0];
+    }
+  } catch (error) {
+    return { ok: false, reason: 'provider', error: error.message };
   }
 
   const chat = Array.isArray(conversation);
@@ -202,7 +203,7 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
   if (settings.provider !== 'anthropic') return askAlternateProvider(settings, apiKey, message, system, signal, chat, onStatus);
 
   const body = {
-    model: settings.model || MODEL,
+    model: settings.model,
     max_tokens: MAX_TOKENS,
     system,
     messages: [{ role: 'user', content: message }],
@@ -211,7 +212,7 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
   let res;
   try {
     res = await fetch(ENDPOINT, {
-      method: 'POST', signal,
+      method: 'POST', signal, credentials: 'omit', redirect: 'error',
       headers: {
         'content-type': 'application/json',
         'x-api-key': apiKey,
@@ -239,7 +240,7 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
   }
   if (!res.ok) {
     let detail = '';
-    try { detail = (await res.text()).slice(0, 300); } catch { /* nothing to add */ }
+    try { detail = (await res.text()).split(apiKey).join('[redacted]').slice(0, 300); } catch { /* nothing to add */ }
     return { ok: false, reason: 'http', error: `Anthropic answered ${res.status}. ${detail}` };
   }
 

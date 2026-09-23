@@ -309,20 +309,34 @@ back.
 
 Three things worth knowing before you use it:
 
-- **You bring your own key, and you pay for the calls.** Put an Anthropic API
-  key in **AI Settings** in the bar above the chart. There is no server in this
-  project, so the request goes straight from your browser to `api.anthropic.com`
+- **You bring your own key and API quota.** Paste your key in **AI Settings**.
+  Recognizable Gemini, Anthropic, NVIDIA and xAI keys select their service
+  automatically; a chat model is discovered without asking you to name one.
+  Detection is local, not validation: unknown key formats require **Advanced**
+  settings, and we never try your key against multiple services. There is no server
+  in this project, so the request goes straight from your browser to that service
   with your key in a header — it is never in the request body, never in a spec,
   never in a share link and never in an export.
 - **The key stays on this browser.** Tick the box and it is kept between
   visits, sealed rather than written as plain text — which hides it from a
   glance at devtools or a shared screen, not from anyone who can read the page.
   It is obfuscation, not a secret store. Leave the box unticked on a shared
-  machine and the key lives in memory for that session only. **Clear Key**
+  machine and the key lives in memory for that session only. **Clear provider**
   removes it.
 - **Nothing is applied until you look at it.** A reply that is not a chart spec
   changes nothing and is shown to you as it came back, with what was wrong with
   it. No key, a refused key and a blocked request each say which.
+
+**Advanced** keeps provider, model override and **Load models** available for
+developers. Use **Custom / local (OpenAI-compatible)** for another service,
+OpenAI, Ollama or a trusted local proxy. Supply its API base URL (for example
+`http://localhost:11434/v1`) or full chat-completions endpoint. Local services
+may not need a key. Leave the model blank to discover one, or enter its exact
+ID if listing is unavailable. The model must support chat and follow the app's
+JSON instructions; embedding/image-only models are not chat models. Automatic
+selection does not guarantee free quota or permission to use a listed model.
+The endpoint must allow browser requests (CORS); a provider that blocks them
+needs a trusted local proxy. Installing this repo alone does not remove CORS.
 
 If you would rather not hand over a key at all, the **AI Prompt** tab does the
 same job the other way round: it writes the whole brief for you to paste into
