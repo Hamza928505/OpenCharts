@@ -366,7 +366,16 @@ console.log(`  ${failures.length ? red('✗') : green('✓')} charts — ${passe
 
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
-await page.waitForTimeout(1200);
+// Previews mount near the viewport. The upload/chat panel can put every tile
+// below that boundary, so bring one into view before checking its renderer.
+await page.locator('.card-canvas').first().scrollIntoViewIfNeeded();
+try {
+  await page.waitForFunction(() => !!document.querySelector('.card-canvas')
+    ?.querySelector('canvas, svg, .waffle-grid'), null, { timeout: 10000 });
+} catch (error) {
+  // Preserve the suite's failure summary if a visible preview never mounts.
+  if (error.name !== 'TimeoutError') throw error;
+}
 const gallery = await page.evaluate(() => ({
   tiles: document.querySelectorAll('.card').length,
   live: [...document.querySelectorAll('.card-canvas')].filter((h) => h.querySelector('canvas, svg, .waffle-grid')).length,
@@ -379,6 +388,7 @@ check(gallery.live > 0, 'gallery mounts live previews', `${gallery.live} mounted
 check(gallery.filters >= meta.categories, 'gallery has a filter per category');
 check(gallery.credits > 0, 'gallery credits its dependencies');
 console.log(`  ${green('✓')} gallery — ${gallery.tiles} tiles, ${gallery.live} previews live`);
+await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 
 /* The gallery answers the other question: "I have this table, what draws it?" */
 const match = await page.evaluate(async () => {
