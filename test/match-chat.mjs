@@ -69,9 +69,17 @@ try {
   await page.locator('#match-chat-clear').click();
   assert.equal(await page.locator('.match-chat-message').count(), 1);
   const geminiCalls = [];
+  const geminiMessages = [];
   await page.route(/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models/, async (route) => {
     const generating = route.request().url().includes(':generateContent');
-    if (generating) geminiCalls.push(route.request().url());
+    if (generating) {
+      geminiCalls.push(route.request().url());
+      geminiMessages.push(JSON.parse(route.request().postDataJSON().contents[0].parts[0].text));
+      if (geminiCalls.length === 1) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'High demand' } }) });
+        return;
+      }
+    }
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(generating
       ? { candidates: [{ content: { parts: [{ text: '{"message":"Gemini connected successfully."}' }] } }] }
       : { models: [
@@ -86,10 +94,18 @@ try {
   await page.getByRole('button', { name: 'Save provider', exact: true }).click();
   await page.locator('#match-message').fill('Hello Gemini');
   await page.locator('#match-chat-send').click();
+  await page.getByText(/Gemini is busy.*Trying another Flash model/).waitFor();
   await page.getByText('Gemini connected successfully.', { exact: true }).waitFor().catch(async (error) => {
     throw new Error(error.message + '\nConversation: ' + await page.locator('#match-chat-log').innerText());
   });
   assert.match(geminiCalls[0], /models\/gemini-3\.8-flash:generateContent/);
+  assert.equal(geminiCalls.length, 2);
+  assert.match(geminiCalls[1], /models\/gemini-2\.5-flash:generateContent/);
+  await page.locator('#match-clear').click();
+  await page.locator('#match-message').fill('hi');
+  await page.locator('#match-chat-send').click();
+  await page.getByText('Gemini connected successfully.', { exact: true }).waitFor();
+  assert.deepEqual(geminiMessages.at(-1).catalogue, []);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.locator('#matchbar').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
   console.log('Matchbar chat: follow-up context, chart rendering, report layout, rate-limit recovery and mobile checks passed.');

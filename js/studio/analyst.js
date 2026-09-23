@@ -135,11 +135,11 @@ function safeEndpoint(value) {
   throw new Error('Use HTTPS, or an HTTP endpoint on this device.');
 }
 
-async function askAlternateProvider(settings, apiKey, message, system, signal, chat) {
+async function askAlternateProvider(settings, apiKey, message, system, signal, chat, onStatus) {
   let res;
   try {
     if (settings.provider === 'gemini') {
-      res = await generateGemini({ key: apiKey, model: '', system, message, signal });
+      res = await generateGemini({ key: apiKey, model: '', system, message, signal, onStatus });
     } else {
       const endpoint = safeEndpoint(settings.endpoint || 'http://localhost:11434/v1/chat/completions');
       const headers = { 'content-type': 'application/json' };
@@ -176,7 +176,7 @@ async function askAlternateProvider(settings, apiKey, message, system, signal, c
  *
  * @returns {Promise<{ ok: boolean, answer?: object, error?: string, reason?: string, raw?: string }>}
  */
-export async function askAnalyst({ def, spec, request, key, conversation, table, signal }) {
+export async function askAnalyst({ def, spec, request, key, conversation, table, signal, onStatus }) {
   const sentence = String(request || '').trim();
   if (!sentence) return { ok: false, reason: 'empty', error: 'Say what you want the chart to show.' };
 
@@ -196,10 +196,10 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
     request: sentence, conversation: conversation.slice(-12),
     table: table ? { headers: table.headers, rows: table.rows.slice(0, TABLE_ROWS), totalRows: table.rows.length } : null,
     currentChart: def ? { chart: def.id, spec } : null,
-    catalogue: CHARTS.map(({ id, title, category }) => ({ id, title, category })),
+    catalogue: table || def ? CHARTS.map(({ id, title, category }) => ({ id, title, category })) : [],
     note: 'Only the first 40 table rows are included. Disclose this when analyzing or drawing a larger table.',
   }) : buildAnalystMessage(def, spec, sentence);
-  if (settings.provider !== 'anthropic') return askAlternateProvider(settings, apiKey, message, system, signal, chat);
+  if (settings.provider !== 'anthropic') return askAlternateProvider(settings, apiKey, message, system, signal, chat, onStatus);
 
   const body = {
     model: settings.model || MODEL,

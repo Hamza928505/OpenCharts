@@ -64,6 +64,9 @@ export function mountMatchChat(root, getTable) {
         request, conversation: history, table: getTable(),
         def: current && getChart(current.chart), spec: current?.spec,
         signal: active.signal,
+        onStatus: (message) => {
+          if (turn === revision && !active.signal.aborted) pending.querySelector('p').textContent = message;
+        },
       });
       if (turn !== revision) return;
       pending.remove();
