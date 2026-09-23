@@ -33,10 +33,14 @@ try {
     assert.equal(error.message.includes(key), false);
     return true;
   });
-  globalThis.fetch = async () => json({ error: { message: 'Quota exhausted' } }, 429);
+  let quotaCalls = 0;
+  globalThis.fetch = async () => { quotaCalls++; return json({ error: { message: 'Quota exhausted (503 mentioned in detail)' } }, 429); };
   await assert.rejects(generateGemini({ ...args, model: 'gemini-test-flash' }), /free-tier quota and billing/);
-  globalThis.fetch = async () => json({ error: { message: 'High demand' } }, 503);
+  assert.equal(quotaCalls, 1);
+  let busyCalls = 0;
+  globalThis.fetch = async () => { busyCalls++; return json({ error: { message: 'High demand' } }, 503); };
   await assert.rejects(generateGemini({ ...args, model: 'gemini-test-flash' }), /temporarily busy/);
+  assert.equal(busyCalls, 3);
 
   calls.length = 0;
   globalThis.fetch = async (url, options) => {
@@ -54,6 +58,23 @@ try {
   const generations = calls.filter((call) => call.url.includes(':generateContent'));
   assert.match(generations[0].url, /gemini-3\.8-flash/);
   assert.match(generations[1].url, /gemini-3\.6-flash/);
+
+  const overloadedCalls = [];
+  const statuses = [];
+  globalThis.fetch = async (url) => {
+    overloadedCalls.push(url);
+    return overloadedCalls.length === 1 ? json({ error: { message: 'High demand' } }, 503) : json({ candidates: [] });
+  };
+  await generateGemini({ ...args, onStatus: (message) => statuses.push(message) });
+  assert.match(overloadedCalls[0], /gemini-3\.8-flash/);
+  assert.match(overloadedCalls[1], /gemini-3\.6-flash/);
+  assert.match(statuses[0], /Trying another Flash model/);
+
+  const controller = new AbortController();
+  let cancelledCalls = 0;
+  globalThis.fetch = async () => { cancelledCalls++; return json({ error: { message: 'High demand' } }, 503); };
+  await assert.rejects(generateGemini({ ...args, signal: controller.signal, onStatus: () => controller.abort() }), { name: 'AbortError' });
+  assert.equal(cancelledCalls, 1);
 
   globalThis.fetch = async (url) => url.includes('pageToken=next')
     ? json({ models: [{ name: 'models/gemini-next-flash', supportedGenerationMethods: ['generateContent'] }] })

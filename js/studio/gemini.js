@@ -44,7 +44,7 @@ export async function listGeminiModels(key, signal) {
   return [...new Set(models)];
 }
 
-export async function generateGemini({ key, model, system, message, signal }) {
+export async function generateGemini({ key, model, system, message, signal, onStatus }) {
   let name = geminiModelName(model);
   if (!name) {
     if (cachedKey !== key) {
@@ -62,17 +62,31 @@ export async function generateGemini({ key, model, system, message, signal }) {
         return version(b) - version(a);
       });
     if (!ranked.length) throw new Error('Google listed no stable Gemini Flash text model for this key. Check the key’s project and model access in AI Studio.');
-    // The model list can include models unavailable to newly created projects;
-    // try the next stable Flash only when Google explicitly says “not found”.
-    return generateWithFallback(ranked, key, system, message, signal);
+    return generateWithFallback(ranked, key, system, message, signal, onStatus);
   }
   if (!/^gemini-[a-z0-9.-]+$/i.test(name)) throw new Error('Enter a Gemini model ID, or load Gemini models in AI provider.');
-  return generateWithFallback([name], key, system, message, signal);
+  return generateWithFallback([name], key, system, message, signal, onStatus);
 }
 
-async function generateWithFallback(names, key, system, message, signal) {
+function waitForRetry(ms, signal) {
+  signal?.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const cancel = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', cancel);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', cancel, { once: true });
+  });
+}
+
+async function generateWithFallback(names, key, system, message, signal, onStatus) {
   let lastError;
-  for (const name of names) {
+  let index = 0;
+  // Bound total requests, including fallback models, so a service outage never loops.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    signal?.throwIfAborted();
+    const name = names[index];
     const response = await fetch(`${BASE}/${encodeURIComponent(name)}:generateContent`, {
       method: 'POST', signal,
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
@@ -84,7 +98,18 @@ async function generateWithFallback(names, key, system, message, signal) {
     });
     if (response.ok) return response;
     lastError = await geminiError(response, key, name);
-    if (!/\b404\b/.test(lastError.message)) throw lastError;
+    const overloaded = [500, 503, 504].includes(response.status);
+    if (attempt === 2) break;
+    if (response.status === 404 && index + 1 < names.length) {
+      index++;
+      onStatus?.('This Gemini model is unavailable. Trying another Flash model…');
+      continue;
+    }
+    if (!overloaded) throw lastError;
+    const next = Math.min(index + 1, names.length - 1);
+    onStatus?.(`Gemini is busy. ${next !== index ? 'Trying another Flash model' : 'Retrying'} (${attempt + 2}/3)…`);
+    index = next;
+    await waitForRetry(1000 * 2 ** attempt, signal);
   }
   if (lastError?.message.includes('404')) { cachedKey = ''; cachedModels = null; }
   throw lastError || new Error('No available Gemini Flash model was found for this key.');
