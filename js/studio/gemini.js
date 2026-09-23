@@ -28,7 +28,7 @@ export async function listGeminiModels(key, signal) {
   do {
     const query = new URLSearchParams({ pageSize: '1000' });
     if (pageToken) query.set('pageToken', pageToken);
-    const response = await fetch(`${BASE}?${query}`, { headers: { 'x-goog-api-key': key }, signal });
+    const response = await fetch(`${BASE}?${query}`, { headers: { 'x-goog-api-key': key }, signal, credentials: 'omit', redirect: 'error' });
     if (!response.ok) throw await geminiError(response, key);
     const payload = await response.json();
     for (const model of payload.models || []) {
@@ -88,7 +88,7 @@ async function generateWithFallback(names, key, system, message, signal, onStatu
     signal?.throwIfAborted();
     const name = names[index];
     const response = await fetch(`${BASE}/${encodeURIComponent(name)}:generateContent`, {
-      method: 'POST', signal,
+      method: 'POST', signal, credentials: 'omit', redirect: 'error',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },

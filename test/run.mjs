@@ -2970,6 +2970,10 @@ let analystReply = JSON.stringify({
 });
 await page.route('https://api.anthropic.com/**', async (route) => {
   const req = route.request();
+  if (req.method() === 'GET') {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'claude-suite-model' }] }) });
+    return;
+  }
   analystSeen = { url: req.url(), headers: req.headers(), body: req.postData() || '' };
   await route.fulfill({
     status: 200,
@@ -3011,8 +3015,8 @@ check(!!analystSeen && /revenue by region, highlight the North/.test(analystSeen
   'the body carries the reader\'s own sentence');
 check(!!analystSeen && /Q1,520,440/.test(analystSeen.body) && /bar-vertical/.test(analystSeen.body),
   'and the table on screen, and the chart it is drawn as');
-check(!!analystSeen && /"model":"claude-sonnet-5"/.test(analystSeen.body.replace(/\s/g, '')),
-  'asking the model the studio names');
+check(!!analystSeen && /"model":"claude-suite-model"/.test(analystSeen.body.replace(/\s/g, '')),
+  'asking a model discovered from the selected provider');
 check(analystAsk.preview && /"chart"/.test(analystAsk.previewText),
   'the answer is previewed rather than applied', analystAsk.previewText.slice(0, 60));
 check(analystAsk.chartBefore === 'bar-vertical',

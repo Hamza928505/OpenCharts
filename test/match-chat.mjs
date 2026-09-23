@@ -88,8 +88,11 @@ try {
       ] }) });
   });
   await page.locator('#match-ai-settings').click();
-  await page.getByLabel('AI provider', { exact: true }).selectOption('gemini');
-  await page.getByLabel('Gemini API key', { exact: true }).fill('test-key');
+  // Clear the previously selected local endpoint, then use the default key-only flow.
+  await page.getByRole('button', { name: 'Clear provider', exact: true }).click();
+  assert.equal(await page.getByLabel('AI provider', { exact: true }).isVisible(), false);
+  await page.getByLabel('API key', { exact: true }).fill('AIza-test-key');
+  await page.getByText(/Gemini · generativelanguage.googleapis.com/).waitFor();
   assert.equal(await page.getByLabel('Model name', { exact: true }).isVisible(), false);
   await page.getByRole('button', { name: 'Save provider', exact: true }).click();
   await page.locator('#match-message').fill('Hello Gemini');
@@ -106,8 +109,59 @@ try {
   await page.locator('#match-chat-send').click();
   await page.getByText('Gemini connected successfully.', { exact: true }).waitFor();
   assert.deepEqual(geminiMessages.at(-1).catalogue, []);
+  await page.locator('#match-ai-settings').click();
+  await page.getByLabel('API key', { exact: true }).fill('sk-ambiguous-key');
+  await page.getByRole('button', { name: 'Save provider', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: /does not identify its service/ }).waitFor();
+  assert.equal(await page.getByLabel('AI provider', { exact: true }).isVisible(), true);
+  assert.equal(await page.getByLabel('API key', { exact: true }).inputValue(), 'sk-ambiguous-key');
+  assert.equal(await page.evaluate(async () => (await (await import('/js/studio/ai-config.js')).getAiSettings()).key), 'AIza-test-key', 'failed save retains the previous connection');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.equal(await page.locator('#match-ai-settings').evaluate((el) => el === document.activeElement), true);
+
+  await page.route('https://integrate.api.nvidia.com/v1/models', (route) => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'nvidia/nemotron-nano-test' }, { id: 'other/chat-model' }] }),
+  }));
+  await page.locator('#match-ai-settings').click();
+  await page.getByLabel('API key', { exact: true }).fill('nvapi-test-key');
+  await page.locator('.ai-config-advanced > summary').click();
+  await page.getByRole('button', { name: 'Load models', exact: true }).click();
+  await page.getByText(/2 chat models loaded/).waitFor();
+  assert.equal(await page.locator('#ai-config-models option').count(), 2);
+  await page.getByLabel('Model name', { exact: true }).fill('other/chat-model');
+  await page.getByRole('button', { name: 'Save provider', exact: true }).click();
+  await page.route('https://integrate.api.nvidia.com/v1/chat/completions', (route) => {
+    assert.equal(route.request().postDataJSON().model, 'other/chat-model');
+    assert.equal(route.request().headers().authorization, 'Bearer nvapi-test-key');
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"message":"NVIDIA model connected."}' } }] }) });
+  });
+  await page.locator('#match-message').fill('hi');
+  await page.locator('#match-chat-send').click();
+  await page.getByText('NVIDIA model connected.', { exact: true }).waitFor();
+  await page.locator('#match-ai-settings').click();
+  await page.getByLabel('API key', { exact: true }).fill('xai-test-key');
+  assert.equal(await page.getByLabel('Model name', { exact: true }).inputValue(), '', 'changing service clears its previous model');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.locator('#matchbar').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
+  for (const viewport of [{ width: 375, height: 812 }, { width: 812, height: 375 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator('#match-ai-settings').click();
+    await page.locator('.ai-config-advanced > summary').click();
+    assert.equal(await page.locator('.ai-config').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
+    await page.getByRole('button', { name: 'Save provider', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.getByLabel('API key', { exact: true }).evaluate((el) => el === document.activeElement), true);
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator('#match-ai-settings').click();
+  await page.getByRole('button', { name: 'Clear provider', exact: true }).click();
+  await page.screenshot({ path: 'test/screenshots/ai-key-setup-desktop.png' });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: 'test/screenshots/ai-key-setup-mobile.png' });
+  await page.keyboard.press('Escape');
   console.log('Matchbar chat: follow-up context, chart rendering, report layout, rate-limit recovery and mobile checks passed.');
 } finally {
   await browser?.close();
