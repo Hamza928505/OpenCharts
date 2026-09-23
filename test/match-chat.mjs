@@ -63,26 +63,33 @@ try {
   await page.locator('#match-chat-send').click();
   await page.getByText(/This provider is out of free capacity/).waitFor();
   assert.equal(await page.locator('#match-message').inputValue(), 'Try again');
+  const editorHeight = await page.locator('#match-text').evaluate((el) => el.getBoundingClientRect().height);
+  const chatHeight = await page.locator('.match-chat').evaluate((el) => el.getBoundingClientRect().height);
+  assert.ok(Math.abs(chatHeight - editorHeight) < 16, `Table editor (${editorHeight}px) should align with chat (${chatHeight}px).`);
   await page.locator('#match-chat-clear').click();
   assert.equal(await page.locator('.match-chat-message').count(), 1);
+  const geminiCalls = [];
   await page.route(/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models/, async (route) => {
     const generating = route.request().url().includes(':generateContent');
+    if (generating) geminiCalls.push(route.request().url());
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(generating
       ? { candidates: [{ content: { parts: [{ text: '{"message":"Gemini connected successfully."}' }] } }] }
-      : { models: [{ name: 'models/gemini-test-flash', supportedGenerationMethods: ['generateContent'] }] }) });
+      : { models: [
+        { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+        { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+      ] }) });
   });
   await page.locator('#match-ai-settings').click();
   await page.getByLabel('AI provider', { exact: true }).selectOption('gemini');
   await page.getByLabel('Gemini API key', { exact: true }).fill('test-key');
-  await page.getByRole('button', { name: 'Load Gemini models', exact: true }).click();
-  await page.getByLabel('Available Gemini models').selectOption('gemini-test-flash');
-  assert.equal(await page.getByLabel('Model name', { exact: true }).inputValue(), 'gemini-test-flash');
+  assert.equal(await page.getByLabel('Model name', { exact: true }).isVisible(), false);
   await page.getByRole('button', { name: 'Save provider', exact: true }).click();
   await page.locator('#match-message').fill('Hello Gemini');
   await page.locator('#match-chat-send').click();
   await page.getByText('Gemini connected successfully.', { exact: true }).waitFor().catch(async (error) => {
     throw new Error(error.message + '\nConversation: ' + await page.locator('#match-chat-log').innerText());
   });
+  assert.match(geminiCalls[0], /models\/gemini-3\.8-flash:generateContent/);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.locator('#matchbar').evaluate((el) => el.scrollWidth <= el.clientWidth), true);
   console.log('Matchbar chat: follow-up context, chart rendering, report layout, rate-limit recovery and mobile checks passed.');

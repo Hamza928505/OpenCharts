@@ -139,7 +139,7 @@ async function askAlternateProvider(settings, apiKey, message, system, signal, c
   let res;
   try {
     if (settings.provider === 'gemini') {
-      res = await generateGemini({ key: apiKey, model: settings.model, system, message, signal });
+      res = await generateGemini({ key: apiKey, model: '', system, message, signal });
     } else {
       const endpoint = safeEndpoint(settings.endpoint || 'http://localhost:11434/v1/chat/completions');
       const headers = { 'content-type': 'application/json' };
@@ -196,7 +196,7 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
     request: sentence, conversation: conversation.slice(-12),
     table: table ? { headers: table.headers, rows: table.rows.slice(0, TABLE_ROWS), totalRows: table.rows.length } : null,
     currentChart: def ? { chart: def.id, spec } : null,
-    catalogue: catalogueLines(),
+    catalogue: CHARTS.map(({ id, title, category }) => ({ id, title, category })),
     note: 'Only the first 40 table rows are included. Disclose this when analyzing or drawing a larger table.',
   }) : buildAnalystMessage(def, spec, sentence);
   if (settings.provider !== 'anthropic') return askAlternateProvider(settings, apiKey, message, system, signal, chat);
