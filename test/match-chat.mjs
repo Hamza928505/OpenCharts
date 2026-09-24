@@ -32,8 +32,11 @@ try {
   await page.route('http://localhost:11434/v1/chat/completions', async (route) => {
     requests.push(JSON.parse(route.request().postData()));
     const answer = requests.length === 1
-      ? { message: 'North has the highest value.', chart: 'bar-vertical', spec: { labels: ['North', 'South'], series: [{ label: 'Value', color: '#448866', data: [680, 575] }] } }
-      : { message: 'North is 105 higher than South.' };
+      ? { message: 'Here are a comparison and a distribution.', charts: [
+        { chart: 'bar-vertical', title: 'Regional comparison', columns: [0, 1] },
+        { chart: 'histogram', title: 'Value distribution', columns: [1] },
+      ] }
+      : { message: 'North is 105 higher than South.', charts: [] };
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(answer) } }] }) });
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
@@ -51,12 +54,17 @@ try {
   await page.locator('#match-message').fill('Draw a comparison');
   await page.locator('#match-chat-send').click();
   await page.waitForSelector('.match-chat-chart canvas, .match-chat-chart svg');
+  assert.equal(await page.locator('.match-chart-card').count(), 2);
+  await page.locator('.match-chart-card').nth(1).locator('canvas, svg').waitFor();
+  await page.getByRole('button', { name: 'Discuss this chart' }).first().click();
   await page.locator('#match-message').fill('How much higher?');
   await page.locator('#match-message').press('Enter');
   await page.getByText('North is 105 higher than South.', { exact: true }).waitFor();
   const followup = JSON.parse(requests[1].messages[1].content);
   assert.equal(followup.conversation.length, 2);
   assert.equal(followup.currentChart.chart, 'bar-vertical');
+  assert.deepEqual(followup.currentChart.columns, [0, 1]);
+  assert.equal(followup.currentChart.spec, undefined, 'follow-ups do not send the full rendered dataset back to the provider');
   assert.equal(followup.table.rows.length, 2);
   await page.route('http://localhost:11434/v1/chat/completions', (route) => route.fulfill({ status: 429, body: '{}' }));
   await page.locator('#match-message').fill('Try again');
@@ -68,6 +76,7 @@ try {
   assert.ok(Math.abs(chatHeight - editorHeight) < 16, `Table editor (${editorHeight}px) should align with chat (${chatHeight}px).`);
   await page.locator('#match-chat-clear').click();
   assert.equal(await page.locator('.match-chat-message').count(), 1);
+  assert.equal(await page.locator('.match-chart-card').count(), 0);
   const geminiCalls = [];
   const geminiMessages = [];
   await page.route(/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models/, async (route) => {
@@ -109,6 +118,37 @@ try {
   await page.locator('#match-chat-send').click();
   await page.getByText('Gemini connected successfully.', { exact: true }).waitFor();
   assert.deepEqual(geminiMessages.at(-1).catalogue, []);
+  const baselineRows = Array.from({ length: 103 }, (_, i) => `EXP${i + 1},${i + 10}`);
+  await page.locator('#match-text').fill('Experiment,B\n' + baselineRows.join('\n'));
+  await page.waitForFunction(() => document.querySelector('#match-read-summary').textContent.includes('103 rows'));
+  let baselineCalls = 0;
+  await page.route(/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/.*:generateContent$/, async (route) => {
+    const body = route.request().postDataJSON();
+    assert.equal(body.generationConfig.responseMimeType, 'application/json');
+    assert.ok(body.generationConfig.responseJsonSchema.properties.charts);
+    const brief = JSON.parse(body.contents[0].parts[0].text);
+    assert.equal(brief.table.rows.length, 40);
+    assert.equal(brief.table.totalRows, 103);
+    const text = ++baselineCalls === 1 ? 'A histogram and comparison would work well.' : JSON.stringify({
+      message: 'Here are the baseline comparison and distribution.', charts: [
+        { chart: 'bar-vertical', title: 'Baseline by experiment', columns: [0, 1] },
+        { chart: 'histogram', title: 'Baseline distribution', columns: [1] },
+      ],
+    });
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] }) });
+  });
+  await page.locator('#match-message').fill('Suggest a chart for the baselines');
+  await page.locator('#match-chat-send').click();
+  await page.getByRole('heading', { name: 'Baseline by experiment', exact: true }).waitFor();
+  assert.equal(baselineCalls, 2);
+  assert.equal(await page.locator('.match-chart-card').count(), 2);
+  await page.locator('.match-chart-card').nth(1).locator('canvas, svg').waitFor();
+  assert.equal(await page.locator('.match-chart-card').first().locator('canvas').evaluate((canvas) => window.Chart.getChart(canvas).data.datasets[0].data.length), 103);
+  assert.equal(await page.locator('.match-chart-card').nth(1).locator('canvas').evaluate((canvas) => window.Chart.getChart(canvas).data.datasets[0].data.reduce((a, b) => a + b, 0)), 103);
+  assert.equal(await page.locator('.match-chart-source').first().textContent(), 'Source: 103 uploaded rows · Experiment / B');
+  await page.locator('.match-chart-card').first().scrollIntoViewIfNeeded();
+  await page.locator('.match-chart-card canvas').evaluateAll((canvases) => canvases.forEach((canvas) => window.Chart.getChart(canvas)?.update('none')));
+  await page.screenshot({ path: 'test/screenshots/ai-baseline-charts.png' });
   await page.locator('#match-ai-settings').click();
   await page.getByLabel('API key', { exact: true }).fill('sk-ambiguous-key');
   await page.getByRole('button', { name: 'Save provider', exact: true }).click();
@@ -162,7 +202,7 @@ try {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.screenshot({ path: 'test/screenshots/ai-key-setup-mobile.png' });
   await page.keyboard.press('Escape');
-  console.log('Matchbar chat: follow-up context, chart rendering, report layout, rate-limit recovery and mobile checks passed.');
+  console.log('Matchbar chat: multi-chart replies, full 103-row baselines, format repair, follow-up context, provider settings and mobile checks passed.');
 } finally {
   await browser?.close();
   server.closeAllConnections();

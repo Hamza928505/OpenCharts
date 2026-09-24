@@ -843,6 +843,11 @@ img, canvas, svg { max-width: 100%; display: block; }
 .match-chat-form textarea { width: 100%; min-height: 90px; resize: vertical; padding: .8rem; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); font: inherit; }
 .match-chat-controls span { font-size: 12px; color: var(--ink-soft); flex: 1; }
 .match-chat-chart { margin-top: .8rem; min-width: 0; }
+.match-chart-card { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--rule); min-width: 0; }
+.match-chart-card h3 { font-size: 15px; overflow-wrap: anywhere; }
+.match-chart-card .match-chart-source { font-size: 12px; color: var(--ink-soft); margin-top: .25rem; }
+.match-chart-card .btn { margin-top: .6rem; }
+.match-chart-card .btn[aria-pressed="true"] { border-color: var(--accent); }
 .match-chat .btn { min-height: 44px; }
 .match-chat [hidden] { display: none; }
 .match-table { min-height: 0; }

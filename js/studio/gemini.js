@@ -1,3 +1,5 @@
+import { unsupportedFormat } from './ai-response.js';
+
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 let cachedKey = '';
 let cachedModels = null;
@@ -17,7 +19,9 @@ async function geminiError(response, key, model = '') {
     : response.status === 400 || response.status === 401 || response.status === 403
       ? 'Check your Google AI Studio key, its restrictions, and model access.'
       : 'Try again later or check your Gemini configuration.';
-  return new Error(`Gemini (${response.status}): ${recovery}${detail ? ' ' + detail.slice(0, 500) : ''}`);
+  return Object.assign(new Error(`Gemini (${response.status}): ${recovery}${detail ? ' ' + detail.slice(0, 500) : ''}`), {
+    unsupportedFormat: unsupportedFormat(response.status, detail),
+  });
 }
 
 /** Google's current catalogue, restricted to conversational text generation. */
@@ -44,7 +48,7 @@ export async function listGeminiModels(key, signal) {
   return [...new Set(models)];
 }
 
-export async function generateGemini({ key, model, system, message, signal, onStatus }) {
+export async function generateGemini({ key, model, system, message, signal, schema, onStatus }) {
   let name = geminiModelName(model);
   if (!name) {
     if (cachedKey !== key) {
@@ -62,10 +66,10 @@ export async function generateGemini({ key, model, system, message, signal, onSt
         return version(b) - version(a);
       });
     if (!ranked.length) throw new Error('Google listed no stable Gemini Flash text model for this key. Check the key’s project and model access in AI Studio.');
-    return generateWithFallback(ranked, key, system, message, signal, onStatus);
+    return generateWithFallback(ranked, key, system, message, signal, onStatus, schema);
   }
   if (!/^gemini-[a-z0-9.-]+$/i.test(name)) throw new Error('Enter a Gemini model ID, or load Gemini models in AI provider.');
-  return generateWithFallback([name], key, system, message, signal, onStatus);
+  return generateWithFallback([name], key, system, message, signal, onStatus, schema);
 }
 
 function waitForRetry(ms, signal) {
@@ -80,7 +84,7 @@ function waitForRetry(ms, signal) {
   });
 }
 
-async function generateWithFallback(names, key, system, message, signal, onStatus) {
+async function generateWithFallback(names, key, system, message, signal, onStatus, schema) {
   let lastError;
   let index = 0;
   // Bound total requests, including fallback models, so a service outage never loops.
@@ -93,7 +97,10 @@ async function generateWithFallback(names, key, system, message, signal, onStatu
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: message }] }],
-        generationConfig: { maxOutputTokens: 2048 },
+        generationConfig: {
+          maxOutputTokens: 4096,
+          ...(schema ? { responseMimeType: 'application/json', responseJsonSchema: schema } : {}),
+        },
       }),
     });
     if (response.ok) return response;
