@@ -14,6 +14,7 @@ node tools/build-wiki.mjs OpenCharts.wiki
 
 | Script | Writes | Rerun when |
 |---|---|---|
+| `vendor-libraries.mjs` | six runtime builds in `lib/` and their original notices in `lib/licenses/` | their pinned versions in `js/studio/cdn.js` change |
 | `place-names.mjs` | nothing (the spelling rules the others import) | — |
 | `build-cities.mjs` | `data/cities/*.json` | you want a newer gazetteer |
 | `build-countries.mjs` | `data/countries.json` | after the above |
