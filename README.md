@@ -338,6 +338,14 @@ selection does not guarantee free quota or permission to use a listed model.
 The endpoint must allow browser requests (CORS); a provider that blocks them
 needs a trusted local proxy. Installing this repo alone does not remove CORS.
 
+Gemini overload handling uses at most three generation requests per message,
+including format fallback and reply repair. Automatic selection remembers a
+working Flash model for the session and skips recently overloaded models for
+30 seconds (or longer when `Retry-After` requests it). An explicit model override
+is respected. During the cooldown, messages stay in the editor without another
+API call. This limits repeated failures; it cannot make an unavailable Google
+service respond. Switch providers or run a local model if the outage persists.
+
 ### Chart replies in the main-page chat
 
 All chat providers use one response contract:
@@ -634,6 +642,11 @@ only implies.
 ## Knowing what you are loading
 
 Nothing here loads a library behind your back.
+
+The site's nine runtime chart scripts are served from its own `lib/` folder,
+including the six plugins/engines that previously required CDN requests.
+Browser tracking protection can remain enabled. Standalone exports still use
+the pinned CDN URLs; map boundary data and web fonts still require a network.
 
 - The studio shows a **Sources** panel under every chart: each library it needs,
   with version, licence, CDN provider and the exact URL, copyable on its own.

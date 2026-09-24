@@ -130,12 +130,12 @@ export function buildAnalystMessage(def, spec, request) {
   ].filter((line) => line !== '').join('\n');
 }
 
-async function callProvider(settings, message, system, signal, schema, onStatus) {
+async function callProvider(settings, message, system, signal, schema, onStatus, budget) {
   const apiKey = settings.key;
   let res;
   try {
     if (settings.provider === 'gemini') {
-      res = await generateGemini({ key: apiKey, model: settings.model, system, message, signal, schema, onStatus });
+      res = await generateGemini({ key: apiKey, model: settings.model, system, message, signal, schema, onStatus, budget });
     } else if (settings.provider === 'anthropic') {
       res = await fetch(ENDPOINT, {
         method: 'POST', signal, credentials: 'omit', redirect: 'error',
@@ -239,12 +239,13 @@ export async function askAnalyst({ def, spec, request, key, conversation, table,
   }) : buildAnalystMessage(def, spec, sentence);
   let schema = chat ? CHAT_SCHEMA : null;
   let repair = '';
+  const budget = { remaining: 3 };
   // At most one unsupported-format fallback and one content-repair request.
   // HTTP/auth/quota failures are not malformed content and are never repaired.
   for (let attempt = 0; attempt < 3; attempt++) {
     signal?.throwIfAborted();
     const brief = repair ? JSON.stringify({ ...JSON.parse(message), repair: `Your previous answer failed validation: ${repair} Regenerate a complete, compact response matching the schema.` }) : message;
-    const response = await callProvider(settings, brief, system, signal, schema, onStatus);
+    const response = await callProvider(settings, brief, system, signal, schema, onStatus, budget);
     if (!response.ok && response.reason === 'format' && schema) {
       schema = null;
       onStatus?.('This model needs prompt-based JSON. Keeping the same response validation…');

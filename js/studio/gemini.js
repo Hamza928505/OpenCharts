@@ -3,6 +3,13 @@ import { unsupportedFormat } from './ai-response.js';
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 let cachedKey = '';
 let cachedModels = null;
+// Session-only health: never persist API keys or move a request to another provider.
+let health = { key: '', preferred: '', cooldowns: new Map() };
+
+function busyError(until) {
+  const seconds = Math.max(1, Math.ceil((until - Date.now()) / 1000));
+  return new Error(`Gemini is temporarily busy. Requests are paused for ${seconds}s to avoid repeated failures. Your message is kept; try again after that, or choose another provider/local model in AI Settings.`);
+}
 
 export function geminiModelName(value) {
   return String(value || '').trim().replace(/^models\//, '');
@@ -48,7 +55,9 @@ export async function listGeminiModels(key, signal) {
   return [...new Set(models)];
 }
 
-export async function generateGemini({ key, model, system, message, signal, schema, onStatus }) {
+export async function generateGemini({ key, model, system, message, signal, schema, onStatus, budget = { remaining: 3 } }) {
+  if (health.key !== key) health = { key, preferred: '', cooldowns: new Map() };
+  const state = health;
   let name = geminiModelName(model);
   if (!name) {
     if (cachedKey !== key) {
@@ -66,10 +75,11 @@ export async function generateGemini({ key, model, system, message, signal, sche
         return version(b) - version(a);
       });
     if (!ranked.length) throw new Error('Google listed no stable Gemini Flash text model for this key. Check the key’s project and model access in AI Studio.');
-    return generateWithFallback(ranked, key, system, message, signal, onStatus, schema);
+    ranked.sort((a, b) => Number(b === state.preferred) - Number(a === state.preferred));
+    return generateWithFallback(ranked, key, system, message, signal, onStatus, schema, state, budget);
   }
   if (!/^gemini-[a-z0-9.-]+$/i.test(name)) throw new Error('Enter a Gemini model ID, or load Gemini models in AI provider.');
-  return generateWithFallback([name], key, system, message, signal, onStatus, schema);
+  return generateWithFallback([name], key, system, message, signal, onStatus, schema, state, budget);
 }
 
 function waitForRetry(ms, signal) {
@@ -84,12 +94,16 @@ function waitForRetry(ms, signal) {
   });
 }
 
-async function generateWithFallback(names, key, system, message, signal, onStatus, schema) {
+async function generateWithFallback(names, key, system, message, signal, onStatus, schema, state, budget) {
+  const available = names.filter((name) => (state.cooldowns.get(name) || 0) <= Date.now());
+  if (!available.length) throw busyError(Math.min(...names.map((name) => state.cooldowns.get(name))));
+  names = available;
   let lastError;
   let index = 0;
-  // Bound total requests, including fallback models, so a service outage never loops.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Share this cap with schema fallback / reply repair so nested retries cannot multiply.
+  while (budget.remaining > 0) {
     signal?.throwIfAborted();
+    budget.remaining--;
     const name = names[index];
     const response = await fetch(`${BASE}/${encodeURIComponent(name)}:generateContent`, {
       method: 'POST', signal, credentials: 'omit', redirect: 'error',
@@ -103,10 +117,18 @@ async function generateWithFallback(names, key, system, message, signal, onStatu
         },
       }),
     });
-    if (response.ok) return response;
+    if (response.ok) {
+      state.preferred = name;
+      state.cooldowns.delete(name);
+      return response;
+    }
     lastError = await geminiError(response, key, name);
     const overloaded = [500, 503, 504].includes(response.status);
-    if (attempt === 2) break;
+    const retryAfter = response.headers.get('retry-after');
+    const retryMs = retryAfter === null ? 0 : /^\d+(\.\d+)?$/.test(retryAfter.trim())
+      ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now()) || 0;
+    if (overloaded) state.cooldowns.set(name, Date.now() + Math.max(30000, retryMs));
+    if (!budget.remaining) break;
     if (response.status === 404 && index + 1 < names.length) {
       index++;
       onStatus?.('This Gemini model is unavailable. Trying another Flash model…');
@@ -114,10 +136,15 @@ async function generateWithFallback(names, key, system, message, signal, onStatu
     }
     if (!overloaded) throw lastError;
     const next = Math.min(index + 1, names.length - 1);
-    onStatus?.(`Gemini is busy. ${next !== index ? 'Trying another Flash model' : 'Retrying'} (${attempt + 2}/3)…`);
+    // Do not keep the chat waiting for long Retry-After windows or ignore the server.
+    if (retryMs > 8000) throw busyError(Date.now() + retryMs);
+    onStatus?.(`Gemini is busy. ${next !== index ? 'Trying another Flash model' : 'Retrying'} (${4 - budget.remaining}/3)…`);
     index = next;
-    await waitForRetry(1000 * 2 ** attempt, signal);
+    await waitForRetry(Math.max(retryMs, 1000 * 2 ** (2 - budget.remaining)), signal);
   }
   if (lastError?.message.includes('404')) { cachedKey = ''; cachedModels = null; }
-  throw lastError || new Error('No available Gemini Flash model was found for this key.');
+  if (names.every((name) => (state.cooldowns.get(name) || 0) > Date.now())) {
+    throw busyError(Math.min(...names.map((name) => state.cooldowns.get(name))));
+  }
+  throw lastError || new Error('Gemini reached the three-request limit for this message. Please try again; your data is unchanged.');
 }

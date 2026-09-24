@@ -39,8 +39,28 @@ try {
   assert.equal(quotaCalls, 1);
   let busyCalls = 0;
   globalThis.fetch = async () => { busyCalls++; return json({ error: { message: 'High demand' } }, 503); };
-  await assert.rejects(generateGemini({ ...args, model: 'gemini-test-flash' }), /temporarily busy/);
+  const busyArgs = { ...args, key: 'busy-test-key', model: 'gemini-test-flash' };
+  await assert.rejects(generateGemini(busyArgs), /temporarily busy/);
   assert.equal(busyCalls, 3);
+  await assert.rejects(generateGemini(busyArgs), /paused for .*s/);
+  assert.equal(busyCalls, 3, 'a new message must not restart retries during the cooldown');
+  const originalNow = Date.now;
+  try {
+    Date.now = () => originalNow() + 31000;
+    globalThis.fetch = async () => { busyCalls++; return json({ candidates: [] }); };
+    await generateGemini(busyArgs);
+    assert.equal(busyCalls, 4, 'the model can recover after its cooldown');
+  } finally { Date.now = originalNow; }
+
+  let delayedCalls = 0;
+  globalThis.fetch = async () => {
+    delayedCalls++;
+    return new Response('{"error":{"message":"High demand"}}', { status: 503, headers: { 'retry-after': '120' } });
+  };
+  const delayedArgs = { ...args, key: 'retry-after-test', model: 'gemini-test-flash' };
+  await assert.rejects(generateGemini(delayedArgs), /paused for 120s/);
+  await assert.rejects(generateGemini(delayedArgs), /paused for .*s/);
+  assert.equal(delayedCalls, 1, 'respect long Retry-After without hanging or resending');
 
   calls.length = 0;
   globalThis.fetch = async (url, options) => {
@@ -66,9 +86,18 @@ try {
     return overloadedCalls.length === 1 ? json({ error: { message: 'High demand' } }, 503) : json({ candidates: [] });
   };
   await generateGemini({ ...args, onStatus: (message) => statuses.push(message) });
-  assert.match(overloadedCalls[0], /gemini-3\.8-flash/);
-  assert.match(overloadedCalls[1], /gemini-3\.6-flash/);
+  assert.match(overloadedCalls[0], /gemini-3\.6-flash/, 'remember the previous successful fallback');
+  assert.match(overloadedCalls[1], /gemini-3\.8-flash/);
   assert.match(statuses[0], /Trying another Flash model/);
+  await generateGemini(args);
+  assert.match(overloadedCalls[2], /gemini-3\.8-flash/, 'do not revisit the busy model on the next turn');
+
+  const limited = { remaining: 1 };
+  let limitedCalls = 0;
+  globalThis.fetch = async () => { limitedCalls++; return json({ candidates: [] }); };
+  await generateGemini({ ...args, budget: limited });
+  await assert.rejects(generateGemini({ ...args, budget: limited }), /three-request limit/);
+  assert.equal(limitedCalls, 1, 'transport and response repair share a request budget');
 
   const controller = new AbortController();
   let cancelledCalls = 0;
@@ -82,5 +111,5 @@ try {
   assert.deepEqual(await listGeminiModels(key), ['gemini-next-flash']);
   globalThis.fetch = async (url) => url.includes('?') ? json({ models: [] }) : json({ error: { message: 'Model unavailable' } }, 404);
   await assert.rejects(generateGemini({ ...args, key: 'empty-model-test-key' }), /no stable Gemini Flash/);
-  console.log('Gemini checks passed: discovery, pagination, model names, 404 recovery, quota errors and key redaction.');
+  console.log('Gemini checks passed: discovery, fallback memory, cooldown/recovery, Retry-After, shared retry cap, cancellation, quota errors and key redaction.');
 } finally { globalThis.fetch = originalFetch; }

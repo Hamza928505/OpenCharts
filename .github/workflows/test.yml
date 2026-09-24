@@ -34,6 +34,9 @@ jobs:
       - name: Check syntax
         run: npm run check
 
+      - name: Check bundled libraries without CDN access
+        run: node test/local-libraries.mjs
+
       - name: Run the suite
         run: npm test
 

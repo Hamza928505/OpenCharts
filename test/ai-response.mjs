@@ -92,6 +92,19 @@ try {
     assert.equal((await askAnalyst({ request: 'Suggest charts', conversation: [], table })).ok, true);
     assert.equal(calls, 2);
   }
+  // Schema fallback must not restart Gemini's transport retries or turn into 9 requests.
+  await setAiSettings({ provider: 'gemini', key: 'retry-cap-test', model: 'gemini-test-flash' });
+  let overloadCalls = 0;
+  globalThis.fetch = async () => ++overloadCalls === 1
+    ? Response.json({ error: { message: 'json_schema is not supported' } }, { status: 400 })
+    : Response.json({ error: { message: 'High demand' } }, { status: 503 });
+  const overloaded = await askAnalyst({ request: 'Draw a chart', conversation: [], table });
+  assert.equal(overloaded.ok, false);
+  assert.match(overloaded.error, /paused/);
+  assert.equal(overloadCalls, 3);
+  assert.equal((await askAnalyst({ request: 'hi', conversation: [], table })).ok, false);
+  assert.equal(overloadCalls, 3, 'cooldown must also cover subsequent chat messages');
+
   await setAiSettings({ provider: 'openai', model: 'local-test', endpoint: 'http://localhost:11434/v1' });
   for (const status of [400, 401, 403, 429, 503]) {
     let calls = 0;

@@ -5,7 +5,7 @@ OpenCharts itself is MIT licensed — see [LICENSE](LICENSE).
 This file lists the third-party software OpenCharts bundles in `lib/`, loads
 from a CDN, or generates code against, together with the notices those
 licences require to be preserved. Every one of them is permissive (MIT, ISC or
-OFL); none imposes copyleft obligations on OpenCharts or on anything you build
+OFL, BSD-3-Clause or Apache-2.0); none imposes copyleft obligations on OpenCharts or on anything you build
 with it.
 
 Versions are pinned in [`js/studio/cdn.js`](js/studio/cdn.js), which is the
@@ -26,6 +26,14 @@ the gallery credits.
 | [@sgratzl/chartjs-chart-boxplot](https://github.com/sgratzl/chartjs-chart-boxplot) | 4.2.4 | MIT | (c) Samuel Gratzl |
 | [topojson-client](https://github.com/topojson/topojson-client) | 3.1.0 | ISC | Copyright 2012–2019 Michael Bostock |
 | [world-atlas](https://github.com/topojson/world-atlas) | 2.0.2 | ISC | Copyright 2013–2020 Michael Bostock |
+| [Arquero](https://uwdata.github.io/arquero/) | 5.4.1 | BSD-3-Clause | University of Washington Interactive Data Lab |
+| [Apache ECharts](https://echarts.apache.org/) | 5.5.0 | Apache-2.0 | Copyright 2017–2024 The Apache Software Foundation |
+
+All runtime chart scripts are bundled in `lib/` and served from the site's own
+origin. Standalone exports still reference the pinned CDN URLs. Original
+license texts for the newly bundled libraries, including ECharts' NOTICE and
+D3 subcomponent license, are preserved in [`lib/licenses/`](lib/licenses/).
+Refresh these copies with `node tools/vendor-libraries.mjs`.
 
 `world-atlas` is boundary *data* rather than a script. It is fetched at runtime
 by the charts in the Geo category and is not committed to this repository. The
