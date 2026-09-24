@@ -338,6 +338,34 @@ selection does not guarantee free quota or permission to use a listed model.
 The endpoint must allow browser requests (CORS); a provider that blocks them
 needs a trusted local proxy. Installing this repo alone does not remove CORS.
 
+### Chart replies in the main-page chat
+
+All chat providers use one response contract:
+
+```json
+{
+  "message": "Here is the baseline comparison.",
+  "charts": [{ "chart": "bar-vertical", "title": "Baseline by experiment", "columns": [0, 1] }]
+}
+```
+
+Column indices refer to the uploaded table (zero-based). The assistant receives
+the first 40 rows for context, but the browser builds each chart from **all local
+rows** using the selected columns and the existing chart data adapters. The model
+does not copy numerical values or executable chart code into its answer. Replies
+can contain up to three charts; greetings and clarification questions use an
+empty array. **Discuss this chart** selects the chart for the next follow-up.
+
+Gemini, Anthropic and compatible APIs receive native structured-output options.
+An endpoint that explicitly rejects those options gets one prompt-only fallback,
+with the same local validation. Malformed, truncated or invalid chart replies get
+one correction request; authentication, quota and safety refusals do not. Unsupported
+models can still fail: no LLM can be forced to comply by a prompt alone. No invalid
+reply is rendered with fabricated values or default example data.
+
+Column plans currently select/reorder existing columns, not arbitrary filtering,
+grouping, calculations or style edits. Use the studio tools for those changes.
+
 If you would rather not hand over a key at all, the **AI Prompt** tab does the
 same job the other way round: it writes the whole brief for you to paste into
 whatever assistant you already use.

@@ -1,7 +1,7 @@
 import { askAnalyst } from './analyst.js';
 import { getAiSettings } from './ai-config.js';
 import { PROVIDERS, detectProvider } from './ai-providers.js';
-import { getChart, newSpec } from './registry.js';
+import { getChart } from './registry.js';
 import { renderChart, destroyInstance } from './engines.js';
 
 /** One in-memory conversation per imported table; provider calls use the shared analyst. */
@@ -12,11 +12,13 @@ export function mountMatchChat(root, getTable) {
   const send = root.querySelector('#match-chat-send');
   const stop = root.querySelector('#match-chat-stop');
   const provider = root.querySelector('#match-chat-provider');
+  const initialPlaceholder = input.placeholder;
   let history = [];
   let current = null;
   let controller = null;
   let revision = 0;
   const charts = [];
+  const selectors = [];
 
   const bubble = (role, text) => {
     const node = document.createElement('div');
@@ -40,8 +42,10 @@ export function mountMatchChat(root, getTable) {
     controller?.abort();
     controller = null;
     charts.splice(0).forEach(destroyInstance);
+    selectors.length = 0;
     history = [];
     current = null;
+    input.placeholder = initialPlaceholder;
     log.replaceChildren();
     bubble('assistant', 'Upload or paste a table, then ask me to find insights or draw a chart. You can follow up to change the chart or explore another question.');
     busy(false);
@@ -65,6 +69,7 @@ export function mountMatchChat(root, getTable) {
       const result = await askAnalyst({
         request, conversation: history, table: getTable(),
         def: current && getChart(current.chart), spec: current?.spec,
+        chartContext: current && { chart: current.chart, title: current.title, columns: current.columns },
         signal: active.signal,
         onStatus: (message) => {
           if (turn === revision && !active.signal.aborted) pending.querySelector('p').textContent = message;
@@ -75,20 +80,40 @@ export function mountMatchChat(root, getTable) {
       if (active.signal.aborted) throw new Error('Request stopped or timed out. You can send your message again.');
       if (!result.ok) throw new Error(result.error);
       const answer = result.answer;
-      history.push({ role: 'user', content: request }, { role: 'assistant', content: answer.message });
+      history.push({ role: 'user', content: request }, { role: 'assistant', content: JSON.stringify({
+        message: answer.message, charts: answer.charts.map(({ chart, title, columns }) => ({ chart, title, columns })),
+      }) });
       // ponytail: retain twelve messages; add a conversation summary if longer context is needed.
       history = history.slice(-12);
       const reply = bubble('assistant', answer.message);
-      if (answer.chart) {
-        const def = getChart(answer.chart);
-        const spec = { ...newSpec(def), ...(current?.chart === answer.chart ? current.spec : {}), ...answer.spec };
+      for (const chart of answer.charts) {
+        const def = getChart(chart.chart);
+        const card = document.createElement('section');
+        card.className = 'match-chart-card';
+        const heading = document.createElement('h3');
+        heading.textContent = chart.title;
+        const source = document.createElement('p');
+        source.className = 'match-chart-source';
+        source.textContent = `Source: ${chart.rowCount} uploaded rows · ${chart.columns.map((index) => getTable().headers[index]).join(' / ')}`;
         const host = document.createElement('div');
         host.className = 'match-chat-chart';
-        host.setAttribute('aria-label', def.title);
-        reply.append(host);
-        const instance = renderChart(def, host, spec, { height: 280 });
+        host.setAttribute('aria-label', chart.title);
+        const select = document.createElement('button');
+        select.type = 'button';
+        select.className = 'btn';
+        select.textContent = 'Discuss this chart';
+        const choose = () => {
+          current = chart;
+          selectors.forEach((button) => button.setAttribute('aria-pressed', String(button === select)));
+          input.placeholder = `Ask about ${chart.title}…`;
+        };
+        select.addEventListener('click', () => { choose(); input.focus(); });
+        selectors.push(select);
+        card.append(heading, source, host, select);
+        reply.append(card);
+        const instance = renderChart(def, host, chart.spec, { height: 280 });
         charts.push(instance);
-        current = { chart: answer.chart, spec };
+        choose();
       }
     } catch (error) {
       if (turn !== revision) return;

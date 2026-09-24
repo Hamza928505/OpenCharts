@@ -224,6 +224,17 @@ export const DATA_SCHEMAS = {
     example: EX.observations,
     hint: 'Either one column per group, or two columns of group and value.',
     toText: (s) => writeObservations(s, key),
+    ...(id === 'histogram' ? {
+      onData(spec) {
+        const values = spec.groups[0]?.values || [];
+        if (!values.length) return;
+        const low = values.reduce((a, b) => Math.min(a, b), Infinity);
+        const high = values.reduce((a, b) => Math.max(a, b), -Infinity);
+        const padding = low === high ? Math.max(Math.abs(low) * .05, 1) : 0;
+        spec.min = low - padding;
+        spec.max = high + padding;
+      },
+    } : {}),
   }])),
 
   /* Flows and networks ------------------------------------------------------- */

@@ -103,13 +103,14 @@ export const distributionCharts = [
     chartjs: {
       build(spec) {
         const width = (spec.max - spec.min) / spec.bins;
+        const decimals = Math.min(12, Math.max(0, 1 - Math.floor(Math.log10(width))));
         const bins = Array.from({ length: spec.bins }, (_, i) => ({
-          label: `${Math.round(spec.min + i * width)}–${Math.round(spec.min + (i + 1) * width)}`,
+          label: `${Number((spec.min + i * width).toFixed(decimals))}–${Number((spec.min + (i + 1) * width).toFixed(decimals))}`,
           count: 0,
         }));
         const feed = (spec.groups[0] && spec.groups[0].values) || [];
         feed.forEach((raw) => {
-          const v = Math.round(raw);
+          const v = Number(raw);
           if (v < spec.min || v > spec.max) return;
           bins[Math.min(Math.floor((v - spec.min) / width), spec.bins - 1)].count++;
         });
