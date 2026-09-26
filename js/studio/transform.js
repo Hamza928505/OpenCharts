@@ -69,9 +69,10 @@ export const OPS = [
  * silently drop every row of a table of prices.
  */
 export function toNumber(cell) {
+  if (typeof cell === 'number') return Number.isFinite(cell) ? cell : NaN;
   if (cell == null) return NaN;
   const t = String(cell).trim();
-  if (!t) return NaN;
+  if (!t || !looksNumeric(t)) return NaN;
   const core = t
     .replace(/^[-+]?\s*[$£€¥₹]?\s*/, '')
     .replace(/\s*[%$£€¥₹]?$/, '')
@@ -162,7 +163,7 @@ function opFilter(table, step) {
   return { headers: [...table.headers], rows: table.rows.filter(keep) };
 }
 
-function fold(values, agg) {
+export function fold(values, agg) {
   const nums = values.filter((v) => Number.isFinite(v));
   if (agg === 'count') return values.length;
   if (!nums.length) return '';
@@ -174,8 +175,8 @@ function fold(values, agg) {
       const m = s.length >> 1;
       return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
     }
-    case 'min': return Math.min(...nums);
-    case 'max': return Math.max(...nums);
+    case 'min': return nums.reduce((a, b) => Math.min(a, b));
+    case 'max': return nums.reduce((a, b) => Math.max(a, b));
     default: return nums.reduce((a, b) => a + b, 0);
   }
 }
@@ -187,6 +188,17 @@ const tidyNumber = (n) => {
   return String(Number.isInteger(r) ? r : +r.toFixed(4));
 };
 
+/** Shared by the editor and local analysis. Blank keys stay a separate group. */
+export function groupRows(table, col) {
+  const buckets = new Map();
+  for (const row of table.rows) {
+    const key = row[col] == null ? '' : String(row[col]).trim();
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(row);
+  }
+  return buckets;
+}
+
 function opGroup(table, step) {
   const by = step.col | 0;
   const agg = step.agg || 'sum';
@@ -195,13 +207,8 @@ function opGroup(table, step) {
   const valueCols = (chosen || defaultValueCols(table, by))
     .filter((c) => c !== by && c >= 0 && c < (table.headers.length || 0));
 
-  const order = [];
-  const buckets = new Map();
-  for (const row of table.rows) {
-    const key = row[by] == null ? '' : String(row[by]).trim();
-    if (!buckets.has(key)) { buckets.set(key, []); order.push(key); }
-    buckets.get(key).push(row);
-  }
+  const buckets = groupRows(table, by);
+  const order = [...buckets.keys()];
 
   // `count` answers a question about rows rather than about a column, so it
   // produces one new column instead of folding the ones already there.
