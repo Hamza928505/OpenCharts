@@ -2901,84 +2901,78 @@ check(/Copied/.test(stageBtn.feedback), 'the button says it copied', stageBtn.fe
 check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data only choice');
 console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
 
-/* A credential control exists only while something consumes it.
- *
- * This check began inverted. The stage bar carried an "AI Settings" button
- * that sealed an API key into localStorage and nothing anywhere read it back —
- * a reader handing a secret to a feature that did not exist — so the control
- * went, and a key already saved was swept up on the next visit. The analyst
- * has shipped, so both halves turn over: the control is back, the sweep is
- * gone, and what is asserted now is the thing that made the removal right in
- * the first place. `getStoredApiKey` must have a caller outside the module
- * that defines it, or the button is asking for a secret again. */
+/* The agent connection replaces API key storage and direct provider calls. */
 await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
-const keyControl = await page.evaluate(async () => {
-  const files = ['analyst.js', 'analyst-ui.js', 'ai-config.js', 'StudioApp.js', 'CodePanel.js'];
-  const sources = {};
-  for (const name of files) sources[name] = await fetch(`/js/studio/${name}`).then((r) => r.text());
-  const consumers = files.filter((name) => name !== 'ai-config.js'
-    && sources[name].includes('getStoredApiKey('));
+const agentControl = await page.evaluate(async () => {
+  const analyst = await fetch('/js/studio/analyst.js').then((r) => r.text());
+  const config = await fetch('/js/studio/ai-config.js').then((r) => r.text());
   return {
     button: !!document.querySelector('#btn-ai-config'),
-    asksForKey: [...document.querySelectorAll('.stage-actions .btn')]
-      .some((b) => /AI Settings|API key/i.test(b.textContent + (b.title || ''))),
-    consumers,
-    // The key is never in a body, a spec, a link or an export: the only place
-    // it is written is a request header.
-    headerOnly: /['"]x-api-key['"]/.test(sources['analyst.js'])
-      && !/body[^\n]*apiKey/.test(sources['analyst.js']),
+    connectsAgent: [...document.querySelectorAll('.stage-actions .btn')]
+      .some((b) => /Connect agent/i.test(b.textContent + (b.title || ''))),
+    consumesConnection: analyst.includes('getAiSettings('),
+    noKeyControl: !config.includes('type = \'password\'') && !config.includes('setApiKey('),
   };
 });
-check(keyControl.button && keyControl.asksForKey,
-  'the stage bar offers AI Settings again, now that something reads the key');
-check(keyControl.consumers.length > 0,
-  'and `getStoredApiKey` has a caller outside the module that defines it',
-  keyControl.consumers.join(', ') || 'none');
-check(keyControl.headerOnly, 'the key goes into a request header and never into a body');
+check(agentControl.button && agentControl.connectsAgent,
+  'the stage bar offers Connect agent');
+check(agentControl.consumesConnection, 'the analyst consumes the paired connection');
+check(agentControl.noKeyControl, 'the connection no longer collects AI API keys');
 
-/* A key a reader saved is theirs to keep: the sweep that deleted one on every
- * visit was correct while nothing read it, and would now be data loss. */
-await page.evaluate(async () => {
-  const cfg = await import('/js/studio/ai-config.js');
-  await cfg.setApiKey('sk-ant-suite-key', { persist: true });
+await page.evaluate(() => {
+  localStorage.setItem('opencharts.ai-key', 'obsolete-suite-key');
+  localStorage.setItem('opencharts.ai-settings', JSON.stringify({ provider: 'anthropic' }));
 });
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(700);
-const keyKept = await page.evaluate(async () => {
+const legacyCleared = await page.evaluate(async () => {
   const cfg = await import('/js/studio/ai-config.js');
-  return { raw: localStorage.getItem('opencharts.ai-key'), key: await cfg.getStoredApiKey() };
+  await cfg.getAiSettings();
+  return { key: localStorage.getItem('opencharts.ai-key'), settings: localStorage.getItem('opencharts.ai-settings') };
 });
-check(keyKept.key === 'sk-ant-suite-key',
-  'a stored key survives the next visit rather than being swept', String(keyKept.key));
-check(!!keyKept.raw && !keyKept.raw.includes('sk-ant-suite-key'),
-  'and is not sitting in storage as plain text', String(keyKept.raw).slice(0, 40));
-console.log(`  ${green('✓')} the key — asked for once, read by ${keyControl.consumers.length}, header only`);
+check(legacyCleared.key === null, 'obsolete stored API keys are removed');
+check(legacyCleared.settings === null, 'obsolete provider settings are removed');
+console.log(`  ${green('✓')} agent connection — paired locally, obsolete API credentials removed`);
 
 /* Suite 32 — the AI Analyst.
  *
- * The endpoint is mocked, because what these checks are about is not whether
- * Anthropic answers. It is what leaves this browser, and what an answer is
- * allowed to reach: the request carries the reader's table and their sentence
- * and their key *as a header*; a well-formed reply lands only through
+ * The local bridge is mocked; this does not invoke a subscribed model. The
+ * request carries the reader's table and sentence, with its pairing token in
+ * a header; a well-formed reply lands only through
  * `_applySpec`, the door a pasted spec uses, and only when Apply is pressed;
  * and a reply that is not a spec changes nothing and is shown as it came. */
 let analystSeen = null;
-let analystReply = JSON.stringify({
+let analystDeleted = 0;
+let analystReply = {
   chart: 'pie',
   spec: { caption: { title: 'Revenue by region' } },
-});
-await page.route('https://api.anthropic.com/**', async (route) => {
+};
+const analystToken = 'a'.repeat(64);
+const analystRequestId = '00000000-0000-4000-8000-000000000001';
+await page.evaluate(async (token) => {
+  const cfg = await import('/js/studio/ai-config.js');
+  await cfg.setAiSettings({ endpoint: 'http://127.0.0.1:8765', token });
+}, analystToken);
+await page.route('http://127.0.0.1:8765/**', async (route) => {
   const req = route.request();
-  if (req.method() === 'GET') {
-    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'claude-suite-model' }] }) });
-    return;
+  const path = new URL(req.url()).pathname;
+  let body;
+  if (req.method() === 'POST' && path === '/requests') {
+    analystSeen = { url: req.url(), headers: req.headers(), body: req.postData() || '' };
+    body = { id: analystRequestId };
+  } else if (req.method() === 'GET' && path === '/requests/' + analystRequestId) {
+    body = { status: 'complete', answer: analystReply };
+  } else if (req.method() === 'DELETE' && path === '/requests/' + analystRequestId) {
+    analystDeleted++;
+    return route.fulfill({ status: 204 });
+  } else {
+    return route.fulfill({ status: 404 });
   }
-  analystSeen = { url: req.url(), headers: req.headers(), body: req.postData() || '' };
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ content: [{ type: 'text', text: analystReply }] }),
+    body: JSON.stringify(body),
   });
 });
 
@@ -3001,22 +2995,22 @@ const analystAsk = await page.evaluate(async () => {
     buttons: [...document.querySelectorAll('.analyst .btn')].map((b) => b.textContent.trim()),
   };
 });
-check(!!analystSeen && /api\.anthropic\.com\/v1\/messages$/.test(analystSeen.url),
-  'the analyst calls the Messages API directly, with no server in between',
+check(!!analystSeen && analystSeen.url === 'http://127.0.0.1:8765/requests',
+  'the analyst queues work at the paired local bridge',
   analystSeen && analystSeen.url);
-check(!!analystSeen && analystSeen.headers['x-api-key'] === 'sk-ant-suite-key'
-  && analystSeen.headers['anthropic-version'] === '2023-06-01'
-  && analystSeen.headers['anthropic-dangerous-direct-browser-access'] === 'true',
-  'carrying the key and the version in headers',
+check(!!analystSeen && analystSeen.headers['x-opencharts-token'] === analystToken
+  && !analystSeen.headers['x-api-key'] && !analystSeen.headers.authorization,
+  'carrying a pairing token without provider credentials',
   analystSeen && JSON.stringify(Object.keys(analystSeen.headers)));
-check(!!analystSeen && !analystSeen.body.includes('sk-ant-suite-key'),
-  'and the key is nowhere in the request body');
+check(!!analystSeen && !analystSeen.body.includes(analystToken),
+  'and the pairing token is nowhere in the request body');
 check(!!analystSeen && /revenue by region, highlight the North/.test(analystSeen.body),
   'the body carries the reader\'s own sentence');
 check(!!analystSeen && /Q1,520,440/.test(analystSeen.body) && /bar-vertical/.test(analystSeen.body),
   'and the table on screen, and the chart it is drawn as');
-check(!!analystSeen && /"model":"claude-suite-model"/.test(analystSeen.body.replace(/\s/g, '')),
-  'asking a model discovered from the selected provider');
+check(!!analystSeen && JSON.parse(analystSeen.body).schema.required.includes('spec')
+  && JSON.parse(analystSeen.body).table.rows.length > 0,
+  'the agent receives the response contract and full table');
 check(analystAsk.preview && /"chart"/.test(analystAsk.previewText),
   'the answer is previewed rather than applied', analystAsk.previewText.slice(0, 60));
 check(analystAsk.chartBefore === 'bar-vertical',
@@ -3025,6 +3019,7 @@ check(/Pie/.test(analystAsk.diff) && /caption/.test(analystAsk.diff),
   'under a line saying what applying it would change', analystAsk.diff);
 check(analystAsk.buttons.includes('Apply') && analystAsk.buttons.includes('Discard'),
   'and two buttons, one of which is Discard', analystAsk.buttons.join(', '));
+check(analystDeleted === 1, 'a completed request is removed from the local bridge');
 
 const analystApplied = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -3043,7 +3038,7 @@ check(analystApplied.chart === 'pie' && analystApplied.title === 'Revenue by reg
   JSON.stringify(analystApplied));
 
 /* A reply that is not a spec keeps the chart and shows what came back. */
-analystReply = 'Sure! I would draw that as a treemap — let me know if you want the code.';
+analystReply = { chart: 'made-up-treemap', spec: {} };
 const analystJunk = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const app = window.openCharts;
@@ -3063,15 +3058,16 @@ const analystJunk = await page.evaluate(async () => {
 });
 check(analystJunk.chart === 'pie' && !analystJunk.preview,
   'a malformed answer changes nothing', JSON.stringify(analystJunk).slice(0, 120));
-check(/treemap/.test(analystJunk.raw) && /JSON/i.test(analystJunk.status),
+check(/made-up-treemap/.test(analystJunk.raw) && /not a chart/i.test(analystJunk.status),
   'and is shown as it came back, with what was wrong with it',
   `${analystJunk.status.slice(0, 60)} | ${analystJunk.raw.slice(0, 40)}`);
+check(analystDeleted === 2, 'a malformed completed reply is also removed from the local bridge');
 
-/* No key is a message with somewhere to go, not a blank panel. */
-const analystNoKey = await page.evaluate(async () => {
+/* A missing connection gives the reader an actionable message. */
+const analystNoAgent = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const cfg = await import('/js/studio/ai-config.js');
-  cfg.clearApiKey();
+  cfg.clearAiSettings();
   const app = window.openCharts;
   app.codePanel.show('html');
   app.codePanel.show('analyst');
@@ -3083,14 +3079,14 @@ const analystNoKey = await page.evaluate(async () => {
   await sleep(600);
   return {
     status: (document.querySelector('.analyst-status.is-bad') || {}).textContent || '',
-    settings: [...document.querySelectorAll('.analyst .btn')].some((b) => b.textContent.trim() === 'AI Settings'),
+    settings: [...document.querySelectorAll('.analyst .btn')].some((b) => b.textContent.trim() === 'Connect agent'),
   };
 });
-check(/No API key/i.test(analystNoKey.status) && /AI Settings/.test(analystNoKey.status),
-  'with no key stored the panel says so and names where to put one',
-  analystNoKey.status.slice(0, 90));
-check(analystNoKey.settings, 'with the button to do it right there');
-await page.unroute('https://api.anthropic.com/**');
+check(/Connect agent/i.test(analystNoAgent.status),
+  'without an agent the panel explains how to connect',
+  analystNoAgent.status.slice(0, 90));
+check(analystNoAgent.settings, 'with the button to do it right there');
+await page.unroute('http://127.0.0.1:8765/**');
 console.log(`  ${green('✓')} analyst — a sentence in, a spec previewed, applied through one door`);
 
 

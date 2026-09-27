@@ -38,93 +38,90 @@ const longTable = { ...table, rows: Array(201).fill(table.rows[0]).concat([['EXP
 assert.equal(buildChatCharts(reply, longTable).ok, false, 'validate beyond the sample and do not invent zero for missing data');
 
 const originalFetch = globalThis.fetch;
-const providers = ['gemini', 'anthropic', 'nvidia', 'xai', 'openai'];
-const payload = (provider, text, truncated = false) => provider === 'gemini'
-  ? { candidates: [{ finishReason: truncated ? 'MAX_TOKENS' : 'STOP', content: { parts: [{ thought: true, text: 'Private reasoning is not JSON.' }, { text }] } }] }
-  : provider === 'anthropic' ? { stop_reason: truncated ? 'max_tokens' : 'end_turn', content: [{ type: 'thinking', thinking: 'Not answer text.' }, { type: 'text', text }] }
-    : { choices: [{ finish_reason: truncated ? 'length' : 'stop', message: { content: text } }] };
+const token = 'a'.repeat(64);
+const endpoint = 'http://127.0.0.1:8765';
 try {
-  for (const provider of providers) {
-    await setAiSettings({ provider, key: 'test-secret', model: provider === 'gemini' ? 'gemini-test-flash' : 'test-model', endpoint: 'http://localhost:11434/v1' });
-    let calls = 0;
-    globalThis.fetch = async (_, options) => {
-      calls++;
+  // No credentials, requests or automatic remote fallbacks before local pairing.
+  clearAiSettings();
+  globalThis.fetch = () => { throw new Error('Unexpected network access'); };
+  assert.equal((await askAnalyst({ request: 'Hi', conversation: [] })).reason, 'no-agent');
+  assert.equal((await askAnalyst({ request: '  ' })).reason, 'empty');
+  await setAiSettings({ endpoint, token });
+  let answer = reply;
+  let calls = [];
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    assert.ok(url.startsWith(endpoint + '/requests'), 'only paired loopback destination is called');
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers['x-opencharts-token'], token);
+    if (options.method === 'POST') {
       const body = JSON.parse(options.body);
-      const schema = provider === 'gemini' ? body.generationConfig.responseJsonSchema
-        : provider === 'anthropic' ? body.output_config.format.schema : body.response_format.json_schema.schema;
-      assert.deepEqual(schema, CHAT_SCHEMA);
-      const message = JSON.parse(provider === 'gemini' ? body.contents[0].parts[0].text : body.messages.at(-1).content);
+      assert.equal(body.kind, 'chat');
+      assert.deepEqual(body.schema, CHAT_SCHEMA);
+      assert.equal(body.table.rows.length, 103, 'the MCP agent can read all rows');
+      const message = JSON.parse(body.message);
       assert.equal(message.table.rows.length, 40);
       assert.equal(message.table.totalRows, 103);
+      assert.match(message.note, /opencharts_read_rows/);
       assert.equal(message.catalogue.find((chart) => chart.id === 'bar-vertical').shape, 'labelSeries');
-      assert.ok(!options.body.includes('test-secret'));
-      return Response.json(payload(provider, wire));
-    };
-    const response = await askAnalyst({ request: 'Suggest charts for the baselines', conversation: [], table });
-    assert.equal(response.ok, true, provider + ': ' + response.error);
-    assert.equal(response.answer.charts[0].spec.labels.length, 103);
-    assert.equal(calls, 1);
-
-    // A prose or truncated reply gets one bounded repair, for every adapter.
-    for (const truncated of [false, true]) {
-      calls = 0;
-      globalThis.fetch = async () => Response.json(payload(provider, ++calls === 1 ? (truncated ? wire : 'Use a bar chart.') : wire, truncated && calls === 1));
-      assert.equal((await askAnalyst({ request: 'Suggest charts', conversation: [], table })).ok, true);
-      assert.equal(calls, 2);
+      assert.ok(!options.body.includes(token));
+      return Response.json({ id: 'test-request' });
     }
-    calls = 0;
-    globalThis.fetch = async () => { calls++; return Response.json(payload(provider, 'not JSON')); };
-    const failed = await askAnalyst({ request: 'Suggest charts', conversation: [], table });
-    assert.equal(failed.ok, false);
-    assert.match(failed.error, /after one repair/);
-    assert.equal(calls, 2);
+    if (options.method === 'DELETE') return new Response(null, { status: 204 });
+    return Response.json({ status: 'complete', answer });
+  };
+  let response = await askAnalyst({ request: 'Suggest charts for the baselines', conversation: [], table });
+  assert.equal(response.ok, true, response.error);
+  assert.equal(response.answer.charts[0].spec.labels.length, 103);
+  assert.deepEqual(calls.map(({ options }) => options.method || 'GET'), ['POST', 'GET', 'DELETE']);
 
-    // If native schema is unsupported, retry without that option but keep validation.
-    calls = 0;
-    globalThis.fetch = async (_, options) => {
-      const body = JSON.parse(options.body);
-      if (++calls === 1) return Response.json({ error: { message: 'Structured output json_schema is not supported by this model' } }, { status: 400 });
-      assert.equal(body.response_format, undefined);
-      assert.equal(body.output_config, undefined);
-      assert.equal(body.generationConfig?.responseJsonSchema, undefined);
-      return Response.json(payload(provider, wire));
-    };
-    assert.equal((await askAnalyst({ request: 'Suggest charts', conversation: [], table })).ok, true);
-    assert.equal(calls, 2);
+  // A server or older MCP client cannot bypass browser chart validation.
+  for (const invalid of [
+    { message: 'Bad chart', charts: [{ chart: 'not-a-chart', title: 'Bad', columns: [1] }] },
+    { message: 'Bad data', charts: [{ chart: 'bar-vertical', title: 'Bad', columns: [0, 999] }] },
+  ]) {
+    answer = invalid;
+    calls = [];
+    response = await askAnalyst({ request: 'Draw', conversation: [], table });
+    assert.equal(response.reason, 'malformed');
+    assert.equal(calls.filter(({ options }) => options.method === 'POST').length, 1, 'no provider retry/repair loops');
+    assert.equal(calls.at(-1).options.method, 'DELETE');
   }
-  // Schema fallback must not restart Gemini's transport retries or turn into 9 requests.
-  await setAiSettings({ provider: 'gemini', key: 'retry-cap-test', model: 'gemini-test-flash' });
-  let overloadCalls = 0;
-  globalThis.fetch = async () => ++overloadCalls === 1
-    ? Response.json({ error: { message: 'json_schema is not supported' } }, { status: 400 })
-    : Response.json({ error: { message: 'High demand' } }, { status: 503 });
-  const overloaded = await askAnalyst({ request: 'Draw a chart', conversation: [], table });
-  assert.equal(overloaded.ok, false);
-  assert.match(overloaded.error, /paused/);
-  assert.equal(overloadCalls, 3);
-  assert.equal((await askAnalyst({ request: 'hi', conversation: [], table })).ok, false);
-  assert.equal(overloadCalls, 3, 'cooldown must also cover subsequent chat messages');
-
-  await setAiSettings({ provider: 'openai', model: 'local-test', endpoint: 'http://localhost:11434/v1' });
-  for (const status of [400, 401, 403, 429, 503]) {
-    let calls = 0;
-    globalThis.fetch = async () => { calls++; return Response.json({ error: { message: 'Some other problem' } }, { status }); };
-    assert.equal((await askAnalyst({ request: 'Suggest charts', conversation: [], table })).ok, false);
-    assert.equal(calls, 1, 'HTTP failures must not cause repair loops');
+  for (const status of [401, 403, 404, 410, 413, 429, 503]) {
+    let count = 0;
+    globalThis.fetch = async () => { count++; return Response.json({}, { status }); };
+    response = await askAnalyst({ request: 'Draw', conversation: [], table });
+    assert.equal(response.ok, false);
+    assert.equal(count, 1, 'HTTP failures must not cause retries');
+    assert.ok(!response.error.includes(token));
   }
-  let calls = 0;
-  const controller = new AbortController();
-  globalThis.fetch = async () => { calls++; return Response.json(payload('openai', 'invalid')); };
-  await assert.rejects(askAnalyst({ request: 'Suggest charts', conversation: [], table, signal: controller.signal, onStatus: () => controller.abort() }), { name: 'AbortError' });
-  assert.equal(calls, 1);
-  globalThis.fetch = async () => Response.json({ choices: [{ finish_reason: 'stop', message: { refusal: 'No', content: '' } }] });
-  assert.equal((await askAnalyst({ request: 'Suggest charts', conversation: [], table })).reason, 'blocked');
 
-  // Studio's preview/apply contract remains intact, independently of chat cards.
+  const stopped = new AbortController();
+  let deleted = false;
+  globalThis.fetch = async (_, options) => {
+    if (options.method === 'DELETE') { deleted = true; assert.equal(options.signal.aborted, false); return new Response(null, { status: 204 }); }
+    return Response.json({ id: 'cancelled-request' });
+  };
+  await assert.rejects(askAnalyst({ request: 'Draw', conversation: [], table, signal: stopped.signal, onStatus: () => stopped.abort() }), { name: 'AbortError' });
+  assert.equal(deleted, true, 'stop removes the queued data with an independent cleanup signal');
+
+  // Studio's preview/apply contract remains intact and exposes all source rows to MCP.
   const def = getChart('bar-vertical');
-  globalThis.fetch = async () => Response.json(payload('openai', '{"chart":"bar-vertical","spec":{"caption":{"title":"Baseline"}}}'));
-  assert.equal((await askAnalyst({ request: 'Change title', def, spec: newSpec(def) })).answer.spec.caption.title, 'Baseline');
-  console.log('AI responses: shared schema across five adapters, 103-row multi-chart mapping, validation, format fallback, bounded repair and cancellation passed.');
+  const spec = newSpec(def);
+  globalThis.fetch = async (_, options) => {
+    if (options.method === 'DELETE') return new Response(null, { status: 204 });
+    if (options.method === 'POST') {
+      const body = JSON.parse(options.body);
+      assert.equal(body.kind, 'chart');
+      assert.ok(body.table.rows.length);
+      assert.ok(body.message.includes('Change title'));
+      return Response.json({ id: 'studio-request' });
+    }
+    return Response.json({ status: 'complete', answer: { chart: 'bar-vertical', spec: { caption: { title: 'Baseline' } } } });
+  };
+  assert.equal((await askAnalyst({ request: 'Change title', def, spec })).answer.spec.caption.title, 'Baseline');
+  console.log('Agent responses: MCP queue, full 103-row chart mapping, validation, cleanup, cancellation, connection errors and studio previews passed.');
 } finally {
   globalThis.fetch = originalFetch;
   clearAiSettings();

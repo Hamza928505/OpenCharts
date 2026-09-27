@@ -140,13 +140,13 @@
     <div class="matchbar-lead">
       <h2 class="matchbar-title">Your data. A conversation. A clearer chart.</h2>
       <p class="matchbar-sub">Bring a table, ask a question, then refine your chart together.
-      Count, average and compare locally without AI. Sending a chat message shares data with your selected AI provider.</p>
+      Count, average and compare locally without AI. Connect your signed-in agent to return AI analysis and charts here.</p>
     </div>
   </div>
 
   <div class="matchbar-actions">
     <span class="match-local">Private analysis on this device</span>
-    <button class="btn btn-sm" id="match-ai-settings" type="button">AI provider</button>
+    <button class="btn btn-sm" id="match-ai-settings" type="button">Connect agent</button>
   </div>
   <div class="match-import">
     <div class="match-drop" id="match-drop" tabindex="0" role="button"
@@ -194,8 +194,8 @@
       <form id="match-chat-form" class="match-chat-form">
         <label for="match-message">Message</label>
         <textarea id="match-message" rows="3" maxlength="12000" placeholder="Ask about your data, or describe the chart you need…" aria-describedby="match-chat-note"></textarea>
-        <div class="match-chat-controls"><span id="match-chat-provider">Choose a provider to start</span><button class="btn btn-sm" id="match-chat-stop" type="button" hidden>Stop</button><button class="btn" id="match-chat-send" type="submit">Send</button></div>
-        <p id="match-chat-note" class="dlg-note">Enter to send · Shift+Enter for a new line. AI receives up to 40 rows and recent messages.</p>
+        <div class="match-chat-controls"><span id="match-chat-provider" role="status">Connect an agent to start</span><button class="btn btn-sm" id="match-chat-stop" type="button" hidden>Stop</button><button class="btn" id="match-chat-send" type="submit">Send</button></div>
+        <p id="match-chat-note" class="dlg-note">Enter to send · Shift+Enter for a new line. Sending shares your full table and recent messages with the connected agent. Ask it to process the pending OpenCharts request. Its plan limits apply.</p>
       </form>
     </div>
   </div>

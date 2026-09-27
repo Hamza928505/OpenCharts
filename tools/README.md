@@ -1,8 +1,52 @@
 # tools/
 
-One-off scripts that generate committed files. Nothing here runs at page load
-and the site never imports it — the output is committed so the no-build-step
-promise holds.
+Most scripts here generate committed files. The site does not import them at
+page load, so the no-build-step promise holds. The optional `mcp-server.mjs`
+instead runs locally to connect a signed-in agent to the browser.
+
+## Local MCP bridge
+
+Install dependencies with `npm install`, then configure your agent to launch
+`node /absolute/path/OpenCharts/tools/mcp-server.mjs` as a stdio MCP server.
+See [Connect an agent](../README.md#connect-codex-claude-code-or-another-mcp-agent)
+for the Codex and Claude Code commands. `npm run mcp` starts the same executable
+for development; an agent normally starts it itself. Do not start a second copy
+on the same port.
+
+The server exposes four tools:
+
+| Tool | Purpose |
+|---|---|
+| `opencharts_status` | Return the local pairing link and pending request information. |
+| `opencharts_get_request` | Read a pending request, its response schema and table preview; optionally wait up to 25 seconds. |
+| `opencharts_read_rows` | Page through the uploaded table by request id, offset and limit. |
+| `opencharts_submit_answer` | Return the answer object for a request so the browser can validate and display it. |
+
+The page talks to the loopback HTTP bridge at `http://127.0.0.1:8765`. Its pairing
+token authorizes browser requests in the `x-opencharts-token` header. The HTTP
+routes are `/health`, `POST /requests`, `GET /requests/:id` and
+`DELETE /requests/:id` (cancel). The agent uses MCP over stdio, not these HTTP
+routes. Never publish the pairing link, expose the bridge to the internet, or
+put subscription credentials into this server.
+
+Requests are kept in memory. Restarting drops pending work and rotates the
+pairing link. Requests expire after 10 minutes; the queue accepts up to eight
+requests, 5 MB each and 20 MB combined. Completion releases the prompt and table;
+the browser removes the returned answer after reading it. Stop or Disconnect
+cancels requests from the page. If a request remains pending, ask your agent to process it with
+`opencharts_get_request` and return its result with `opencharts_submit_answer`.
+The bridge does not start model calls on its own. If the hosted page cannot
+reach localhost, use the local page from `opencharts_status` instead. If the
+port is occupied, stop the previous agent's server before opening another, or
+set `MCP_PORT` in that agent's server environment. The server listens only on
+`127.0.0.1`; browser access is limited to its own origin and the OpenCharts
+GitHub Pages origin. For other deployments, use the local pairing link.
+
+`node test/mcp-server.mjs` checks the real stdio and HTTP bridge without making
+model requests. Browser tests use controlled replies to verify chart rendering
+and rejection of invalid results.
+
+## Generated files
 
 The one exception is `build-wiki.mjs`, whose output lives in the separate
 `OpenCharts.wiki` repository. Pass it a clone:

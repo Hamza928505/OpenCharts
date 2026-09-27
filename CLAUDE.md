@@ -2178,12 +2178,11 @@ Three things it has to get right, each checked:
 The AI Prompt tab hands a brief to an assistant somewhere else and asks the
 reader to carry the answer back by hand. This closes that loop inside the
 studio: the table already on screen, the catalogue of what this library can
-draw and one sentence from the reader go to the Anthropic Messages API, and
-what comes back is a `{ chart, spec }` — the object the Spec view already
-prints.
+draw and one sentence from the reader go to the paired local MCP bridge. The
+reader's signed-in agent processes that request and returns `{ chart, spec }`,
+the object the Spec view already prints.
 
-**It is about a hundred lines because of two decisions, not because it does
-little.**
+Two existing studio rules still apply:
 
 - **The answer lands through the door a pasted spec uses.** `_applySpec` merges
   over `newSpec`, opens another chart when the id differs, and banks an undo
@@ -2209,36 +2208,35 @@ because models add them, and everything else is refused **with the raw text
 kept on screen**. A reader can only correct what they can see, and a panel that
 went blank would be indistinguishable from a broken feature.
 
-**The request goes straight from the browser to Anthropic**, with
-`anthropic-dangerous-direct-browser-access`, because there is no server in this
-project and adding one to hold a key would be a different product. Four
-failures are four messages: no key links to AI Settings, a 401 says the key was
-refused, a fetch that never left says the cause is usually a network, a proxy
-or an extension rather than the API, and a malformed answer keeps the chart.
+**The browser queues work; the agent runs it.** `tools/mcp-server.mjs` exposes
+stdio MCP tools to Codex, Claude Code or another local MCP client, and a
+token-protected loopback HTTP bridge to the page. `analyst.js` posts the request,
+response schema and full table to `/requests`, polls for the answer, and deletes
+the request on completion, cancellation or timeout. The agent reads a request
+with `opencharts_get_request`, pages through data with `opencharts_read_rows`,
+and responds through `opencharts_submit_answer`. Sending a browser message does
+not automatically start a model turn; the reader asks the agent to process it.
 
-#### The key
+For main-page chat, the contract is `{ message, charts }`, where chart plans name
+registered chart ids and zero-based table column indices. The brief previews
+40 rows; all rows remain available through MCP. The browser uses the full local
+table to build chart suggestions. Both the bridge and browser validate replies;
+neither executes model-supplied JavaScript.
 
-`ai-config.js` came back for this. It was removed once, and rightly: the stage
-bar had an AI Settings button that sealed a key into `localStorage` and nothing
-anywhere read it, so a reader was handing a credential to a feature that did
-not exist. The suite check written for that removal is now **inverted rather
-than deleted** — what it asserts is the rule that made the removal right, that
-`getStoredApiKey` has a caller outside the module defining it. The sweep in
-`StudioApp` that deleted a stored key on every visit is gone with it: correct
-while nothing read the key, data loss now.
+#### The agent connection
 
-**"Encrypted" here means obfuscated, and the dialog says so.** The key is
-AES-GCM sealed under a passphrase that is a constant in `ai-config.js`, so
-anything that can read the page can derive it. What that buys is real and
-narrow: the key is not sitting in storage as plain text where a glance at
-devtools, a screen share or a synced profile would show it. It is not a secret
-store, and a browser is not one — which is why the unticked default keeps the
-key in memory for the session only. The key leaves the browser in exactly one
-place, the `x-api-key` header, and the suite checks it is in no request body.
+`ai-config.js` owns **Connect agent**, which accepts the pairing link returned
+by `opencharts_status`. It validates the loopback address and temporary token;
+the token travels in `x-opencharts-token`, never in a request body or chart
+export. Obsolete API keys and provider settings are cleared from local storage.
+There are no provider, model or API-key controls in the app.
 
-The reader pays for their own calls. That is stated in the dialog, in the
-panel and in the README, because a feature that spends somebody's money has to
-say so before it does.
+Model choice, login and subscription limits belong to the agent. The bridge
+does not read agent credentials or invoke a model API. Requests and tables are
+held in memory and expire; restarting requires a new pairing link. The agent
+may send its received data to its model service. Static local analysis remains
+available without any connection. See the README and `tools/README.md` for
+setup and the four MCP tools.
 
 ### The data dialog
 
@@ -2577,9 +2575,9 @@ the values it changed are shown by the series widget next door.
 | `reference.js` | Lines at a value — mean, median, target, moving average, trend — as extra Chart.js datasets, and the sentences that say their numbers |
 | `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours/AI Analyst tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
-| `analyst.js` | The brief, the call to Anthropic and the parse — a sentence in, one `{ chart, spec }` back |
+| `analyst.js` | Briefs, local MCP request queue/polling and response validation for studio specs and chat chart plans |
 | `analyst-ui.js` | The AI Analyst tab — the request box, the preview, and Apply through `_applySpec` |
-| `ai-config.js` | The Anthropic API key: the dialog, and where it is kept on this browser |
+| `ai-config.js` | Pairing-link validation and the Connect agent dialog; no provider API credentials |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |

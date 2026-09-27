@@ -1,386 +1,157 @@
-/**
- * ai-config.js — where the AI Analyst's API key is kept.
- *
- * This module and its button were removed once, because nothing read the key
- * back: a reader was being asked to hand over a credential to a feature that
- * did not exist. It comes back now with `analyst.js` behind it, and the suite
- * holds the rule that removal established — the control exists only while
- * something consumes it, which is checked by requiring a caller for
- * `getStoredApiKey` outside this file.
- *
- * **"Encrypted" here means obfuscated, and the dialog says so.** The key is
- * AES-GCM sealed under a passphrase that is a constant in this file, so
- * anything that can read the page can derive it. What that buys is real but
- * narrow: a key does not sit in `localStorage` as plain text where a glance at
- * devtools, a screen share or a synced profile would show it. It is not a
- * secret store, and a browser is not one. The honest alternative — keeping the
- * key in memory for the session only — is the unticked default here.
- *
- * The key is sent only to the provider the reader chooses. It never enters a
- * spec, share link or export.
- */
-
+/** A tab-scoped connection to the user's local OpenCharts MCP server. */
 import { toast } from './toast.js';
-import { PROVIDERS, detectProvider, resolveProvider, listProviderModels } from './ai-providers.js';
 
+const SESSION_KEY = 'opencharts.agent-connection';
+let sessionSettings;
 const el = (tag, cls, text) => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
 };
-
-// Keep it in memory if they don't want to save to localStorage
-let sessionApiKey = null;
-let sessionSettings = null;
-
-const STORAGE_KEY = 'opencharts.ai-key';
-const SETTINGS_KEY = 'opencharts.ai-settings';
-const ENC_PREFIX = 'enc:v1:';
-const PASSPHRASE = 'opencharts-ai-config-local';
-
-const DEFAULT_SETTINGS = {
-  provider: 'auto',
-  endpoint: 'http://localhost:11434/v1/chat/completions',
-  model: '',
-};
-
-function normaliseSettings(value) {
-  const raw = value && typeof value === 'object' ? value : {};
-  return {
-    provider: Object.hasOwn(PROVIDERS, raw.provider) ? raw.provider : 'auto',
-    endpoint: String(raw.endpoint || DEFAULT_SETTINGS.endpoint).trim(),
-    model: String(raw.model || '').trim(),
-  };
-}
-
-const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
-
-function bytesToBase64(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
-
-function base64ToBytes(b64) {
-  const s = atob(b64);
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-  return out;
-}
-
-async function deriveAesKey(salt) {
-  const material = await crypto.subtle.importKey(
-    'raw',
-    textEncoder.encode(PASSPHRASE),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-    material,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
-
-async function encryptForStorage(plainText) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveAesKey(salt);
-  const cipherBuf = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    textEncoder.encode(plainText)
-  );
-  return ENC_PREFIX + [bytesToBase64(salt), bytesToBase64(iv), bytesToBase64(new Uint8Array(cipherBuf))].join(':');
-}
-
-async function decryptFromStorage(payload) {
-  if (!payload) return null;
-  if (!payload.startsWith(ENC_PREFIX)) return null;
-  const parts = payload.slice(ENC_PREFIX.length).split(':');
-  if (parts.length !== 3) return null;
-  const salt = base64ToBytes(parts[0]);
-  const iv = base64ToBytes(parts[1]);
-  const data = base64ToBytes(parts[2]);
-  const key = await deriveAesKey(salt);
-  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-  return textDecoder.decode(plainBuf);
-}
-
-export async function getStoredApiKey() {
-  if (sessionApiKey) return sessionApiKey;
+function removeLegacyKeys() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return await decryptFromStorage(stored);
-  } catch (e) {
-    return null;
-  }
+    localStorage.removeItem('opencharts.ai-key');
+    localStorage.removeItem('opencharts.ai-settings');
+  } catch { /* Storage may be unavailable. */ }
 }
+removeLegacyKeys();
 
-/** The provider choice is browser preference data; its key remains sealed separately. */
-export async function getAiSettings() {
-  if (!sessionSettings) {
-    try {
-      sessionSettings = normaliseSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'));
-    } catch (e) {
-      sessionSettings = { ...DEFAULT_SETTINGS };
-    }
+function localURL(value) {
+  let url;
+  try { url = new URL(String(value || '').trim()); } catch { /* handled below */ }
+  if (!url || url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
+      || url.username || url.password || url.search || !['/', '/index.html'].includes(url.pathname)) {
+    throw new Error('Use the local OpenCharts link from opencharts_status, such as http://127.0.0.1:8765/#mcp=…');
   }
-  return { ...sessionSettings, key: await getStoredApiKey() };
+  return url;
 }
-
-/**
- * Put a key in place, for the session or for this browser.
- *
- * The dialog is not the only caller that should exist — the suite needs to seed
- * one without typing into a modal — and a second path that wrote storage its
- * own way would be a second idea of what "stored" means. Everything that sets
- * a key goes through here.
- *
- * @param {string} key
- * @param {{ persist?: boolean }} [opts]  persist: keep it between visits
- */
-export async function setApiKey(key, { persist = false } = {}) {
-  const value = String(key || '').trim();
-  sessionApiKey = value || null;
-  if (!value || !persist) {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* not fatal */ }
-    return { ok: true, persisted: false };
+export function parseAgentLink(link) {
+  const url = localURL(link);
+  const match = url.hash.match(/^#mcp=([a-f0-9]{64})$/i);
+  if (!match) throw new Error('The connection link must include the complete #mcp= token from opencharts_status.');
+  return { endpoint: url.origin, token: match[1].toLowerCase() };
+}
+function normalizeSettings(settings) {
+  if (!settings || typeof settings.endpoint !== 'string' || typeof settings.token !== 'string') {
+    throw new Error('Paste the local connection link from your agent.');
   }
-  try {
-    localStorage.setItem(STORAGE_KEY, await encryptForStorage(value));
-    return { ok: true, persisted: true };
-  } catch (e) {
-    // The key still works for this session; it just will not be remembered.
-    return { ok: false, persisted: false, message: e.message };
-  }
+  const url = localURL(settings.endpoint);
+  if (url.hash || !/^[a-f0-9]{64}$/i.test(settings.token)) throw new Error('The local connection link is incomplete.');
+  return { endpoint: url.origin, token: settings.token.toLowerCase() };
 }
-
-/** Save automatic key detection or an explicit provider/endpoint override. */
-export async function setAiSettings(settings, { persist = false } = {}) {
-  sessionSettings = normaliseSettings(settings);
-  const result = await setApiKey(settings && settings.key, { persist });
-  try {
-    if (persist) localStorage.setItem(SETTINGS_KEY, JSON.stringify(sessionSettings));
-    else localStorage.removeItem(SETTINGS_KEY);
-  } catch (e) {
-    return { ok: false, persisted: false, message: e.message };
-  }
-  return result.ok ? { ...result, persisted: persist } : result;
+export async function setAiSettings(settings) {
+  const value = normalizeSettings(settings);
+  sessionSettings = value;
+  removeLegacyKeys();
+  let persisted = true;
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch { persisted = false; }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('opencharts-agent-change'));
+  return { ok: true, persisted };
 }
-
-/** Forget it, in memory and on disk. */
-export function clearApiKey() {
-  sessionApiKey = null;
-  try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* not fatal */ }
-}
-
 export function clearAiSettings() {
-  sessionSettings = { ...DEFAULT_SETTINGS };
-  clearApiKey();
-  try { localStorage.removeItem(SETTINGS_KEY); } catch (e) { /* not fatal */ }
+  sessionSettings = null;
+  removeLegacyKeys();
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* Memory still cleared. */ }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('opencharts-agent-change'));
+}
+async function checkConnection(settings, signal) {
+  const response = await fetch(settings.endpoint + '/health', {
+    headers: { 'x-opencharts-token': settings.token }, signal,
+    credentials: 'omit', redirect: 'error', cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('The local connection was refused. Ask your agent for a fresh opencharts_status link.');
+  const health = await response.json();
+  if (health.name !== 'OpenCharts MCP' || health.connected !== true) {
+    throw new Error('OpenCharts MCP is not connected. Enable it in your agent, then try again.');
+  }
 }
 
-/** Whether a key is persisted in localStorage. Storage access can throw. */
-function hasPersistedKey() {
+// Consume only a local connection fragment, never a chart/share fragment.
+const autoConnection = (async () => {
+  if (typeof location === 'undefined' || !/^#mcp=/.test(location.hash)) return;
+  let settings;
+  try { settings = parseAgentLink(location.href); } catch { return; }
+  history.replaceState(history.state, '', location.pathname + location.search);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    return !!localStorage.getItem(STORAGE_KEY);
-  } catch (e) {
-    return false;
+    await checkConnection(settings, controller.signal);
+    await setAiSettings(settings);
+  } catch {
+    toast('Could not connect to your local agent. Open Connect agent and paste a fresh link from opencharts_status.', 'bad', 6500);
+  } finally { clearTimeout(timeout); }
+})();
+export async function getAiSettings() {
+  await autoConnection;
+  if (sessionSettings === undefined) {
+    try { sessionSettings = normalizeSettings(JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null')); }
+    catch { sessionSettings = null; }
   }
+  return sessionSettings ? { ...sessionSettings } : null;
 }
 
 export function openAiConfigDialog() {
   return new Promise((resolve) => {
+    const returnFocus = document.activeElement;
     const scrim = el('div', 'dlg-scrim ask-scrim');
     const box = el('div', 'ask ai-config');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.setAttribute('aria-labelledby', 'ai-config-title');
-    const returnFocus = document.activeElement;
-    let loading = null;
-    let closed = false;
-    let edited = false;
-    let lastDetected = null;
-
     const main = el('div', 'ask-main');
-    const title = el('h2', 'ask-title', 'Connect your AI');
+    const title = el('h2', 'ask-title', 'Connect agent');
     title.id = 'ai-config-title';
-    main.appendChild(title);
-    main.appendChild(el('p', 'ask-text',
-      'Paste your API key. We recognize Gemini, Anthropic, NVIDIA and xAI keys and select a model for you. '
-      + 'Requests go directly to that service and use your API quota or billing.'));
-
-    const inputWrap = el('div', 'dlg-col');
-    inputWrap.style.marginTop = '16px';
+    main.append(title, el('p', 'ask-text', 'Use Codex, Claude Code or another MCP-capable agent signed in on your device. Your agent handles AI access under its own plan and usage limits.'));
+    const label = el('label', 'dlg-label', 'Local connection link');
+    label.htmlFor = 'ai-config-link';
     const input = el('input', 'link-input');
-    input.type = 'password';
-    input.id = 'ai-config-key';
-    input.placeholder = 'Paste your API key';
+    input.id = label.htmlFor;
+    input.type = 'url';
     input.autocomplete = 'off';
     input.spellcheck = false;
-    input.setAttribute('aria-describedby', 'ai-config-destination ai-config-error');
-    const keyLabel = el('label', 'dlg-label', 'API key');
-    keyLabel.htmlFor = input.id;
-    const hint = el('p', 'ask-text');
-    hint.id = 'ai-config-destination';
-    hint.setAttribute('role', 'status');
+    input.placeholder = 'http://127.0.0.1:8765/#mcp=…';
+    input.setAttribute('aria-describedby', 'ai-config-hint ai-config-error');
+    const hint = el('p', 'ask-text', 'Ask your agent to call opencharts_status. Open its local link or paste it here. Keep this link private; it connects this tab to the agent on your device.');
+    hint.id = 'ai-config-hint';
     const error = el('p', 'analyst-status is-bad');
     error.id = 'ai-config-error';
     error.setAttribute('role', 'alert');
-    inputWrap.append(keyLabel, input, hint, error);
-
-    const advanced = el('details', 'ai-config-advanced');
-    advanced.appendChild(el('summary', null, 'Advanced — provider, model or local endpoint'));
-    const provider = el('select', 'input');
-    provider.id = 'ai-config-provider';
-    const providerLabel = el('label', 'dlg-label', 'AI provider');
-    providerLabel.htmlFor = provider.id;
-    Object.entries(PROVIDERS).forEach(([value, entry]) => {
-      const option = el('option', null, entry.label);
-      option.value = value;
-      provider.appendChild(option);
-    });
-    advanced.append(providerLabel, provider);
-
-    const endpoint = el('input', 'link-input');
-    endpoint.type = 'url';
-    endpoint.id = 'ai-config-endpoint';
-    endpoint.spellcheck = false;
-    endpoint.setAttribute('aria-label', 'OpenAI-compatible endpoint');
-    endpoint.value = DEFAULT_SETTINGS.endpoint;
-    endpoint.placeholder = 'https://your-provider.example/v1';
-    const endpointLabel = el('label', 'dlg-label', 'API base URL or chat endpoint');
-    endpointLabel.htmlFor = endpoint.id;
-
-    const model = el('input', 'link-input');
-    model.type = 'text';
-    model.id = 'ai-config-model';
-    model.spellcheck = false;
-    model.setAttribute('aria-label', 'Model name');
-    model.placeholder = 'Automatic (leave blank)';
-    model.setAttribute('list', 'ai-config-models');
-    const modelLabel = el('label', 'dlg-label', 'Model override (optional)');
-    modelLabel.htmlFor = model.id;
-    const models = el('datalist');
-    models.id = 'ai-config-models';
-    const loadBtn = el('button', 'btn', 'Load models');
-    loadBtn.type = 'button';
-    advanced.append(endpointLabel, endpoint, modelLabel, model, models, loadBtn,
-      el('p', 'ask-text', 'Use any chat model supported by this API. Other services need their endpoint; local models can use no key. Browser access (CORS) must be allowed. A trusted local proxy is needed when a service blocks browser requests.'));
-    inputWrap.appendChild(advanced);
-
-    const draft = () => ({ provider: provider.value, endpoint: endpoint.value, model: model.value.trim(), key: input.value.trim() });
-
-    const paintProvider = () => {
-      const local = provider.value === 'openai';
-      endpointLabel.hidden = endpoint.hidden = !local;
-      lastDetected = detectProvider(input.value);
-      const chosen = provider.value === 'auto' ? lastDetected : provider.value;
-      hint.textContent = chosen
-        ? `${PROVIDERS[chosen].label} · ${chosen === 'openai' ? endpoint.value : new URL(PROVIDERS[chosen].endpoint).host} · ${model.value.trim() ? 'Custom model' : 'Automatic model'}`
-        : input.value.trim() ? 'Unrecognized key format. Choose a service in Advanced; your key has not been sent.'
-          : 'Detection happens on your device. Nothing is sent until you chat or load models.';
-      loadBtn.disabled = !!loading || !chosen || (!input.value.trim() && !local);
-    };
-    const changed = () => {
-      edited = true;
-      loading?.abort();
-      loading = null;
-      loadBtn.textContent = 'Load models';
-      models.replaceChildren();
-      error.textContent = '';
-      input.removeAttribute('aria-invalid');
-      paintProvider();
-    };
-    provider.addEventListener('change', () => { model.value = ''; changed(); });
-    input.addEventListener('input', () => {
-      const detected = detectProvider(input.value);
-      // A new recognizable key should not inherit the previous service/model.
-      // Preserve custom proxy destinations, which may intentionally use that key.
-      if (provider.value !== 'openai' && detected && detected !== lastDetected) {
-        provider.value = 'auto';
-        model.value = '';
-      }
-      changed();
-    });
-    endpoint.addEventListener('input', changed);
-    model.addEventListener('input', () => { edited = true; paintProvider(); });
-    getAiSettings().then((settings) => {
-      if (closed || edited) return;
-      provider.value = settings.provider;
-      endpoint.value = settings.endpoint;
-      model.value = settings.model;
-      input.value = settings.key || '';
-      paintProvider();
-    }).catch(paintProvider);
-    paintProvider();
-
-    loadBtn.addEventListener('click', async () => {
-      const controller = new AbortController();
-      loading = controller;
-      loadBtn.disabled = true;
-      loadBtn.textContent = 'Loading…';
-      error.textContent = '';
-      const timeout = setTimeout(() => controller.abort(), 20000);
-      try {
-        const names = await listProviderModels(draft(), controller.signal);
-        if (closed || loading !== controller) return;
-        models.replaceChildren(...names.map((name) => { const option = el('option'); option.value = name; return option; }));
-        hint.textContent = `${names.length} chat models loaded. Leave the model blank for automatic selection, or type to choose.`;
-        model.focus();
-      } catch (err) {
-        if (!closed && loading === controller) error.textContent = controller.signal.aborted ? 'Model lookup timed out. Try again or enter a model manually.' : err.message;
-      } finally {
-        clearTimeout(timeout);
-        if (loading === controller) { loading = null; loadBtn.disabled = false; loadBtn.textContent = 'Load models'; }
-      }
-    });
-
-    const checkboxWrap = el('label', 'shape-col');
-    checkboxWrap.style.display = 'flex';
-    checkboxWrap.style.alignItems = 'center';
-    checkboxWrap.style.gap = '8px';
-    checkboxWrap.style.cursor = 'pointer';
-    const checkbox = el('input');
-    checkbox.type = 'checkbox';
-    // Check it if they already have one in localStorage
-    checkbox.checked = hasPersistedKey();
-    checkboxWrap.append(checkbox, el('span', null,
-      'Keep it on this browser between visits. Stored sealed rather than in plain '
-      + 'text, under a passphrase this page carries — that hides it from a glance, '
-      + 'not from anyone who can read the page. Leave it unticked on a shared machine '
-      + 'and the key lives in memory for this session only.'));
-    inputWrap.appendChild(checkboxWrap);
-
-    main.appendChild(inputWrap);
-
+    const fields = el('div', 'ai-config-fields');
+    fields.append(label, input, hint, error);
+    const guide = el('details', 'ai-config-advanced');
+    guide.appendChild(el('summary', null, 'First-time setup'));
+    guide.appendChild(el('p', 'ask-text', 'Download OpenCharts, install Node.js 20 or newer, and run npm install in the OpenCharts folder. Add its MCP server to your signed-in agent using the full path on your device:'));
+    for (const [name, command] of [
+      ['Codex', 'codex mcp add opencharts -- node /absolute/path/to/OpenCharts/tools/mcp-server.mjs'],
+      ['Claude Code', 'claude mcp add --transport stdio opencharts -- node /absolute/path/to/OpenCharts/tools/mcp-server.mjs'],
+    ]) guide.append(el('p', 'dlg-label', name), el('pre', 'ai-config-command', command));
+    guide.append(el('p', 'dlg-label', 'Other MCP clients'), el('pre', 'ai-config-command', JSON.stringify({
+      mcpServers: { opencharts: { command: 'node', args: ['/absolute/path/to/OpenCharts/tools/mcp-server.mjs'] } },
+    }, null, 2)));
+    guide.appendChild(el('p', 'ask-text', 'Restart or reconnect your agent, then ask it to call opencharts_status. After sending a message here, ask the agent to read the pending OpenCharts request and reply. Keep the agent running while you chat.'));
+    const docs = el('a', null, 'Download and setup instructions');
+    docs.href = 'https://github.com/Hamza928505/OpenCharts#connect-codex-claude-code-or-another-mcp-agent';
+    docs.target = '_blank';
+    docs.rel = 'noopener noreferrer';
+    guide.appendChild(docs);
+    main.append(fields, guide, el('p', 'ask-text', 'Only messages you send and their data are shared with the connected agent. Local analysis works without a connection. The connection is kept for this browser tab; OpenCharts does not sign into an AI account.'));
     const foot = el('div', 'ask-foot');
-    foot.style.marginTop = '24px';
-    
-    const cancelBtn = el('button', 'btn', 'Cancel');
-    cancelBtn.type = 'button';
-    
-    const clearBtn = el('button', 'btn', 'Clear provider');
-    clearBtn.type = 'button';
-    clearBtn.style.marginRight = 'auto';
-
-    const saveBtn = el('button', 'btn btn-primary', 'Save provider');
-    saveBtn.type = 'button';
-    
-    foot.append(clearBtn, cancelBtn, saveBtn);
+    const clear = el('button', 'btn', 'Disconnect');
+    const cancel = el('button', 'btn', 'Cancel');
+    const save = el('button', 'btn btn-primary', 'Connect');
+    for (const button of [clear, cancel, save]) button.type = 'button';
+    clear.style.marginRight = 'auto';
+    foot.append(clear, cancel, save);
     main.appendChild(foot);
-
-    box.append(main);
+    box.appendChild(main);
     scrim.appendChild(box);
     document.body.appendChild(scrim);
-
+    let closed = false;
+    let edited = false;
+    let loading = null;
     const done = (value) => {
+      if (closed) return;
       closed = true;
       loading?.abort();
       document.removeEventListener('keydown', onKey, true);
@@ -388,51 +159,62 @@ export function openAiConfigDialog() {
       returnFocus?.focus();
       resolve(value);
     };
-
-    function onKey(e) {
-      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
-      if (e.key === 'Tab') {
-        const focusable = [...box.querySelectorAll('input, select, button, summary')].filter((node) => !node.disabled && node.getClientRects().length);
+    function onKey(event) {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); done(false); }
+      if (event.key === 'Tab') {
+        const focusable = [...box.querySelectorAll('input, button, summary, a[href]')]
+          .filter((node) => !node.disabled && node.getClientRects().length);
         const first = focusable[0], last = focusable.at(-1);
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        if (!box.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }
     }
-
-    cancelBtn.addEventListener('click', () => done(false));
-    clearBtn.addEventListener('click', () => {
-      clearAiSettings();
-      input.value = '';
-      provider.value = 'auto';
-      endpoint.value = DEFAULT_SETTINGS.endpoint;
-      model.value = '';
-      checkbox.checked = false;
-      changed();
-      toast('AI provider cleared', 'ok');
+    input.addEventListener('input', () => { edited = true; error.textContent = ''; input.removeAttribute('aria-invalid'); });
+    getAiSettings().then((settings) => {
+      if (!closed && !edited && settings) input.value = `${settings.endpoint}/#mcp=${settings.token}`;
     });
-
-    saveBtn.addEventListener('click', async () => {
-      try { resolveProvider(draft()); } catch (err) {
+    cancel.addEventListener('click', () => done(false));
+    clear.addEventListener('click', () => { clearAiSettings(); toast('Agent disconnected', 'ok'); done(true); });
+    save.addEventListener('click', async () => {
+      if (loading) return;
+      let settings;
+      try { settings = parseAgentLink(input.value); } catch (err) {
         error.textContent = err.message;
-        if (!input.value.trim() && provider.value !== 'openai') { input.setAttribute('aria-invalid', 'true'); input.focus(); }
-        else { advanced.open = true; (provider.value === 'openai' ? endpoint : provider).focus(); }
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
         return;
       }
-      saveBtn.disabled = true;
-      const res = await setAiSettings(draft(), { persist: checkbox.checked });
-      if (!res.ok) {
-        toast('This browser refused to store the provider — it will work for this session only', 'bad', 4200);
-      } else {
-        toast(res.persisted ? 'Provider saved on this browser' : 'Provider kept for this session only', 'ok');
+      loading = new AbortController();
+      const active = loading;
+      const timeout = setTimeout(() => active.abort(), 5000);
+      save.disabled = input.disabled = clear.disabled = true;
+      save.textContent = 'Connecting…';
+      cancel.focus();
+      error.textContent = '';
+      try {
+        await checkConnection(settings, active.signal);
+        if (closed) return;
+        const result = await setAiSettings(settings);
+        toast(result.persisted ? 'Agent connected for this tab' : 'Agent connected for this page only', 'ok');
+        done(true);
+      } catch (err) {
+        if (closed) return;
+        error.textContent = err instanceof TypeError || active.signal.aborted
+          ? 'Could not reach OpenCharts MCP. Keep your agent running, allow local network access if asked, or open the local link from opencharts_status.'
+          : err.message;
+        input.setAttribute('aria-invalid', 'true');
+      } finally {
+        clearTimeout(timeout);
+        loading = null;
+        save.disabled = input.disabled = clear.disabled = false;
+        save.textContent = 'Connect';
+        if (!closed) input.focus();
       }
-      done(true);
     });
-
-    scrim.addEventListener('mousedown', (e) => { if (e.target === scrim) done(false); });
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); save.click(); } });
+    scrim.addEventListener('mousedown', (event) => { if (event.target === scrim) done(false); });
     document.addEventListener('keydown', onKey, true);
-    
-    // Focus input on load
     input.focus();
   });
 }
-
