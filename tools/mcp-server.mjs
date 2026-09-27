@@ -193,8 +193,11 @@ const http = createServer(async (req, res) => {
     }
     if (!['GET', 'HEAD'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
     const name = path === '/' ? 'index.html' : path.slice(1);
-    if (!path.startsWith('/') || !allowedFile(name)) return send(res, 404, { error: 'Not found.' });
-    const file = await realpath(resolve(ROOT, name));
+    if (!path.startsWith('/') || !name || name.startsWith('/') || name.startsWith('\\') || name.includes('\0') || !allowedFile(name)) return send(res, 404, { error: 'Not found.' });
+    const candidate = resolve(ROOT, name);
+    const candidateRel = relative(ROOT, candidate);
+    if (candidateRel.startsWith('..') || candidateRel.includes(`${sep}..${sep}`) || candidateRel === '..') return send(res, 404, { error: 'Not found.' });
+    const file = await realpath(candidate);
     const rel = relative(ROOT, file);
     if (rel.startsWith('..') || rel.includes(`${sep}..${sep}`) || rel === '..') return send(res, 404, { error: 'Not found.' });
     const local = rel.split(sep).join('/');
