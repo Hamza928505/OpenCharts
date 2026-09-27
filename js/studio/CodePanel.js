@@ -296,8 +296,8 @@ export class CodePanel {
       this.dlBtn.style.display = 'none';
       this.editBtn.hidden = true;
       this.note.textContent = tab.view === 'analyst'
-        ? 'Your table and your sentence go straight from this browser to Anthropic, '
-          + 'with your own key. Nothing is applied until you press Apply.'
+        ? 'Your table and your sentence go through your local MCP bridge to your signed-in agent, '
+          + 'using its account and plan. Nothing is applied until you press Apply.'
         : 'Every colour this chart draws with. '
           + 'Changing one here is the same edit as changing it in the sidebar.';
       return;

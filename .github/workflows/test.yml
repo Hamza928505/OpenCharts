@@ -43,11 +43,10 @@ jobs:
       - name: Run the suite
         run: npm test
 
-      - name: Check AI provider routing and chat (mock APIs)
+      - name: Check MCP bridge and agent chat (no model calls)
         run: |
-          node test/ai-providers.mjs
+          node test/mcp-server.mjs
           node test/ai-response.mjs
-          node test/gemini.mjs
           node test/match-chat.mjs
 
       # A failing run is far easier to diagnose with the screenshots the

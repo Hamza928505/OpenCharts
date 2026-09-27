@@ -32,7 +32,7 @@ const el = (tag, cls, text) => {
 function stateFor(spec) {
   let s = pending.get(spec);
   if (!s) {
-    s = { request: '', status: '', tone: '', answer: null, raw: '', busy: false, node: null };
+    s = { request: '', status: '', tone: '', answer: null, raw: '', busy: false, node: null, controller: null };
     pending.set(spec, s);
   }
   return s;
@@ -61,8 +61,8 @@ export function analystPanel(def, spec, { onApply } = {}) {
   };
 
   root.appendChild(el('p', 'analyst-lead',
-    'Say what you want this chart to show. Your table, the chart list and your '
-    + 'sentence go straight from this browser to the provider in AI Settings — there is no server here.'));
+    'Say what you want this chart to show, then ask your signed-in agent to process the pending '
+    + 'OpenCharts request. Your table and message go through the local MCP bridge; its answer appears here for review.'));
 
   const box = el('textarea', 'analyst-input');
   box.placeholder = 'revenue by region, and highlight the North';
@@ -76,10 +76,16 @@ export function analystPanel(def, spec, { onApply } = {}) {
   const ask = el('button', 'btn btn-sm btn-primary', state.busy ? 'Asking…' : 'Ask');
   ask.type = 'button';
   ask.disabled = state.busy;
-  const settings = el('button', 'btn btn-sm', 'AI Settings');
+  const settings = el('button', 'btn btn-sm', 'Connect agent');
   settings.type = 'button';
   settings.addEventListener('click', async () => { await openAiConfigDialog(); repaint(); });
   row.append(ask, settings);
+  if (state.busy) {
+    const stop = el('button', 'btn btn-sm', 'Stop');
+    stop.type = 'button';
+    stop.addEventListener('click', () => state.controller?.abort());
+    row.appendChild(stop);
+  }
   root.appendChild(row);
 
   const status = el('p', 'analyst-status' + (state.tone ? ' is-' + state.tone : ''), state.status);
@@ -142,11 +148,20 @@ export function analystPanel(def, spec, { onApply } = {}) {
     state.busy = true;
     state.answer = null;
     state.raw = '';
-    state.status = 'Asking Anthropic…';
+    state.status = 'Sending to your local agent connection…';
+    state.controller = new AbortController();
     state.tone = '';
     repaint();
 
-    const res = await askAnalyst({ def, spec, request: state.request });
+    let res;
+    try {
+      res = await askAnalyst({ def, spec, request: state.request, signal: state.controller.signal,
+        onStatus: (message) => { state.status = message; repaint(); },
+      });
+    } catch (error) {
+      res = { ok: false, error: state.controller.signal.aborted ? 'Request stopped. Your message is kept; send it again when ready.' : error.message };
+    }
+    state.controller = null;
     state.busy = false;
     if (res.ok) {
       state.answer = res.answer;
@@ -162,15 +177,11 @@ export function analystPanel(def, spec, { onApply } = {}) {
     repaint();
   });
 
-  // Whether there is a key at all is the first thing a reader needs to know,
-  // and it is answered asynchronously — so the panel renders without it and
-  // says so when the answer arrives.
+  // Give setup guidance before the reader starts an analysis request.
   getAiSettings().then((settings) => {
-    if (settings.key || settings.provider === 'openai' || !root.isConnected || state.node !== root) return;
+    if (settings || state.status || !root.isConnected || state.node !== root) return;
     const note = el('p', 'analyst-status is-bad',
-      'No API key on this browser yet. Add one in AI Settings — it stays on this '
-      + 'browser, sealed rather than in plain text, and leaves it only as a header '
-      + 'on the request to the provider you chose.');
+      'No agent is paired with this tab. Use Connect agent to link Codex, Claude Code or another MCP client signed in on your device.');
     root.insertBefore(note, row.nextSibling);
     status.hidden = true;
   }).catch(() => { /* storage refused; the Ask button says so instead */ });

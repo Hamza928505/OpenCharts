@@ -2183,6 +2183,9 @@ input[type="range"]::-moz-range-thumb {
 .ai-config-advanced .dlg-label:not([hidden]) { display: block; margin-top: 12px; }
 .ai-config-advanced .btn { margin-top: 8px; }
 .ai-config .ask-foot { flex-wrap: wrap; }
+.ai-config-fields { display: grid; gap: .5rem; margin-top: 1rem; }
+.ai-config-command { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; margin: .5rem 0; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-sm); font: 12px/1.6 var(--mono); }
+.ai-config .btn, .ai-config .link-input, .ai-config-advanced summary { min-height: 44px; }
 .btn-danger { background: var(--bad); border-color: var(--bad); }
 
 @media (max-width: 720px) {

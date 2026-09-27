@@ -1,10 +1,9 @@
 import { askAnalyst } from './analyst.js';
 import { getAiSettings } from './ai-config.js';
-import { PROVIDERS, detectProvider } from './ai-providers.js';
 import { getChart } from './registry.js';
 import { renderChart, destroyInstance } from './engines.js';
 
-/** One in-memory conversation per imported table; provider calls use the shared analyst. */
+/** One in-memory conversation per imported table, answered by the paired MCP agent. */
 export function mountMatchChat(root, getTable) {
   const log = root.querySelector('#match-chat-log');
   const form = root.querySelector('#match-chat-form');
@@ -35,7 +34,7 @@ export function mountMatchChat(root, getTable) {
   const busy = (value) => {
     send.disabled = value;
     stop.hidden = !value;
-    send.textContent = value ? 'Thinking…' : 'Send';
+    send.textContent = value ? 'Waiting…' : 'Send';
   };
   const reset = () => {
     revision++;
@@ -47,7 +46,7 @@ export function mountMatchChat(root, getTable) {
     current = null;
     input.placeholder = initialPlaceholder;
     log.replaceChildren();
-    bubble('assistant', 'Upload or paste a table, then ask me to find insights or draw a chart. You can follow up to change the chart or explore another question.');
+    bubble('assistant', 'Connect your signed-in agent, then send a question about your data. Ask the agent to process the pending OpenCharts request; its reply and charts will appear here. Local analysis works without an agent.');
     busy(false);
   };
   const submit = async () => {
@@ -59,13 +58,11 @@ export function mountMatchChat(root, getTable) {
     busy(true);
     bubble('user', request);
     input.value = '';
-    const pending = bubble('assistant', 'Thinking…');
-    const timeout = setTimeout(() => active.abort(), 90000);
+    const pending = bubble('assistant', 'Sending to your local agent connection…');
     try {
       const settings = await getAiSettings();
       if (turn !== revision) return;
-      const service = settings.provider === 'auto' ? detectProvider(settings.key) : settings.provider;
-      provider.textContent = settings.model || PROVIDERS[service]?.label || 'Add API key';
+      provider.textContent = settings ? 'Paired with local agent' : 'Connect an agent to start';
       const result = await askAnalyst({
         request, conversation: history, table: getTable(),
         def: current && getChart(current.chart), spec: current?.spec,
@@ -121,7 +118,6 @@ export function mountMatchChat(root, getTable) {
       bubble('assistant', active.signal.aborted ? 'Request stopped or timed out. You can send your message again.' : error.message);
       if (!input.value) input.value = request;
     } finally {
-      clearTimeout(timeout);
       if (turn === revision) { controller = null; busy(false); }
     }
   };
@@ -134,6 +130,12 @@ export function mountMatchChat(root, getTable) {
   root.querySelectorAll('.match-chat-suggestions button').forEach((button) => {
     button.addEventListener('click', () => { input.value = button.textContent; input.focus(); });
   });
+  const connectionChanged = () => {
+    controller?.abort();
+    getAiSettings().then((settings) => { provider.textContent = settings ? 'Paired with local agent' : 'Connect an agent to start'; });
+  };
+  window.addEventListener('opencharts-agent-change', connectionChanged);
+  connectionChanged();
   reset();
   return { reset };
 }

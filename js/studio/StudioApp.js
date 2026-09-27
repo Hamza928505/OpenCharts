@@ -353,10 +353,7 @@ export class StudioApp {
     $('#btn-save')?.addEventListener('click', () => this._save());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
-    // The AI Analyst's key. This control was removed once, and rightly, while
-    // nothing read the key back — a reader was handing a credential to a
-    // feature that did not exist. `analyst.js` reads it now, so the control is
-    // back and the sweep that deleted a stored key on every visit is gone.
+    // Pair this tab with the user's local MCP agent bridge.
     $('#btn-ai-config')?.addEventListener('click', () => openAiConfigDialog());
 
     // Restore the rail the way it was left. Read once, here, rather than at

@@ -78,8 +78,10 @@ file is read the other way up — a bar per month, a series per product — on
 every tile, in the studio and in the prompt. The data editor has the same
 thing as a button on the table, undoable, and as a step in the Shape tab.
 
-Nothing is uploaded. The file is read in the browser, and the table travels to
-the studio in session storage rather than over a network.
+The file is read in the browser, and the table travels to the studio in session
+storage. Local analysis needs no network. If you connect an agent and send an
+AI request, its context and table are shared with that agent through the local
+MCP bridge described below.
 
 ## Keeping a chart
 
@@ -220,7 +222,7 @@ Each chart emits eight views:
 - **Colours** — not code at all: the whole palette at once, a swatch and a name
   per series, with a warning if two of them merge for a colour-blind reader.
 - **AI Analyst** — ask for a chart in a sentence and get a spec back, previewed
-  before it is applied. Needs your own Anthropic key; see below.
+  before it is applied. Connect your signed-in agent through MCP; see below.
 
 Undo and redo sit in that same bar and cover the whole chart — every colour,
 slider, toggle, note and split, not just the data table.
@@ -307,48 +309,60 @@ happens until you press **Apply**. Apply goes through the same door a pasted
 spec does, so it joins the undo history like any other edit and you can take it
 back.
 
-Three things worth knowing before you use it:
+### Connect Codex, Claude Code or another MCP agent
 
-- **You bring your own key and API quota.** Paste your key in **AI Settings**.
-  Recognizable Gemini, Anthropic, NVIDIA and xAI keys select their service
-  automatically; a chat model is discovered without asking you to name one.
-  Detection is local, not validation: unknown key formats require **Advanced**
-  settings, and we never try your key against multiple services. There is no server
-  in this project, so the request goes straight from your browser to that service
-  with your key in a header — it is never in the request body, never in a spec,
-  never in a share link and never in an export.
-- **The key stays on this browser.** Tick the box and it is kept between
-  visits, sealed rather than written as plain text — which hides it from a
-  glance at devtools or a shared screen, not from anyone who can read the page.
-  It is obfuscation, not a secret store. Leave the box unticked on a shared
-  machine and the key lives in memory for that session only. **Clear provider**
-  removes it.
-- **Nothing is applied until you look at it.** A reply that is not a chart spec
-  changes nothing and is shown to you as it came back, with what was wrong with
-  it. No key, a refused key and a blocked request each say which.
+OpenCharts no longer asks for an AI provider, model name or API key. Its optional
+MCP server connects the page to an agent you run and sign into, such as Codex or
+Claude Code. Choose your model and account in that agent. Your subscription must
+include access to the agent; its normal usage limits still apply. MCP is a tool
+connection, not a source of free or unlimited inference.
 
-**Advanced** keeps provider, model override and **Load models** available for
-developers. Use **Custom / local (OpenAI-compatible)** for another service,
-OpenAI, Ollama or a trusted local proxy. Supply its API base URL (for example
-`http://localhost:11434/v1`) or full chat-completions endpoint. Local services
-may not need a key. Leave the model blank to discover one, or enter its exact
-ID if listing is unavailable. The model must support chat and follow the app's
-JSON instructions; embedding/image-only models are not chat models. Automatic
-selection does not guarantee free quota or permission to use a listed model.
-The endpoint must allow browser requests (CORS); a provider that blocks them
-needs a trusted local proxy. Installing this repo alone does not remove CORS.
+Clone this repository, install [Node.js](https://nodejs.org/) 20 or newer, and run
+`npm install` in its folder. Register the server in **one** agent, replacing the
+example path with the absolute path to your clone:
 
-Gemini overload handling uses at most three generation requests per message,
-including format fallback and reply repair. Automatic selection remembers a
-working Flash model for the session and skips recently overloaded models for
-30 seconds (or longer when `Retry-After` requests it). An explicit model override
-is respected. During the cooldown, messages stay in the editor without another
-API call. This limits repeated failures; it cannot make an unavailable Google
-service respond. Switch providers or run a local model if the outage persists.
+```bash
+# Codex
+codex mcp add opencharts -- node /absolute/path/OpenCharts/tools/mcp-server.mjs
+
+# Claude Code
+claude mcp add --transport stdio opencharts -- node /absolute/path/OpenCharts/tools/mcp-server.mjs
+```
+
+On Windows, quote the path, for example
+`node "C:/Users/you/OpenCharts/tools/mcp-server.mjs"`. Other local MCP clients
+can launch the same `node` command and script using stdio. These commands follow
+the [Codex MCP setup](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and
+[Claude Code MCP setup](https://code.claude.com/docs/en/mcp).
+
+1. Open your signed-in agent, enable the OpenCharts MCP tools, and ask it to call
+   `opencharts_status`.
+2. Open the pairing link it returns, such as
+   `http://127.0.0.1:8765/#mcp=...`. This serves OpenCharts locally and connects
+   the tab. Alternatively, paste the full link into **Connect agent** on the
+   hosted site. If the browser blocks access to a local service, use the local
+   link instead.
+3. Upload your table and send a message in OpenCharts. Then tell the agent:
+   **"Process my pending OpenCharts request and submit the answer using its MCP
+   tools."** The agent reads the request, retrieves rows if needed, and submits
+   an answer. The page displays it and draws valid chart suggestions.
+
+Keep the agent session open. A browser message queues work; it does not start an
+agent turn automatically. For another message, ask the agent to process the next
+request. The studio's **AI Analyst** previews a returned spec and changes the
+chart only when you press **Apply**. Malformed replies do not change the chart.
+
+The bridge runs on your computer and keeps requests in memory. The pairing link
+contains a temporary access token, not an AI API key; keep it private and use the
+new link after restarting the server. The agent receives the data you send for
+analysis and may send it to its model service under that account's data policy.
+OpenCharts does not read or forward your agent's login credentials. Disconnect
+to stop using the bridge; **Analyze without AI** and **AI Prompt** remain usable
+without it. [Bridge details and troubleshooting](tools/README.md#local-mcp-bridge).
 
 ### Chart replies in the main-page chat
 
-All chat providers use one response contract:
+All connected agents use one response contract:
 
 ```json
 {
@@ -357,26 +371,24 @@ All chat providers use one response contract:
 }
 ```
 
-Column indices refer to the uploaded table (zero-based). The assistant receives
-the first 40 rows for context, but the browser builds each chart from **all local
-rows** using the selected columns and the existing chart data adapters. The model
+Column indices refer to the uploaded table (zero-based). The request includes a
+40-row preview; the agent can retrieve additional rows with `opencharts_read_rows`.
+The browser builds each chart from **all local rows** using the selected columns
+and the existing chart data adapters. The model
 does not copy numerical values or executable chart code into its answer. Replies
 can contain up to three charts; greetings and clarification questions use an
 empty array. **Discuss this chart** selects the chart for the next follow-up.
 
-Gemini, Anthropic and compatible APIs receive native structured-output options.
-An endpoint that explicitly rejects those options gets one prompt-only fallback,
-with the same local validation. Malformed, truncated or invalid chart replies get
-one correction request; authentication, quota and safety refusals do not. Unsupported
-models can still fail: no LLM can be forced to comply by a prompt alone. No invalid
-reply is rendered with fabricated values or default example data.
+The MCP request supplies the response schema. The agent sends its answer through
+`opencharts_submit_answer`, and the browser validates the chart identifiers and
+column selections before rendering. An invalid reply is reported instead of
+being rendered with fabricated values or default example data.
 
 Column plans currently select/reorder existing columns, not arbitrary filtering,
 grouping, calculations or style edits. Use the studio tools for those changes.
 
-If you would rather not hand over a key at all, the **AI Prompt** tab does the
-same job the other way round: it writes the whole brief for you to paste into
-whatever assistant you already use.
+The **AI Prompt** tab also writes a complete brief to paste into whatever
+assistant you already use, without setting up an MCP connection.
 
 ## Not sure how to read a chart?
 
@@ -715,7 +727,7 @@ Finance, Geo, KPI & Micro, and Custom Engine.
 ## Tests
 
 ```bash
-npm install          # once — pulls Playwright
+npm install          # once — MCP dependencies and Playwright
 npx playwright install chromium
 npm test             # renders all <!-- count:charts -->115<!-- /count --> charts and checks them
 ```
