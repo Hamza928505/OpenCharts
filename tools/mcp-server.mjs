@@ -195,7 +195,9 @@ const http = createServer(async (req, res) => {
     const name = path === '/' ? 'index.html' : path.slice(1);
     if (!path.startsWith('/') || !allowedFile(name)) return send(res, 404, { error: 'Not found.' });
     const file = await realpath(resolve(ROOT, name));
-    const local = relative(ROOT, file).split(sep).join('/');
+    const rel = relative(ROOT, file);
+    if (rel.startsWith('..') || rel.includes(`${sep}..${sep}`) || rel === '..') return send(res, 404, { error: 'Not found.' });
+    const local = rel.split(sep).join('/');
     if (!allowedFile(local)) return send(res, 404, { error: 'Not found.' });
     const content = await readFile(file);
     res.writeHead(200, { 'Content-Type': MIME[extname(file)], 'Content-Length': content.length });
