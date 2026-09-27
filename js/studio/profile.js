@@ -15,14 +15,14 @@
  * Two rules it keeps, both borrowed from the rest of this codebase:
  *
  * - **Nothing is invented.** A column with no numbers gets no mean. A pair of
- *   columns with three rows between them gets no correlation. Where there is
+ *   columns with too few pairs or no variation gets no correlation. Where there is
  *   not enough to say something true, nothing is said.
  * - **A finding names its evidence.** "4 of 500 cells will read as 0" is
  *   actionable; "data quality issues detected" is not.
  */
 
 import { looksNumeric } from './dataio.js';
-import { toNumber, ID_NAME } from './transform.js';
+import { toNumber, ID_NAME, fold, groupRows, AGGREGATES } from './transform.js';
 import { looksDateLike } from './timeaxis.js';
 
 /**
@@ -56,18 +56,8 @@ const CATEGORY_CEILING = 50;
 const isBlank = (v) => v == null || String(v).trim() === '';
 
 
-const median = (sorted) => {
-  if (!sorted.length) return null;
-  const m = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
-};
-
-/** Trim float noise without lying about big numbers — the rule `transform.js` uses. */
-const tidy = (n) => {
-  if (!Number.isFinite(n)) return null;
-  const r = Math.round(n * 1e6) / 1e6;
-  return Number.isInteger(r) ? r : +r.toFixed(4);
-};
+// Round for display only: tiny scientific measurements must not become zero.
+const tidy = (n) => Number.isFinite(n) ? +n.toPrecision(12) : null;
 
 /**
  * One column, described.
@@ -94,6 +84,9 @@ function profileColumn(name, index, values) {
     name, index, missing, distinct,
     count: values.length,
     filled: filled.length,
+    numericCount: nums.length,
+    invalid: filled.length - nums.length,
+    repeated: filled.length - distinct,
     // How many cells a chart would silently read as zero. The single most
     // useful number here, and the one no other surface reports.
     unreadable: filled.filter((v) => !looksNumeric(v)).length,
@@ -104,20 +97,25 @@ function profileColumn(name, index, values) {
 
   if (!filled.length) { col.type = 'empty'; return col; }
 
+  // Keep statistics even for mixed columns; the valid/excluded counts explain
+  // the denominator. Classification must not make an average inaccessible.
+  if (nums.length) {
+    const mean = fold(nums, 'mean');
+    const variance = nums.reduce((s, n) => s + (n - mean) ** 2, 0) / nums.length;
+    Object.assign(col, {
+      min: fold(nums, 'min'), max: fold(nums, 'max'), mean,
+      median: fold(nums, 'median'), sum: fold(nums, 'sum'),
+      stdev: Math.sqrt(variance),
+    });
+  }
+
   // A date column is ordered, which is what makes a line chart honest.
   if (dateShare >= 0.9) { col.type = 'date'; return col; }
 
   if (numericShare >= 0.9) {
-    const sorted = [...nums].sort((a, b) => a - b);
-    const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
-    const variance = nums.reduce((a, b) => a + (b - mean) ** 2, 0) / nums.length;
-    const sd = Math.sqrt(variance);
+    const mean = col.mean;
+    const sd = col.stdev;
     col.type = 'number';
-    col.min = tidy(sorted[0]);
-    col.max = tidy(sorted[sorted.length - 1]);
-    col.mean = tidy(mean);
-    col.median = tidy(median(sorted));
-    col.stdev = tidy(sd);
     col.zeros = nums.filter((n) => n === 0).length;
     col.negatives = nums.filter((n) => n < 0).length;
     // Three standard deviations, reported as the values themselves rather than
@@ -150,16 +148,15 @@ function profileColumn(name, index, values) {
 }
 
 /** Pearson's r over the rows where both columns are numbers. */
-function correlate(a, b) {
+export function correlate(a, b) {
   const pairs = [];
   for (let i = 0; i < a.length && i < b.length; i++) {
     const x = toNumber(a[i]);
     const y = toNumber(b[i]);
     if (Number.isFinite(x) && Number.isFinite(y)) pairs.push([x, y]);
   }
-  // Under a dozen points a correlation is a shape somebody imagined.
-  if (pairs.length < 12) return null;
   const n = pairs.length;
+  if (n < 3) return { n, r: null };
   const mx = pairs.reduce((s, p) => s + p[0], 0) / n;
   const my = pairs.reduce((s, p) => s + p[1], 0) / n;
   let num = 0; let dx = 0; let dy = 0;
@@ -168,8 +165,41 @@ function correlate(a, b) {
     dx += (x - mx) ** 2;
     dy += (y - my) ** 2;
   }
-  if (!dx || !dy) return null;
-  return tidy(num / Math.sqrt(dx * dy));
+  if (!dx || !dy) return { n, r: null };
+  return { n, r: tidy(Math.max(-1, Math.min(1, num / Math.sqrt(dx * dy)))) };
+}
+
+/** Full-table grouped arithmetic, never an average of already-averaged groups. */
+export function groupSummary(table, by, measure, agg = 'mean') {
+  const validColumn = (i) => Number.isInteger(i) && i >= 0 && i < table.headers.length;
+  if ((by !== null && !validColumn(by)) || (agg !== 'count' && !validColumn(measure))
+    || !AGGREGATES.some((a) => a.id === agg)) throw new Error('Choose valid columns and a calculation.');
+  const groups = by === null ? new Map([['All rows', table.rows]]) : groupRows(table, by);
+  return [...groups].map(([key, rows]) => {
+    const values = rows.map((r) => toNumber(r[measure]));
+    const valid = values.filter(Number.isFinite).length;
+    const missing = rows.filter((r) => isBlank(r[measure])).length;
+    return { key, count: rows.length, valid, missing, invalid: rows.length - valid - missing,
+      value: agg === 'count' ? rows.length : (valid ? fold(values, agg) : null) };
+  });
+}
+
+/** Equality is trimmed cell text, case-sensitive; headers are not column data. */
+function duplicateGroups(table) {
+  const collect = (items) => {
+    const seen = new Map();
+    items.forEach((cells, i) => {
+      const key = JSON.stringify(cells.map((v) => String(v ?? '').trim()));
+      if (!seen.has(key)) seen.set(key, []);
+      seen.get(key).push(i);
+    });
+    return [...seen.values()].filter((group) => group.length > 1);
+  };
+  const rows = collect(table.rows.map((r) => table.headers.map((_, i) => r[i])));
+  const columns = table.rows.length ? collect(table.headers.map((_, i) => table.rows.map((r) => r[i]))) : [];
+  return { rows, columns,
+    rowCount: rows.reduce((n, group) => n + group.length - 1, 0),
+    columnCount: columns.reduce((n, group) => n + group.length - 1, 0) };
 }
 
 /**
@@ -188,7 +218,7 @@ function separation(rows, byCol, measureCol) {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(v);
   }
-  if (groups.size < 2) return null;
+  if (groups.size < 2 || [...groups.values()].some((vs) => vs.length < 2)) return null;
   const means = [...groups.values()].map((vs) => vs.reduce((a, b) => a + b, 0) / vs.length);
   const lo = Math.min(...means);
   const hi = Math.max(...means);
@@ -209,7 +239,7 @@ function separation(rows, byCol, measureCol) {
  * Ordered by how badly it would mislead: a cell that silently reads as zero
  * beats a duplicated row, which beats a column nobody will be able to read.
  */
-function qualityNotes(cols, table) {
+function qualityNotes(cols, duplicates) {
   const out = [];
 
   for (const c of cols) {
@@ -268,13 +298,7 @@ function qualityNotes(cols, table) {
     }
   }
 
-  const seen = new Set();
-  let dupes = 0;
-  for (const r of table.rows) {
-    const k = r.join(' ');
-    if (seen.has(k)) dupes++;
-    else seen.add(k);
-  }
+  const dupes = duplicates.rowCount;
   if (dupes) {
     out.push({
       level: 'warn',
@@ -303,25 +327,35 @@ export function profileTable(table) {
   const numbers = columns.filter((c) => c.type === 'number' && !c.idLike);
   const categories = columns.filter((c) => c.type === 'category' && !c.idLike);
   const dates = columns.filter((c) => c.type === 'date');
+  const groups = columns.filter((c) => !c.idLike && c.distinct >= 2
+    && c.distinct <= CATEGORY_CEILING && c.distinct < c.filled);
+  const duplicates = duplicateGroups({ headers, rows });
 
   // Every numeric pair, strongest first, and only the ones worth a sentence.
   const correlations = [];
-  for (let i = 0; i < numbers.length; i++) {
-    for (let j = i + 1; j < numbers.length; j++) {
-      const r = correlate(
-        rows.map((row) => row[numbers[i].index]),
-        rows.map((row) => row[numbers[j].index]),
+  const copies = new Set(duplicates.columns.flatMap((g) => g.slice(1)));
+  const variable = numbers.filter((c) => c.min !== c.max && !copies.has(c.index));
+  // ponytail: bound automatic pair scanning on very wide tables; any pair is
+  // still available in the explicit comparison, always using every row.
+  const scanned = variable.slice(0, 40);
+  const values = scanned.map((c) => rows.map((row) => toNumber(row[c.index])));
+  for (let i = 0; i < scanned.length; i++) {
+    for (let j = i + 1; j < scanned.length; j++) {
+      const { r, n } = correlate(
+        values[i], values[j],
       );
-      if (r != null && Math.abs(r) >= 0.5) {
-        correlations.push({ a: numbers[i].name, b: numbers[j].name, r });
+      if (r != null && n >= 12 && Math.abs(r) >= 0.5) {
+        correlations.push({ a: scanned[i].name, b: scanned[j].name, r, n,
+          aIndex: scanned[i].index, bIndex: scanned[j].index });
       }
     }
   }
   correlations.sort((x, y) => Math.abs(y.r) - Math.abs(x.r));
 
   const separators = [];
-  for (const cat of categories) {
-    for (const num of numbers) {
+  for (const cat of groups.slice(0, 40)) {
+    for (const num of scanned) {
+      if (cat.index === num.index) continue;
       const s = separation(rows, cat, num);
       if (s && s.spread >= 0.25) separators.push(s);
     }
@@ -335,7 +369,10 @@ export function profileTable(table) {
     numbers,
     categories,
     dates,
-    quality: qualityNotes(columns, table),
+    groups,
+    duplicates,
+    relationshipsLimited: variable.length > scanned.length || groups.length > 40,
+    quality: qualityNotes(columns, duplicates),
     correlations: correlations.slice(0, 5),
     separators: separators.slice(0, 3),
   };

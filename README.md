@@ -419,6 +419,34 @@ from a "Sample seed" slider and had no way to accept anyone's actual numbers.
 The datasets are deliberately small enough to edit: a histogram of 140 ages
 rather than 2,400 simulated ones.
 
+## Analyze without AI
+
+After uploading or pasting a table, **Analyze without AI** on the main page
+calculates over every imported row, entirely in the browser. No key or model
+is needed, and the source table is not changed.
+
+- **Counts & grouped calculations:** count repeated values in any column
+  (including numeric settings), or calculate an average, median, total,
+  minimum or maximum by group. Choose **All rows** for a whole-column result.
+  Each group shows its row count and the valid/excluded measurement counts.
+- **Every column's statistics:** numeric summaries, distinct/repeated values,
+  missing cells and population standard deviation, in a sortable paginated table.
+- **Compare two columns:** a scatter plot and Pearson's r over paired numeric
+  rows, with the sample size and exclusions. Association does not prove causation;
+  this is exploratory analysis, not a significance test.
+- **Repeated rows & columns:** counts and positions of identical records and
+  column contents. Equality uses trimmed, case-sensitive cell text; extra copies
+  are counted after the first. Nothing is removed automatically.
+
+Blank and nonnumeric measurements (including `—` and `N/A`) are excluded from
+arithmetic, **not converted to zero**. Results use the stored input values and
+their original units. Charts show calculated group results (up to 30 groups)
+or paired observations, not the first 40-row AI sample. Larger group results
+remain available in the table and **Download results CSV**. Display rounding
+does not change the numbers in the download. Automatic relationship suggestions
+scan at most 40 eligible measures/grouping columns; manual comparisons can use
+any numeric column and always use all rows.
+
 ## Reshaping a table before you chart it
 
 The file most people have is five hundred transactions; the chart they want is

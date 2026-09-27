@@ -20,6 +20,7 @@ import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
 } from './DataMatch.js';
 import { profileTable } from './profile.js';
+import { mountDataAnalysis } from './data-analysis.js';
 import { recommendCharts } from './recommend.js';
 import { buildPrompt, readPromptMode } from './prompt.js';
 import { toast } from './toast.js';
@@ -198,6 +199,8 @@ export class GalleryApp {
     let timer = null;
     const run = () => {
       chat.reset();
+      this._disposeAnalysis?.();
+      this._disposeAnalysis = null;
       const raw = text.value.trim();
       if (!raw) {
         this.table = null;
@@ -230,7 +233,9 @@ export class GalleryApp {
       this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
       // A new table is a new question, so it is asked narrowed again.
       this.onlyFit = true;
-      this._renderReading(read, table, ranked);
+      const profile = profileTable(table);
+      this._renderReading(read, table, ranked, profile);
+      this._disposeAnalysis = mountDataAnalysis(bar.querySelector('#match-analysis'), table, profile);
       const total = this.fit.size;
       setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
       this.render();
@@ -459,11 +464,9 @@ export class GalleryApp {
    *
    * It cannot narrow the grid, and nothing here hides a chart.
    */
-  _reportMarkup(table, ranked) {
-    let profile;
+  _reportMarkup(table, ranked, profile) {
     let picked;
     try {
-      profile = profileTable(table);
       picked = recommendCharts(profile, this.fit || new Set());
     } catch {
       return '';                      // a report is a bonus, never the point
@@ -500,7 +503,7 @@ export class GalleryApp {
 
     const rel = [
       ...profile.correlations.map((c) =>
-        `"${c.a}" and "${c.b}" move together (r = ${c.r}).`),
+        `"${c.a}" and "${c.b}" have a linear association (r = ${c.r}, ${c.n} paired rows; not causation).`),
       ...profile.separators.map((s) =>
         `"${s.by}" separates "${s.measure}" across ${s.groups} groups.`),
     ];
@@ -520,7 +523,7 @@ export class GalleryApp {
     return `<div class="report">${parts.join('')}</div>`;
   }
 
-  _renderReading(host, table, ranked) {
+  _renderReading(host, table, ranked, profile) {
     const firstColumn = table.rows.map((r) => r[0]);
     const firstIsDates = isDateLabels(firstColumn);
     const chips = table.headers.map((h, i) => {
@@ -560,7 +563,7 @@ export class GalleryApp {
       + `<div class="match-cols">${chips}</div>`
       + verdict
       + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
-      + this._reportMarkup(table, ranked)
+      + this._reportMarkup(table, ranked, profile)
       // A first column of dates is placed on a time axis by the line and area
       // charts — said here, because a gap where a month is missing is the
       // first thing a reader notices and should not be a surprise. And where
