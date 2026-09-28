@@ -339,12 +339,13 @@ const MATCH_REQUEST_KEY = 'opencharts.match-request';
  * `HANDOFF_TTL`. `clearHandOff` is the deliberate way out, and the gallery's
  * own Clear button calls it.
  */
-export function handOff(table) {
+export function handOff(table, prepared = null) {
   try {
     localStorage.setItem(HANDOFF_KEY, JSON.stringify({
       at: Date.now(),
       headers: table.headers,
       rows: table.rows,
+      ...(prepared ? { prepared } : {}),
     }));
     return true;
   } catch {
@@ -370,7 +371,11 @@ export function takeHandOff() {
     const held = JSON.parse(raw);
     if (!held || !Array.isArray(held.rows) || !held.rows.length) return null;
     if (!(held.at > Date.now() - HANDOFF_TTL)) { clearHandOff(); return null; }
-    return { headers: held.headers, rows: held.rows };
+    const prepared = held.prepared;
+    return { headers: held.headers, rows: held.rows,
+      ...(prepared && typeof prepared.chart === 'string' && prepared.spec
+        && typeof prepared.spec === 'object' && !Array.isArray(prepared.spec) ? { prepared } : {}),
+    };
   } catch {
     return null;
   }

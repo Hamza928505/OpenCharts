@@ -1,10 +1,103 @@
 import { groupSummary, correlate } from './profile.js';
 import { AGGREGATES, toNumber } from './transform.js';
-import { getChart, newSpec } from './registry.js';
+import { CHARTS, getChart, newSpec } from './registry.js';
 import { applyData, toCSV } from './dataio.js';
 import { renderChart, destroyInstance } from './engines.js';
 import { onThemeChange } from './theme.js';
 import { escapeHtml as esc } from './StudioApp.js';
+import { recommendAnalysisCharts, buildAnalysisChart } from './analysis-charts.js';
+import { handOff } from './DataMatch.js';
+
+function downloadTable(table, filename) {
+  const safe = (v) => typeof v === 'string' && /^(?:\s*[=+@\-]|[\t\r])/.test(v) ? `'${v}` : v ?? '';
+  const text = toCSV(table.headers.map(safe), table.rows.map((row) => row.map(safe)));
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a'); link.href = url; link.download = filename;
+  link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Plans are cheap; only the current page gets full data tables and renderers. */
+function mountRecommendations(host, table, profile) {
+  const plans = recommendAnalysisCharts(table, profile);
+  const kinds = { count: 'Counts', group: 'Grouped calculations', distribution: 'Distributions', relationship: 'Relationships', trend: 'Time trends' };
+  const usedColumns = new Set(plans.flatMap((plan) => plan.columns));
+  host.innerHTML = `<h4>Recommended charts for your data</h4>
+    <p class="dlg-note">${CHARTS.length} chart types can produce many more views of your data. Explore different columns and calculations, using all eligible rows with missing values explained.</p>
+    <p data-charts-count class="analysis-chart-count" role="status"></p>
+    <div class="analysis-controls analysis-chart-controls">
+      <label>Analysis type<select data-chart-kind><option value="all">All analyses</option>${[...new Set(plans.map((plan) => plan.kind))].map((kind) => `<option value="${esc(kind)}">${esc(kinds[kind] || kind)}</option>`).join('')}</select></label>
+      <label>Include column<select data-chart-column><option value="all">All columns</option>${profile.columns.filter((c) => usedColumns.has(c.index)).map((c) => `<option value="${c.index}">${esc(c.name)}</option>`).join('')}</select></label>
+    </div>
+    <div class="analysis-suggestions"></div>
+    <div class="analysis-pager"><button class="btn btn-sm" type="button" data-charts-prev>Previous charts</button>
+      <span data-charts-page role="status" aria-live="polite"></span><button class="btn btn-sm" type="button" data-charts-next>Next charts</button></div>`;
+  const find = (selector) => host.querySelector(selector);
+  const kind = find('[data-chart-kind]');
+  const column = find('[data-chart-column]');
+  const grid = find('.analysis-suggestions');
+  const instances = [];
+  const pageSize = 4;
+  let page = 0;
+  let disposed = false;
+  const destroyCharts = () => instances.splice(0).forEach(destroyInstance);
+  const render = () => {
+    if (disposed) return;
+    destroyCharts();
+    const matches = plans.filter((plan) => (kind.value === 'all' || plan.kind === kind.value)
+      && (column.value === 'all' || plan.columns.includes(Number(column.value))));
+    const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+    page = Math.min(page, pages - 1);
+    find('[data-charts-count]').textContent = `${plans.length} chart views recommended from ${profile.rows} rows · ${matches.length} match the selected options`;
+    find('[data-charts-page]').textContent = matches.length
+      ? `Charts ${page * pageSize + 1}–${Math.min((page + 1) * pageSize, matches.length)} of ${matches.length} · Page ${page + 1} of ${pages}`
+      : 'No matching chart views';
+    find('[data-charts-prev]').disabled = page === 0;
+    find('[data-charts-next]').disabled = page + 1 >= pages;
+    grid.replaceChildren();
+    for (const plan of matches.slice(page * pageSize, (page + 1) * pageSize)) {
+      const card = document.createElement('article');
+      card.className = 'analysis-suggestion';
+      card.dataset.plan = plan.key;
+      card.innerHTML = `<h5>${esc(plan.title)}</h5><p class="dlg-note">${esc(plan.why)}</p>
+        <div class="analysis-preview"></div><p class="dlg-note" data-chart-source></p>
+        <div class="analysis-chart-actions"><a class="btn btn-sm" data-open-chart href="studio.html?chart=${encodeURIComponent(plan.id)}">Open in studio</a>
+          <button class="btn btn-sm btn-ghost" type="button" data-chart-download>Download chart data</button></div>
+        <p class="dlg-note" data-chart-status role="status"></p>`;
+      grid.append(card);
+      const status = card.querySelector('[data-chart-status]');
+      try {
+        const built = buildAnalysisChart(table, plan);
+        const preview = card.querySelector('.analysis-preview');
+        card.querySelector('[data-chart-source]').textContent = built.note;
+        instances.push(renderChart(built.def, preview, built.spec, { height: 240, label: `${plan.title}. ${built.note}` }));
+        const carry = (event) => {
+          if (!handOff(built.table, { chart: plan.id, spec: built.spec })) {
+            event.preventDefault();
+            status.textContent = 'Your browser could not keep this chart for the studio. Download its data, or allow local storage and try again.';
+          }
+        };
+        ['mousedown', 'click', 'auxclick'].forEach((event) => card.querySelector('[data-open-chart]').addEventListener(event, carry));
+        card.querySelector('[data-chart-download]').addEventListener('click', () => downloadTable(built.table, 'opencharts-chart-data.csv'));
+      } catch (error) {
+        card.querySelector('.analysis-preview').hidden = true;
+        card.querySelector('.analysis-chart-actions').hidden = true;
+        status.textContent = error.message || 'This view could not be drawn from the selected columns.';
+      }
+    }
+    if (!matches.length) {
+      const empty = document.createElement('p'); empty.className = 'dlg-note';
+      empty.textContent = plans.length ? 'Choose another column or analysis type to see more views.'
+        : 'No automatic chart fits these values yet. Explore the calculations below or choose a chart from the library.';
+      grid.append(empty);
+    }
+  };
+  [kind, column].forEach((control) => control.addEventListener('change', () => { page = 0; render(); }));
+  find('[data-charts-prev]').addEventListener('click', () => { page--; render(); });
+  find('[data-charts-next]').addEventListener('click', () => { page++; render(); });
+  const unsubscribe = onThemeChange(render);
+  render();
+  return () => { disposed = true; unsubscribe(); destroyCharts(); host.replaceChildren(); };
+}
 
 const format = (v) => typeof v === 'number'
   ? (Number.isFinite(v) ? v.toLocaleString(undefined, { maximumSignificantDigits: 7 }) : '—')
@@ -21,13 +114,15 @@ export function mountDataAnalysis(host, table, profile) {
   const options = (cols) => cols.map((c) => `<option value="${c.index}">${esc(c.name)}</option>`).join('');
   host.hidden = false;
   host.innerHTML = `<div class="analysis-head"><div><h3>Analyze without AI</h3>
-    <p class="dlg-note">All ${profile.rows} rows · Calculated on this device · No API key needed</p></div>
-    <button class="btn btn-sm" type="button" data-export>Download results CSV</button></div>
+    <p class="dlg-note">All ${profile.rows} rows · Calculated on this device · No API key needed</p></div></div>
     <div class="analysis-facts">
       <span><b>${profile.rows}</b> data rows</span><span><b>${profile.cols}</b> columns</span>
       <span><b>${profile.duplicates.rowCount}</b> duplicate rows after the first</span>
       <span><b>${profile.duplicates.columnCount}</b> duplicate columns after the first</span>
     </div>
+    <section class="analysis-recommendations" data-recommendations aria-label="Recommended charts"></section>
+    <div class="analysis-calculator-head"><h4>Explore calculations</h4>
+      <button class="btn btn-sm" type="button" data-export>Download results CSV</button></div>
     <div class="analysis-controls">
       <label>Analysis<select data-mode>
         <option value="group">Counts &amp; grouped calculations</option>
@@ -45,7 +140,7 @@ export function mountDataAnalysis(host, table, profile) {
     <div class="analysis-chart" hidden></div>
     <p class="dlg-note" data-chart-note hidden></p>
     <div class="analysis-table-wrap" tabindex="0" role="region" aria-label="Analysis results table"></div>
-    <div class="analysis-pager"><button class="btn btn-sm" type="button" data-prev>Previous</button>
+    <div class="analysis-pager analysis-results-pager"><button class="btn btn-sm" type="button" data-prev>Previous</button>
       <span data-page role="status"></span><button class="btn btn-sm" type="button" data-next>Next</button></div>
     <details class="analysis-findings"><summary>Relationships found in this table</summary><div data-findings></div></details>`;
   const find = (s) => host.querySelector(s);
@@ -91,7 +186,7 @@ export function mountDataAnalysis(host, table, profile) {
     find('[data-page]').textContent = `Page ${page + 1} of ${pages} · ${rows.length} result rows`;
     find('[data-prev]').disabled = page === 0;
     find('[data-next]').disabled = page + 1 >= pages;
-    find('.analysis-pager').hidden = pages === 1;
+    find('.analysis-results-pager').hidden = pages === 1;
     find('[data-export]').disabled = !rows.length;
     find('.analysis-table-wrap').querySelectorAll('[data-sort]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -169,12 +264,13 @@ export function mountDataAnalysis(host, table, profile) {
       method = counting ? 'Counts use trimmed, case-sensitive cell text. Blank cells form their own group. Repeated values are not necessarily duplicate records.'
         : 'Calculations use each valid numeric cell once. Blank cells and nonnumbers (such as — or N/A) are excluded, never replaced with zero. Rows and valid counts can differ between groups; unequal group sizes and other variables can affect comparisons.';
       const valid = summary.filter((g) => Number.isFinite(g.value));
-      if (valid.length && valid.length <= 30) {
-        plot = { id: 'bar-vertical', title, table: { headers: [result.headers[0], counting ? 'Rows' : `${calculation}: ${columns[m].name}`],
+      if (valid.length) {
+        plot = { id: valid.length > 12 ? 'bar-horizontal' : 'bar-vertical', title, table: { headers: [result.headers[0], counting ? 'Rows' : `${calculation}: ${columns[m].name}`],
           rows: valid.map((g) => [g.key || '(blank)', String(g.value)]) } };
       }
-      chartNote.textContent = valid.length > 30 ? 'More than 30 groups: use the paginated table or CSV, or choose a column with fewer groups.'
-        : `${title}.${valid.length < summary.length ? ` ${summary.length - valid.length} groups have no numeric values and are omitted from the chart.` : ''}`;
+      chartNote.textContent = `${title}. All ${valid.length} valid groups are plotted.`
+        + (valid.length > 30 ? ' Labels may be crowded; exact values are in the table and CSV.' : '')
+        + (valid.length < summary.length ? ` ${summary.length - valid.length} groups have no numeric values and are omitted from the chart.` : '');
       chartNote.hidden = false;
     } else if (kind === 'columns') {
       result = { headers: ['Column', 'Valid numbers', 'Missing', 'Nonnumeric', 'Distinct filled', 'Repeated filled', 'Average', 'Median', 'Total', 'Minimum', 'Maximum', 'Std dev (population)'],
@@ -225,18 +321,14 @@ export function mountDataAnalysis(host, table, profile) {
   caveat.textContent = 'These are exploratory patterns, not causal conclusions. Automatic relationships omit identifiers, constants and duplicate columns; choose any two numeric columns above to inspect them.'
     + (profile.relationshipsLimited ? ' Automatic scanning is limited to the first 40 eligible measures and grouping columns.' : '');
   findings.appendChild(caveat);
-  host.querySelectorAll('select').forEach((control) => control.addEventListener('change', update));
+  [mode, by, agg, measure, x].forEach((control) => control.addEventListener('change', update));
   find('[data-prev]').addEventListener('click', () => { page--; renderTable(); });
   find('[data-next]').addEventListener('click', () => { page++; renderTable(); });
   find('[data-export]').addEventListener('click', () => {
-    // Export unrounded results, but never executable spreadsheet formulas.
-    const safe = (v) => typeof v === 'string' && /^(?:\s*[=+@\-]|[\t\r])/.test(v) ? `'${v}` : v ?? '';
-    const text = toCSV(result.headers.map(safe), sortedRows().map((r) => r.map(safe)));
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a'); link.href = url; link.download = 'opencharts-analysis.csv';
-    link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadTable({ headers: result.headers, rows: sortedRows() }, 'opencharts-analysis.csv');
   });
   const unsubscribe = onThemeChange(draw);
   update();
-  return () => { disposed = true; unsubscribe(); destroyInstance(chart); host.replaceChildren(); host.hidden = true; };
+  const disposeRecommendations = mountRecommendations(find('[data-recommendations]'), table, profile);
+  return () => { disposed = true; unsubscribe(); disposeRecommendations(); destroyInstance(chart); host.replaceChildren(); host.hidden = true; };
 }

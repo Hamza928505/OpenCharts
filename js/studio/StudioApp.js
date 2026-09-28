@@ -449,7 +449,16 @@ export class StudioApp {
         this.brought = takeHandOff();
       }
       if (this.brought) {
-        const res = applyData(def, this.spec, this.brought);
+        // Calculated recommendations carry their exact spec (title, axes and
+        // full data) through the existing local handoff, without a giant URL.
+        const prepared = this.brought.prepared;
+        let res;
+        if (prepared?.chart === id) {
+          this.spec = { ...this.spec, ...prepared.spec };
+          res = { ok: true, message: 'calculated chart from your full table' };
+        } else {
+          res = applyData(def, this.spec, this.brought);
+        }
         if (res.ok) {
           if (typeof def.onChange === 'function') def.onChange(this.spec);
           // Said once, on arrival. A toast on every chart switch is noise.

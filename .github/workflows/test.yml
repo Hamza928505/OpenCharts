@@ -38,7 +38,9 @@ jobs:
         run: node test/local-libraries.mjs
 
       - name: Check local data analysis (no AI)
-        run: node test/data-analysis.mjs
+        run: |
+          node test/analysis-charts.mjs
+          node test/data-analysis.mjs
 
       - name: Run the suite
         run: npm test

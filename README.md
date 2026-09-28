@@ -433,10 +433,18 @@ rather than 2,400 simulated ones.
 
 ## Analyze without AI
 
-After uploading or pasting a table, **Analyze without AI** on the main page
+After uploading, pasting or fetching a table by URL, **Analyze without AI** on the main page
 calculates over every imported row, entirely in the browser. No key or model
 is needed, and the source table is not changed.
 
+- **Recommended charts:** ready-to-view counts, grouped calculations,
+  distributions, relationships and time trends based on the table's columns.
+  The <!-- count:charts -->115<!-- /count --> chart types are reusable: different columns and calculations can
+  yield more chart views than chart types for a wide dataset. No manual column
+  selection is needed to get started; optional filters and pagination help
+  browse the views. Only visible previews are rendered, but each calculation
+  uses the full table. **Open in studio** carries the exact chart locally for
+  editing/export, and **Download chart data** saves its plotted input values.
 - **Counts & grouped calculations:** count repeated values in any column
   (including numeric settings), or calculate an average, median, total,
   minimum or maximum by group. Choose **All rows** for a whole-column result.
@@ -452,12 +460,13 @@ is needed, and the source table is not changed.
 
 Blank and nonnumeric measurements (including `—` and `N/A`) are excluded from
 arithmetic, **not converted to zero**. Results use the stored input values and
-their original units. Charts show calculated group results (up to 30 groups)
-or paired observations, not the first 40-row AI sample. Larger group results
-remain available in the table and **Download results CSV**. Display rounding
-does not change the numbers in the download. Automatic relationship suggestions
-scan at most 40 eligible measures/grouping columns; manual comparisons can use
-any numeric column and always use all rows.
+their original units. Charts show all valid calculated groups or paired
+observations; pagination limits previews, never source rows. Crowded charts
+retain their complete values in the table and **Download results CSV**.
+Display rounding does not change downloaded values. Statistical relationship
+highlights scan at most 40 eligible measures/grouping columns; chart
+recommendations and manual comparisons can use later columns too. All use
+every row, with missing/non-numeric exclusions stated on each chart.
 
 ## Reshaping a table before you chart it
 

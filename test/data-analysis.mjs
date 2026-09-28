@@ -101,10 +101,10 @@ try {
   await panel.locator('[data-group]').selectOption('1');
   await panel.locator('[data-measure]').selectOption('2');
   await panel.locator('[data-agg]').selectOption('mean');
-  await panel.locator('canvas').waitFor();
+  await panel.locator('.analysis-chart canvas').waitFor();
   assert.match(await panel.locator('.analysis-result').innerText(), /5 valid measurements; 4 excluded/);
   assert.deepEqual(await panel.locator('tbody tr').first().locator('td').allTextContents(), ['2', '2', '2', '0', '2']);
-  const chartValues = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#match-analysis canvas')).data.datasets[0].data);
+  const chartValues = () => page.evaluate(() => window.Chart.getChart(document.querySelector('#match-analysis .analysis-chart canvas')).data.datasets[0].data);
   assert.deepEqual(await chartValues(), [2, 10, 1e-8], 'invalid-only group is omitted, never drawn as zero');
   await panel.locator('[data-agg]').selectOption('count');
   assert.deepEqual(await chartValues(), [3, 2, 2, 2]);
@@ -125,11 +125,11 @@ try {
   await panel.locator('[data-mode]').selectOption('relationship');
   await panel.locator('[data-x]').selectOption('0');
   await panel.locator('[data-measure]').selectOption('1');
-  await panel.locator('canvas').waitFor();
+  await panel.locator('.analysis-chart canvas').waitFor();
   assert.match(await panel.locator('.analysis-result').innerText(), /103 paired numeric rows; 0 excluded.*-1/);
   assert.equal((await chartValues()).length, 103);
   const axes = await page.evaluate(() => {
-    const chart = window.Chart.getChart(document.querySelector('#match-analysis canvas'));
+    const chart = window.Chart.getChart(document.querySelector('#match-analysis .analysis-chart canvas'));
     return { xMin: chart.options.scales.x.min, xMax: chart.options.scales.x.max, yMin: chart.options.scales.y.min, yMax: chart.options.scales.y.max, xTitle: chart.options.scales.x.title.text };
   });
   assert.ok(axes.xMin < 400 && axes.xMax > 502 && axes.yMin < -1001 && axes.yMax > -797, 'scatter axes cover the actual data, not example price/rating bounds');
@@ -147,8 +147,8 @@ try {
   await panel.locator('[data-mode]').selectOption('group');
   await panel.locator('[data-group]').selectOption('0');
   await panel.locator('[data-agg]').selectOption('count');
-  assert.match(await panel.locator('[data-chart-note]').innerText(), /More than 30 groups/);
-  assert.equal(await panel.locator('canvas').count(), 0);
+  assert.match(await panel.locator('[data-chart-note]').innerText(), /All 103 valid groups are plotted/);
+  assert.equal((await chartValues()).length, 103);
 
   await upload('Label,Value\n<img src=x onerror=alert(1)>,2\n=1+1,4\n=1+1,6');
   await panel.locator('[data-group]').selectOption('0');
@@ -180,6 +180,72 @@ try {
   assert.deepEqual(await chartValues(), [2, 1]);
   await panel.locator('[data-mode]').selectOption('duplicates');
   assert.match(await panel.locator('.analysis-result').innerText(), /1 extra duplicate rows/);
+
+  // The same full-table recommendation path runs for paste, file and URL.
+  const wide = ['Group,' + Array.from({ length: 18 }, (_, i) => `Measure ${i}`).join(','),
+    ...Array.from({ length: 103 }, (_, row) => `Batch ${row % 3},` + Array.from({ length: 18 }, (_, col) => String(100 + row * (col + 1) + col * col)).join(','))].join('\n');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await upload(wide);
+  const recommendations = panel.locator('[data-recommendations]');
+  assert.ok(Number((await recommendations.locator('[data-charts-count]').innerText()).split(' ')[0]) > 115);
+  assert.equal(await recommendations.locator('.analysis-suggestion').count(), 4, 'only the visible page is built');
+  assert.ok((await recommendations.locator('[data-chart-source]').allTextContents()).every((note) => /All 103 source rows analyzed/.test(note)));
+  const firstKey = await recommendations.locator('.analysis-suggestion').first().getAttribute('data-plan');
+  await recommendations.locator('[data-charts-next]').click();
+  assert.notEqual(await recommendations.locator('.analysis-suggestion').first().getAttribute('data-plan'), firstKey);
+  assert.match(await recommendations.locator('[data-charts-page]').innerText(), /Page 2/);
+  await recommendations.locator('[data-chart-kind]').selectOption('relationship');
+  await recommendations.locator('[data-chart-column]').selectOption('18');
+  assert.ok((await recommendations.locator('h5').allTextContents()).every((title) => title.includes('Measure 17')));
+  assert.equal(await recommendations.locator('[data-chart-status]').first().innerText(), '');
+  const renderedPoints = await recommendations.locator('.analysis-preview canvas').first().evaluate((canvas) => {
+    const chart = window.Chart.getChart(canvas);
+    return chart.getDatasetMeta(0).data.filter((point) => !point.skip && Number.isFinite(point.x) && Number.isFinite(point.y)).length;
+  });
+  assert.equal(await recommendations.locator('.analysis-preview canvas').first().evaluate((canvas) => window.Chart.getChart(canvas).options.animation), false, 'previews honor reduced motion');
+  assert.equal(renderedPoints, 103, 'scatter renders every valid point, not just axes');
+  const coloredPixels = await recommendations.locator('.analysis-preview canvas').first().evaluate((canvas) => {
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let colored = 0;
+    for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 1] > pixels[i] + 15 && pixels[i + 1] > pixels[i + 2] + 15 && pixels[i + 3]) colored++;
+    return colored;
+  });
+  assert.ok(coloredPixels > 50, 'scatter previews contain visible plotted marks');
+  const selectedTitle = await recommendations.locator('h5').first().innerText();
+  const chartDataWait = page.waitForEvent('download');
+  await recommendations.locator('[data-chart-download]').first().click();
+  const chartCsv = await readFile(await (await chartDataWait).path(), 'utf8');
+  assert.equal(chartCsv.trim().split('\n').length, 104, 'download includes the complete plotted inputs');
+  await page.evaluate(() => { window.originalSetItem = Storage.prototype.setItem; Storage.prototype.setItem = () => { throw new Error('Storage disabled'); }; });
+  await recommendations.locator('[data-open-chart]').first().click();
+  assert.match(await recommendations.locator('[data-chart-status]').first().innerText(), /could not keep this chart/);
+  assert.ok(!page.url().includes('studio.html'), 'failed handoff does not open misleading example data');
+  await page.evaluate(() => { Storage.prototype.setItem = window.originalSetItem; delete window.originalSetItem; });
+  await recommendations.screenshot({ path: 'test/screenshots/analysis-recommendations-desktop.png' });
+  await recommendations.locator('[data-open-chart]').first().click();
+  await page.waitForURL('**/studio.html?chart=scatter-basic');
+  await page.waitForFunction(() => window.openCharts?.spec?.points?.length === 103);
+  assert.equal(await page.evaluate(() => window.openCharts.spec.caption.title), selectedTitle);
+  assert.equal(await page.evaluate(() => window.openCharts.spec.points.at(-1).y), 2225);
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => !!window.openChartsGallery);
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#match-file').click();
+  await (await chooser).setFiles({ name: 'full-data.csv', mimeType: 'text/csv', buffer: Buffer.from(wide) });
+  await page.waitForFunction(() => window.openChartsGallery.table?.rows.length === 103);
+  assert.equal(await recommendations.locator('.analysis-suggestion').count(), 4);
+  const urlCsv = 'Category,Amount\nNorth,10\nNorth,20\nSouth,40';
+  await page.route(base + '/recommendations.csv', (route) => route.fulfill({ status: 200, contentType: 'text/csv', body: urlCsv }));
+  await page.locator('#match-url').fill(base + '/recommendations.csv');
+  await page.locator('#match-url-go').click();
+  await page.waitForFunction(() => window.openChartsGallery.table?.rows.length === 3);
+  assert.match(await recommendations.locator('[data-chart-source]').first().innerText(), /All 3 source rows analyzed/);
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate(async (value) => (await import('/js/studio/theme.js')).setTheme(value), theme);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'recommendations fit mobile');
+    await recommendations.screenshot({ path: `test/screenshots/analysis-recommendations-${theme}.png` });
+  }
   await page.locator('#match-clear').click();
   await panel.waitFor({ state: 'hidden' });
   assert.equal(await panel.locator('canvas').count(), 0);
