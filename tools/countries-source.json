@@ -2,7 +2,7 @@
   "meta": {
     "count": 194,
     "description": "Countries with flag icons and city names in English and local language.",
-    "flag_icons": "Emoji plus CDN images from flagcdn.com (public domain flag images).",
+    "flag_icons": "Emoji plus images from flagcdn.com (provider states public domain: https://flagpedia.net/terms).",
     "cities_local": "null when the local language rendering matches the English list.",
     "notes": "Covers UN member states plus Vatican City and Palestine."
   },

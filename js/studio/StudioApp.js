@@ -478,7 +478,7 @@ export class StudioApp {
     this.titleEl.innerHTML = `${escapeHtml(def.title)} <em>Studio</em>`;
     this.blurbEl.textContent = def.blurb;
     this.crumbEl.innerHTML =
-      `<a href="index.html">Library</a><span class="sep">/</span>`
+      `<a href="studio.html">Studio</a><span class="sep">/</span>`
       + `<span>${escapeHtml(def.category)}</span><span class="sep">/</span>`
       + `<span>${escapeHtml(def.title)}</span>`;
     this.stageTitle.textContent = def.title;

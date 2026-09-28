@@ -28,7 +28,8 @@
  * (Greenland, Taiwan, Kosovo, Israel…) are absent from the curated list and
  * would otherwise be the only flagless rows in the picker.
  *
- * Source: flagcdn.com, whose images are public domain. Re-run when a country
+ * Source: flagcdn.com; its provider states that flag images are public domain
+ * at https://flagpedia.net/terms. Re-run when a country
  * changes its flag, which is rarer than it sounds.
  *
  *   node tools/build-flags.mjs

@@ -78,8 +78,8 @@ file is read the other way up — a bar per month, a series per product — on
 every tile, in the studio and in the prompt. The data editor has the same
 thing as a button on the table, undoable, and as a step in the Shape tab.
 
-The file is read in the browser, and the table travels to the studio in session
-storage. Local analysis needs no network. If you connect an agent and send an
+The file is read in the browser, and the table travels to the studio in local
+storage for up to six hours. Local analysis needs no network. If you connect an agent and send an
 AI request, its context and table are shared with that agent through the local
 MCP bridge described below.
 
@@ -88,7 +88,7 @@ MCP bridge described below.
 **Save** in the studio (or Ctrl+S) keeps the chart on this browser, under
 its title. The gallery shows what you kept as **My charts** — open one, rename
 it, remove it — and **Export all** writes them as one JSON file that
-**Import…** reads back on another browser. Nothing leaves your machine; there
+**Import…** reads back on another browser. Saving and exporting happen in your browser; there
 is no account. Forty charts fit, and the oldest go first when they do not.
 
 ## Sharing a chart
@@ -135,7 +135,8 @@ so installing needs a one-off `.npmrc` and a personal access token with the
 npm install @hamza928505/opencharts
 ```
 
-That gives you the whole site — `index.html`, `studio.html`, `board.html`, `css/`, `js/`,
+That gives you the whole site — `index.html`, `studio.html`, `board.html`, `404.html`,
+`privacy.html`, `legal.html`, `css/`, `js/`,
 `lib/` and `data/` — which is the same thing the repository holds, because
 there is no build step. Serve the folder over HTTP and the gallery runs.
 
@@ -169,13 +170,17 @@ python -m http.server 8000
 Any static server works — `npx serve`, `php -S localhost:8000`, VS Code Live
 Server, and so on. There is no build step and nothing to install.
 
-## The three pages
+## Pages
 
 | Page | What it is |
 |---|---|
-| `index.html` | The gallery. Every chart rendered live, searchable and filterable by category. |
+| `index.html` | Project home, connection steps, library credits, and the searchable live chart gallery. |
+| `studio.html` | Start with a data file or pasted table, open a compatible chart, or manage saved charts. |
 | `studio.html?chart=<id>` | The editor. Controls on the left, live preview top right, generated code below. |
 | `board.html` | Several charts you saved, on one page — and that page as one file. |
+| `privacy.html` | Data handling, external requests, and license links. |
+| `legal.html` | Draft operator notice with contact placeholders to complete before publication. |
+| `404.html` | Recovery page for missing routes on GitHub Pages. |
 
 ## What this deliberately is not
 
