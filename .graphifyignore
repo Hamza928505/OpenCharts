@@ -1,0 +1,2 @@
+# Keep the architecture map focused on project code, not bundled minified internals.
+/lib/*.min.js

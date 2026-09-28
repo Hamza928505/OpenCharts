@@ -91,7 +91,8 @@ try {
   assert.equal(request.table.rows, undefined, 'the tool brief must not silently dump the entire table');
   assert.equal(request.system, payload.system);
   assert.deepEqual(request.schema, payload.schema);
-  assert.ok(request.expiresAt > Date.now() + 590000 && request.expiresAt <= Date.now() + 600000);
+  const remaining = request.expiresAt - Date.now();
+  assert.ok(remaining > 590000 && remaining <= 600000, `request expiry should be ten minutes away, got ${remaining}ms`);
   const first = text(await call('opencharts_read_rows', { requestId: id }));
   assert.equal(first.rows.length, 200);
   assert.equal(first.nextOffset, 200);

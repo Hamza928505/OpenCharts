@@ -246,6 +246,9 @@ function renderOne(def, host, spec, opts = {}) {
     host.appendChild(wrap);
     try {
       const config = applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds);
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        config.options = { ...config.options, animation: false };
+      }
       // A time axis needs a date adapter, and Chart.js ships none of its own.
       // Ours is native Date; installing is idempotent, so asking every time a
       // config wants one costs nothing after the first.
