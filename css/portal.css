@@ -29,7 +29,7 @@ html { scroll-behavior: smooth; }
 }
 .hero-note strong { color: var(--ink); font-weight: 600; }
 .hero-note code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-xs); padding: .05rem .32rem; }
-.home-steps, .home-connect { max-width: var(--portal-width); margin: auto; padding: 5rem clamp(1.15rem, 4vw, 3.2rem); }
+.home-steps, .home-connect { max-width: var(--portal-width); margin: auto; padding: 5rem clamp(1.15rem, 4vw, 3.2rem); scroll-margin-top: 8rem; }
 .home-steps { display: grid; grid-template-columns: minmax(260px, .72fr) 1.28fr; gap: clamp(2rem, 5vw, 5rem); }
 .home-section-head h2, .home-connect h2 { max-width: 18ch; font-size: clamp(2rem, 3.3vw, 3.3rem); line-height: 1.13; }
 .home-section-head p, .home-connect p { max-width: 49ch; margin-top: 1rem; color: var(--ink-soft); line-height: 1.65; }
@@ -40,7 +40,7 @@ html { scroll-behavior: smooth; }
 .home-steps li span { color: var(--ink-soft); line-height: 1.55; }
 .home-connect { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem 4rem; border-top: 1px solid var(--rule); }
 .home-connect ol { counter-reset: connect; }
-.home-connect li { counter-increment: connect; display: grid; grid-template-columns: 2rem 1fr; gap: .8rem; margin-bottom: 1.1rem; color: var(--ink-soft); line-height: 1.55; }
+.home-connect li { counter-increment: connect; display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .8rem; margin-bottom: 1.1rem; color: var(--ink-soft); line-height: 1.55; }
 .home-connect li code { overflow-wrap: anywhere; color: var(--ink); }
 .home-connect li::before { content: counter(connect); display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border: 1px solid var(--rule-firm); border-radius: 50%; font-family: var(--mono); font-size: .75rem; color: var(--ink); }
 .home-connect .text-link { grid-column: 2; }
