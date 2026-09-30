@@ -1,0 +1,133 @@
+/* Public pages and the studio starting place. The editor keeps studio.css. */
+:root { --portal-width: 1440px; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.skip-link {
+  position: fixed; z-index: 200; top: .5rem; left: .5rem; transform: translateY(-160%);
+  padding: .7rem 1rem; background: var(--ink); color: var(--paper); border-radius: var(--r-sm);
+}
+.skip-link:focus { transform: translateY(0); }
+.topbar {
+  display: flex; align-items: center; gap: 1.5rem;
+  min-height: 72px; padding: .7rem clamp(1.15rem, 4vw, 3.2rem);
+  border-bottom: 1px solid var(--rule); background: var(--surface);
+}
+.topbar .brand { padding: 0; }
+.topbar .brand-name, .topbar .brand-sub { display: block; }
+.topbar nav { margin-left: auto; display: flex; align-items: center; gap: .45rem; }
+.nav-link { padding: .55rem .75rem; color: var(--ink-soft); font-size: .88rem; border-radius: var(--r-sm); }
+.nav-link:hover, .nav-link:focus-visible { background: var(--surface-2); color: var(--ink); }
+.workspace-data-actions, .workspace-saved-tools { display: flex; flex-wrap: wrap; gap: .6rem; }
+.hero-kicker { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.hero-copy {
+  display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
+  gap: 3rem; align-items: start; padding-bottom: .4rem;
+}
+.hero-note {
+  border-left: 1px solid var(--rule); padding-left: 2rem;
+  font-size: 13.5px; line-height: 1.62; color: var(--ink-soft); align-self: stretch;
+}
+.hero-note strong { color: var(--ink); font-weight: 600; }
+.hero-note code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-xs); padding: .05rem .32rem; }
+.home-steps, .home-connect { max-width: var(--portal-width); margin: auto; padding: 5rem clamp(1.15rem, 4vw, 3.2rem); scroll-margin-top: 8rem; }
+.home-steps { display: grid; grid-template-columns: minmax(260px, .72fr) 1.28fr; gap: clamp(2rem, 5vw, 5rem); }
+.home-section-head h2, .home-connect h2 { max-width: 18ch; font-size: clamp(2rem, 3.3vw, 3.3rem); line-height: 1.13; }
+.home-section-head p, .home-connect p { max-width: 49ch; margin-top: 1rem; color: var(--ink-soft); line-height: 1.65; }
+.home-steps ol, .home-connect ol { margin: 0; padding: 0; list-style: none; }
+.home-steps li { display: grid; grid-template-columns: minmax(130px, .55fr) 1fr; gap: 1rem; padding: 1.25rem 0; border-top: 1px solid var(--rule); }
+.home-steps li:last-child { border-bottom: 1px solid var(--rule); }
+.home-steps li strong { font-size: 1.12rem; }
+.home-steps li span { color: var(--ink-soft); line-height: 1.55; }
+.home-connect { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem 4rem; border-top: 1px solid var(--rule); }
+.home-connect ol { counter-reset: connect; }
+.home-connect li { counter-increment: connect; display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .8rem; margin-bottom: 1.1rem; color: var(--ink-soft); line-height: 1.55; }
+.home-connect li code { overflow-wrap: anywhere; color: var(--ink); }
+.home-connect li::before { content: counter(connect); display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border: 1px solid var(--rule-firm); border-radius: 50%; font-family: var(--mono); font-size: .75rem; color: var(--ink); }
+.home-connect .text-link { grid-column: 2; }
+.text-link { color: var(--accent); font-weight: 600; text-underline-offset: .22em; }
+.text-link:hover { text-decoration: underline; }
+.matchbar { scroll-margin-top: 1rem; }
+.toolbar { scroll-margin-top: 1rem; }
+.site-foot .foot-lead .text-link { display: inline-block; margin-top: 1rem; }
+.foot-meta a:not(.foot-gh) { color: var(--ink-soft); text-decoration: underline; text-underline-offset: .2em; }
+
+[data-studio-view="home"] .app { display: none; }
+[data-studio-view="editor"] .studio-home, [data-studio-view="home"] .editor-skip { display: none; }
+.workspace { max-width: var(--portal-width); min-height: calc(100vh - 170px); margin: auto; padding: clamp(2.5rem, 5vw, 5rem) clamp(1.15rem, 4vw, 3.2rem); }
+.workspace-head { display: flex; justify-content: space-between; align-items: end; gap: 2rem; margin-bottom: 2.8rem; }
+.workspace-head h1 { max-width: 15ch; font-size: clamp(2.4rem, 4.2vw, 4.3rem); line-height: 1.08; }
+.workspace-head p { margin-top: .85rem; }
+.workspace-head .btn { flex: 0 0 auto; }
+.workspace-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(310px, .85fr); gap: 1.4rem; align-items: start; }
+.workspace-data, .workspace-start, .workspace-saved { min-width: 0; padding: 1.6rem; border: 1px solid var(--rule); border-radius: var(--r-xl); background: var(--surface); }
+.workspace-side { display: grid; gap: 1.4rem; }
+.workspace-section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.workspace-section-title h2 { font-size: 1.3rem; letter-spacing: -.02em; }
+.workspace-section-title span { font-family: var(--mono); font-size: .75rem; color: var(--ink-faint); }
+.workspace-data > p, .workspace-start > p, .workspace-saved > p { margin: .5rem 0 1.3rem; color: var(--ink-soft); font-size: .9rem; line-height: 1.55; }
+.workspace-label { display: block; margin-bottom: .45rem; font-size: .82rem; font-weight: 600; }
+.workspace-data textarea { width: 100%; min-height: 180px; resize: vertical; padding: .9rem; border: 1px solid var(--rule-firm); border-radius: var(--r-sm); background: var(--paper); color: var(--ink); font: .83rem/1.6 var(--mono); }
+.workspace-data textarea:focus, .workspace-rename:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.workspace-data-actions { margin-top: .8rem; }
+.workspace-data-actions label { cursor: pointer; }
+.workspace-file-label { position: relative; cursor: pointer; }
+.workspace-file-label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.workspace-file-input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; }
+#workspace-data-status { min-height: 2.6rem; margin: .75rem 0 0; font-size: .8rem; }
+.workspace-columns { overflow-wrap: anywhere; padding-top: 1rem; border-top: 1px solid var(--rule); }
+#workspace-suggestions h3 { margin: 1rem 0 .6rem; font-size: 1rem; }
+.workspace-recommendations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.workspace-recommendation, .workspace-starter { display: flex; flex-direction: column; gap: .25rem; min-width: 0; padding: .9rem; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink); text-align: left; cursor: pointer; }
+.workspace-recommendation:hover, .workspace-starter:hover { border-color: var(--accent); background: var(--accent-wash); }
+.workspace-recommendation strong, .workspace-starter strong { font-size: .9rem; }
+.workspace-recommendation span, .workspace-starter span { color: var(--ink-soft); font-size: .76rem; line-height: 1.4; }
+.workspace-recommendation span { overflow-wrap: anywhere; }
+.workspace-starters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.workspace-starter { min-height: 92px; text-decoration: none; }
+.workspace-saved-tools { margin-bottom: 1rem; }
+.workspace-saved-tools label { cursor: pointer; }
+.workspace-saved .workspace-saved-status { min-height: 1rem; margin: -.35rem 0 .7rem; font-size: .78rem; }
+.workspace-empty { padding: 1.5rem 1rem; background: var(--surface-2); color: var(--ink-soft); font-size: .85rem; }
+.workspace-saved-item { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .8rem 0; border-top: 1px solid var(--rule); }
+.workspace-saved-link { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.workspace-saved-link:hover strong { color: var(--accent); text-decoration: underline; }
+.workspace-saved-link strong { overflow-wrap: anywhere; font-size: .88rem; }
+.workspace-saved-link span { color: var(--ink-faint); font-size: .72rem; }
+.workspace-saved-actions { display: flex; gap: .25rem; }
+.workspace-rename { min-width: 0; width: 100%; padding: .45rem; background: var(--paper); color: var(--ink); border: 1px solid var(--rule-firm); }
+.portal-foot { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 1.4rem clamp(1.15rem, 4vw, 3.2rem); border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: .8rem; }
+.portal-foot nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+.portal-foot a:hover { color: var(--accent); text-decoration: underline; }
+.board { min-height: calc(100vh - 145px); }
+
+.info-page { max-width: 850px; min-height: calc(100vh - 170px); margin: auto; padding: clamp(3rem, 7vw, 6rem) 1.2rem; }
+.info-page h1 { margin-bottom: 1.2rem; font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1.05; }
+.info-page h2 { margin: 2.4rem 0 .7rem; font-size: 1.3rem; }
+.info-page p, .info-page li { max-width: 70ch; color: var(--ink-soft); line-height: 1.65; }
+.info-page p + p { margin-top: 1rem; }
+.info-page ul { margin-top: .7rem; padding-left: 1.3rem; list-style: disc; }
+.info-page li + li { margin-top: .5rem; }
+.info-page a:not(.btn) { color: var(--accent); text-decoration: underline; text-underline-offset: .2em; }
+.info-page .draft-note { padding: 1rem 1.2rem; border-left: 3px solid var(--accent); background: var(--accent-wash); }
+.info-page address { margin-top: 1rem; font-style: normal; line-height: 1.8; }
+.info-page address span { display: block; }
+.error-code { display: block; margin-bottom: .7rem; color: var(--accent); font: 600 .9rem var(--mono); letter-spacing: .15em; }
+
+@media (max-width: 1000px) {
+  .hero-copy, .home-steps, .home-connect, .workspace-grid { grid-template-columns: 1fr; }
+  .hero-copy { gap: 1.5rem; }
+  .hero-note { max-width: 66ch; border-left: 0; padding-left: 0; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
+  .home-connect .text-link { grid-column: 1; }
+}
+@media (max-width: 680px) {
+  .topbar { min-height: 64px; gap: .4rem; }
+  .topbar nav { gap: .15rem; }
+  .topbar .brand-sub, .topbar .nav-link { display: none; }
+  .home-steps, .home-connect { padding-block: 3.5rem; }
+  .home-steps li { grid-template-columns: 1fr; gap: .35rem; }
+  .workspace-head { display: block; }
+  .workspace-head .btn { margin-top: 1.2rem; }
+  .workspace-data, .workspace-start, .workspace-saved { padding: 1.1rem; }
+  .workspace-recommendations, .workspace-starters { grid-template-columns: 1fr; }
+  .workspace-saved-item { align-items: flex-start; flex-direction: column; }
+}

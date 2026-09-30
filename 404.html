@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found — OpenCharts</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  body { min-height: 100vh; margin: 0; display: flex; flex-direction: column; background: #f7faf8; color: #10251d; }
+  header { padding: 1.2rem clamp(1rem, 4vw, 3rem); border-bottom: 1px solid #d5e1d9; font-weight: 750; }
+  header a { color: inherit; text-decoration: none; }
+  main { flex: 1; width: min(100%, 980px); margin: auto; padding: 5rem clamp(1rem, 4vw, 3rem); }
+  small { color: #176436; font-weight: 700; letter-spacing: .16em; }
+  h1 { max-width: 13ch; margin: 1rem 0; font-size: clamp(3rem, 9vw, 7rem); line-height: 1.03; letter-spacing: -.04em; }
+  p { max-width: 46ch; color: #46584d; line-height: 1.65; font-size: 1.08rem; }
+  nav { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 2rem; }
+  nav a { display: inline-block; padding: .8rem 1.1rem; border: 1px solid #b8c9bd; border-radius: 6px; color: #10251d; text-decoration: none; font-weight: 600; }
+  nav a:first-child { background: #23c962; border-color: #23c962; }
+  a:focus-visible { outline: 3px solid #176436; outline-offset: 3px; }
+  footer { padding: 1rem clamp(1rem, 4vw, 3rem); border-top: 1px solid #d5e1d9; color: #46584d; font-size: .85rem; }
+  @media (prefers-color-scheme: dark) { body { background: #0b1813; color: #f5fff8; } header, footer { border-color: #314638; } p, footer { color: #c1d0c5; } nav a { border-color: #58715f; color: #f5fff8; } nav a:first-child { color: #10251d; } small { color: #7ce69e; } }
+</style>
+</head>
+<body>
+<header><a data-page="" href="https://hamza928505.github.io/OpenCharts/">OpenCharts</a></header>
+<main>
+  <small>404 · PAGE NOT FOUND</small>
+  <h1>This chart is off the map.</h1>
+  <p>The address may have changed, or the page may never have existed. Your saved charts are still in the browser where you made them.</p>
+  <nav aria-label="Recovery links"><a data-page="" href="https://hamza928505.github.io/OpenCharts/">Go home</a><a data-page="studio.html" href="https://hamza928505.github.io/OpenCharts/studio.html">Open studio</a></nav>
+</main>
+<footer>OpenCharts · Make a chart you can keep</footer>
+<script>
+  if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+    document.querySelectorAll('[data-page]').forEach((link) => { link.href = '/' + link.dataset.page; });
+  }
+</script>
+</body>
+</html>

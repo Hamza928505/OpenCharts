@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "opencharts": {
+      "command": "node",
+      "args": ["tools/mcp-server.mjs"],
+      "env": {
+        "MCP_PORT": "8765"
+      }
+    }
+  }
+}

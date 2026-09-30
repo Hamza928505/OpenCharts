@@ -275,7 +275,7 @@ export const ASSETS = {
   flags: {
     key: 'flags',
     kind: 'asset',
-    name: 'flagcdn (country flags)',
+    name: 'Flagpedia / flagcdn (country flags)',
     version: '80px PNG',
     license: 'Public domain',
     provider: 'flagcdn.com',

@@ -129,13 +129,18 @@ mcp.registerTool('opencharts_submit_answer', {
 });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
-const topFiles = new Set(['index.html', 'studio.html', 'board.html', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png']);
+const topFiles = new Set(['index.html', 'studio.html', 'board.html', 'privacy.html', 'legal.html', '404.html', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png']);
 function allowedFile(path) {
   const parts = path.split('/');
   return parts.every((part) => part && !part.startsWith('.') && /^[\w.-]+$/.test(part))
     && (topFiles.has(path) || ['css', 'js', 'lib', 'data'].includes(parts[0]) && Boolean(MIME[extname(path)]));
 }
 const send = (res, status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
+const missingPage = async (res, method) => {
+  const content = await readFile(resolve(ROOT, '404.html'));
+  res.writeHead(404, { 'Content-Type': MIME['.html'], 'Content-Length': content.length });
+  res.end(method === 'HEAD' ? undefined : content);
+};
 async function bodyJson(req) {
   const chunks = [];
   let length = 0;
@@ -193,20 +198,23 @@ const http = createServer(async (req, res) => {
     }
     if (!['GET', 'HEAD'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
     const name = path === '/' ? 'index.html' : path.slice(1);
-    if (!path.startsWith('/') || !name || name.startsWith('/') || name.startsWith('\\') || name.includes('\0') || !allowedFile(name)) return send(res, 404, { error: 'Not found.' });
+    if (!path.startsWith('/') || !name || name.startsWith('/') || name.startsWith('\\') || name.includes('\0') || !allowedFile(name)) return missingPage(res, req.method);
     const candidate = resolve(ROOT, name);
     const candidateRel = relative(ROOT, candidate);
-    if (candidateRel.startsWith('..') || candidateRel.includes(`${sep}..${sep}`) || candidateRel === '..') return send(res, 404, { error: 'Not found.' });
+    if (candidateRel.startsWith('..') || candidateRel.includes(`${sep}..${sep}`) || candidateRel === '..') return missingPage(res, req.method);
     const file = await realpath(candidate);
     const rel = relative(ROOT, file);
-    if (rel.startsWith('..') || rel.includes(`${sep}..${sep}`) || rel === '..') return send(res, 404, { error: 'Not found.' });
+    if (rel.startsWith('..') || rel.includes(`${sep}..${sep}`) || rel === '..') return missingPage(res, req.method);
     const local = rel.split(sep).join('/');
-    if (!allowedFile(local)) return send(res, 404, { error: 'Not found.' });
+    if (!allowedFile(local)) return missingPage(res, req.method);
     const content = await readFile(file);
     res.writeHead(200, { 'Content-Type': MIME[extname(file)], 'Content-Length': content.length });
     res.end(req.method === 'HEAD' ? undefined : content);
   } catch (error) {
-    if (!res.headersSent && !res.destroyed) send(res, error.status || (error instanceof URIError ? 400 : 404), { error: error.status ? error.message : 'Not found.' });
+    if (!res.headersSent && !res.destroyed) {
+      if (error.code === 'ENOENT' && ['GET', 'HEAD'].includes(req.method)) await missingPage(res, req.method);
+      else send(res, error.status || (error instanceof URIError ? 400 : 404), { error: error.status ? error.message : 'Not found.' });
+    }
   }
 });
 http.requestTimeout = 15000;

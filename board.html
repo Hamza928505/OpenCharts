@@ -19,35 +19,17 @@
   } catch (e) { /* private mode — fall through to the OS preference */ }
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/studio.css">
+<link rel="stylesheet" href="css/portal.css">
 
 <!-- Rendering engines. Chart.js must load before any of its plugins. -->
 <script src="lib/chart.umd.min.js"></script>
 <script src="lib/d3.min.js"></script>
 
-<style>
-  /* Page-level chrome the board shares with the gallery. */
-  .topbar {
-    display: flex; align-items: center; gap: 1rem;
-    padding: .85rem 2.4rem;
-    border-bottom: 1px solid var(--rule);
-    background: var(--surface);
-  }
-  .topbar .brand { padding: 0; }
-  .topbar nav { margin-left: auto; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  @media (max-width: 900px) {
-    .topbar { padding-left: 1.15rem; padding-right: 1.15rem; }
-  }
-  @media (max-width: 640px) {
-    .topbar { padding: .7rem 1.15rem; gap: .6rem; }
-    .topbar .brand-sub { display: none; }
-  }
-</style>
 </head>
 <body>
+
+<a class="skip-link" href="#board-main">Skip to content</a>
 
 <header class="topbar">
   <a class="brand" href="index.html">
@@ -61,14 +43,14 @@
       <span class="brand-sub">board</span>
     </span>
   </a>
-  <nav>
-    <a class="btn btn-sm btn-ghost" href="index.html">Library</a>
+  <nav aria-label="Main navigation">
+    <a class="nav-link" href="index.html">Home</a>
     <a class="btn btn-sm btn-primary" href="studio.html">Open studio</a>
     <span id="theme-mount"></span>
   </nav>
 </header>
 
-<main class="board">
+<main class="board" id="board-main">
   <!-- Title, byline, the picker and the exports; built by BoardApp. -->
   <section class="board-head" id="board-head" aria-label="Board settings"></section>
 
@@ -76,6 +58,7 @@
        cross-filtering here, by design — see board.js. -->
   <section class="board-grid" id="board-grid" aria-label="Charts on this board"></section>
 </main>
+<footer class="portal-foot"><span>OpenCharts · Free and open source</span><nav aria-label="Footer"><a href="privacy.html">Privacy &amp; credits</a><a href="legal.html">Legal notice</a><a href="https://github.com/Hamza928505/OpenCharts" target="_blank" rel="noopener noreferrer">Source code</a></nav></footer>
 
 <script type="module">
   import { BoardApp } from './js/studio/BoardApp.js';
