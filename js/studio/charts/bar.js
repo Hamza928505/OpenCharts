@@ -23,9 +23,19 @@ const barStyleControls = [
 // through a Chart.js config can draw a line at a value.
 const axisControls = [...valueAxisControls, { ...REFERENCE_CONTROL }];
 
-// Chart.js reserves a numeric radius for the outer edge of a stack; explicit
-// corners keep the rounding on every segment.
-const allCorners = (radius) => ({ topLeft: radius, topRight: radius, bottomLeft: radius, bottomRight: radius });
+// Scriptable so the top and bottom corners follow the visible series when a
+// legend item is hidden. The literal radius travels with the exported config.
+function stackCorners(ctx) {
+  const visible = ctx.chart.data.datasets.map((ds, i) =>
+    ds.stack === ctx.dataset.stack && ctx.chart.isDatasetVisible(i) ? i : -1).filter((i) => i >= 0);
+  const radius = ctx.dataset._ocRadius;
+  return {
+    topLeft: ctx.datasetIndex === visible.at(-1) ? radius : 0,
+    topRight: ctx.datasetIndex === visible.at(-1) ? radius : 0,
+    bottomLeft: ctx.datasetIndex === visible[0] ? radius : 0,
+    bottomRight: ctx.datasetIndex === visible[0] ? radius : 0,
+  };
+}
 
 function barDatasets(spec, { stack = false } = {}) {
   const o = spec.opts;
@@ -35,7 +45,8 @@ function barDatasets(spec, { stack = false } = {}) {
     backgroundColor: o.outline ? withAlpha(s.color, 0.2) : s.color,
     borderColor: s.color,
     borderWidth: o.outline ? 1.5 : 0,
-    borderRadius: stack ? allCorners(o.radius) : o.radius,
+    ...(stack ? { _ocRadius: o.radius } : {}),
+    borderRadius: stack ? stackCorners : o.radius,
     borderSkipped: false,
     categoryPercentage: o.thickness,
     barPercentage: 0.92,
@@ -217,9 +228,10 @@ export const barCharts = [
               // Keep the typed values literal. The plugin computes the shown
               // percentages from visible series before Chart.js parses them.
               _ocRaw: s.data.slice(),
+              _ocRadius: spec.opts.radius,
               data: s.data.slice(),
               backgroundColor: s.color,
-              borderRadius: allCorners(spec.opts.radius),
+              borderRadius: stackCorners,
               borderSkipped: false,
               categoryPercentage: spec.opts.thickness,
               stack: 'total',

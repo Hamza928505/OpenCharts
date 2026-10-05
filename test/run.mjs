@@ -437,11 +437,13 @@ const stackTotals = await page.evaluate(async () => {
     const chart = inst.chart;
     const totals = () => chart.data.labels.map((_, col) =>
       chart.data.datasets.reduce((sum, ds, i) => sum + (chart.isDatasetVisible(i) ? ds.data[col] : 0), 0));
+    const corners = () => chart.data.datasets.map((_, i) => chart.getDatasetMeta(i).data[0].options.borderRadius);
     chart.update('none');
     const initial = totals();
+    const initialCorners = corners();
     chart.getDatasetMeta(0).hidden = true;
     chart.update('none');
-    results[id] = { initial, hidden: totals() };
+    results[id] = { initial, hidden: totals(), radius: spec.opts.radius, initialCorners, hiddenCorners: corners() };
     eng.destroyInstance(inst);
   }
   host.remove();
@@ -452,6 +454,12 @@ check(stackTotals['bar-stacked'].initial.every((sum, i) => Math.abs(sum - [1.01,
 check(stackTotals['bar-100stacked'].initial.every((sum) => Math.abs(sum - 100) < 1e-9)
   && stackTotals['bar-100stacked'].hidden.every((sum) => Math.abs(sum - 100) < 1e-9),
   '100% stacks total exactly 100 before and after a legend toggle');
+check(Object.values(stackTotals).every(({ radius, initialCorners, hiddenCorners }) =>
+  initialCorners[0].bottomLeft === radius && initialCorners[0].topLeft === 0
+  && initialCorners.at(-1).topLeft === radius && initialCorners.at(-1).bottomLeft === 0
+  && initialCorners.slice(1, -1).every((c) => !c.topLeft && !c.bottomLeft)
+  && hiddenCorners[1].bottomLeft === radius),
+  'stacks round only their visible outer corners');
 
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
