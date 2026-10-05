@@ -204,17 +204,16 @@ export const barCharts = [
     ],
     chartjs: {
       build(spec) {
-        // Normalise each column to 100% here rather than in the data, so the
-        // control panel keeps showing the raw numbers the user typed.
-        const totals = spec.labels.map((_, i) =>
-          spec.series.reduce((sum, s) => sum + (s.data[i] || 0), 0) || 1);
         return {
           type: 'bar',
           data: {
             labels: spec.labels,
             datasets: spec.series.map((s, si) => ({
               label: s.label,
-              data: spec.labels.map((_, i) => +(((s.data[i] || 0) / totals[i]) * 100).toFixed(1)),
+              // Keep the typed values literal. The plugin computes the shown
+              // percentages from visible series before Chart.js parses them.
+              _ocRaw: s.data.slice(),
+              data: s.data.slice(),
               backgroundColor: s.color,
               borderRadius: si === spec.series.length - 1 ? spec.opts.radius : 0,
               borderSkipped: false,
@@ -222,6 +221,26 @@ export const barCharts = [
               stack: 'total',
             })),
           },
+          plugins: [{
+            id: 'ocPercentStack',
+            beforeUpdate(chart) {
+              const sets = chart.data.datasets;
+              for (let col = 0; col < chart.data.labels.length; col++) {
+                const values = sets.map((ds, i) => chart.isDatasetVisible(i)
+                  ? Math.max(0, Number(ds._ocRaw[col]) || 0) : 0);
+                const total = values.reduce((sum, value) => sum + value, 0);
+                const last = values.findLastIndex((value) => value > 0);
+                let used = 0;
+                values.forEach((value, i) => {
+                  const percent = !total || !value ? 0 : i === last
+                    ? +(100 - used).toFixed(1)
+                    : Math.round(value / total * 1000) / 10;
+                  sets[i].data[col] = percent;
+                  used += percent;
+                });
+              }
+            },
+          }],
           options: baseOpts({
             scales: {
               x: xAxis({ stacked: true }),

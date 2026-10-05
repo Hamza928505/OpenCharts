@@ -382,14 +382,15 @@ console.log(`  ${failures.length ? red('✗') : green('✓')} charts — ${passe
 const effectExports = await page.evaluate(async () => {
   const reg = await import('/js/studio/registry.js');
   const eng = await import('/js/studio/engines.js');
-  return ['bar-vertical', 'bar-lollipop'].flatMap((id) => [true, false].map((enabled) => {
-    const def = reg.getChart(id);
-    const spec = reg.newSpec(def);
-    spec.effects = { enabled, glow: 0.7, gradient: 0.8, shadow: 0.3 };
-    const saved = JSON.parse(JSON.stringify(spec));
-    const code = eng.generateCode(def, saved);
-    return { id, enabled, saved: saved.effects, code };
-  }));
+  return ['bar-vertical', 'bar-stacked', 'bar-100stacked', 'bar-lollipop']
+    .flatMap((id) => [true, false].map((enabled) => {
+      const def = reg.getChart(id);
+      const spec = reg.newSpec(def);
+      spec.effects = { enabled, glow: 0.7, gradient: 0.8, shadow: 0.3 };
+      const saved = JSON.parse(JSON.stringify(spec));
+      const code = eng.generateCode(def, saved);
+      return { id, enabled, saved: saved.effects, code };
+    }));
 });
 for (const item of effectExports) {
   check(item.saved.glow === 0.7 && item.saved.gradient === 0.8 && item.saved.shadow === 0.3,
@@ -417,6 +418,41 @@ check(await page.evaluate(async () => (await import('/js/studio/effects.js')).ef
   'print mode reduces effect strength');
 await page.emulateMedia({ media: 'screen' });
 
+const stackTotals = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:800px;position:fixed;left:-9999px';
+  document.body.appendChild(host);
+  const results = {};
+  for (const id of ['bar-stacked', 'bar-100stacked']) {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    if (id === 'bar-100stacked') {
+      spec.series = spec.series.slice(0, 3);
+      spec.series.forEach((series) => { series.data = spec.labels.map(() => 1); });
+    }
+    const inst = eng.renderChart(def, host, spec);
+    if (inst.whenReady) await inst.whenReady;
+    const chart = inst.chart;
+    const totals = () => chart.data.labels.map((_, col) =>
+      chart.data.datasets.reduce((sum, ds, i) => sum + (chart.isDatasetVisible(i) ? ds.data[col] : 0), 0));
+    chart.update('none');
+    const initial = totals();
+    chart.getDatasetMeta(0).hidden = true;
+    chart.update('none');
+    results[id] = { initial, hidden: totals() };
+    eng.destroyInstance(inst);
+  }
+  host.remove();
+  return results;
+});
+check(stackTotals['bar-stacked'].initial.every((sum, i) => Math.abs(sum - [1.01, 1.28, 1.4, 1.71][i]) < 1e-9),
+  'stacked bars preserve the sums of their input series');
+check(stackTotals['bar-100stacked'].initial.every((sum) => Math.abs(sum - 100) < 1e-9)
+  && stackTotals['bar-100stacked'].hidden.every((sum) => Math.abs(sum - 100) < 1e-9),
+  '100% stacks total exactly 100 before and after a legend toggle');
+
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
 // Previews mount near the viewport. The upload/chat panel can put every tile
@@ -440,6 +476,14 @@ check(gallery.tiles === meta.total, 'gallery lists every chart', `${gallery.tile
 check(gallery.live > 0, 'gallery mounts live previews', `${gallery.live} mounted`);
 check(gallery.filters >= meta.categories, 'gallery has a filter per category');
 check(gallery.credits > 0, 'gallery credits its dependencies');
+const stackPreviewClear = await page.evaluate(() => ['bar-stacked', 'bar-100stacked'].every((id) => {
+  const shell = document.querySelector(`.card-shell:has(a[href*="${id}"])`);
+  const button = shell.querySelector('.card-prompt').getBoundingClientRect();
+  const preview = shell.querySelector('.card-canvas');
+  const box = preview.getBoundingClientRect();
+  return button.bottom <= box.top + parseFloat(getComputedStyle(preview).paddingTop);
+}));
+check(stackPreviewClear, 'stacked gallery previews leave their totals clear of the Prompt button');
 console.log(`  ${green('✓')} gallery — ${gallery.tiles} tiles, ${gallery.live} previews live`);
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 
