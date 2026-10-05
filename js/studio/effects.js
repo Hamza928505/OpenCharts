@@ -184,3 +184,75 @@ export function chartJsEffects(config, spec) {
   return config;
 }
 
+/** Paint-time Canvas wrapper: paths and hit boxes remain exactly as authored. */
+export function canvasEffects(ctx, spec, chartId) {
+  const fx = effectsOf(spec);
+  if (!fx.enabled) return ctx;
+  const palette = new Set();
+  let maxMarks = 0;
+  const collect = (value, key = '') => {
+    if (Array.isArray(value)) {
+      maxMarks = Math.max(maxMarks, value.length);
+      value.forEach((item) => collect(item, key));
+    } else if (value && typeof value === 'object') {
+      Object.entries(value).forEach(([name, item]) => collect(item, name));
+    } else if (typeof value === 'string' && !/text|grid|axis|background/i.test(key)) {
+      const rgb = effectRgb(value);
+      if (rgb) palette.add(rgb.slice(0, 3).map(Math.round).join(','));
+    }
+  };
+  collect(spec);
+  const dense = maxMarks > 2000;
+  const heat = /heatmap|matrix|hexbin|calendar/i.test(chartId);
+  const candle = /candlestick|ohlc|renko|kagi|point-figure/i.test(chartId);
+  let box = null;
+  const include = (x, y) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (!box) box = [x, y, x, y];
+    else { box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y); }
+  };
+  const paint = (method, args, bounds) => {
+    const color = ctx[method.startsWith('stroke') ? 'strokeStyle' : 'fillStyle'];
+    const rgb = effectRgb(color);
+    const key = rgb?.slice(0, 3).map(Math.round).join(',');
+    if (!key || !palette.has(key) || !bounds) return ctx[method](...args);
+    const [x0, y0, x1, y1] = bounds;
+    const wide = x1 - x0;
+    const tall = y1 - y0;
+    if (wide < 1.5 && tall < 1.5) return ctx[method](...args);
+    const theme = effectTheme();
+    ctx.save();
+    if (!heat && fx.gradient && wide > 2 && tall > 2) {
+      const gradient = ctx.createLinearGradient(x0, y0, x0, y1);
+      const strength = fx.gradient * (0.5 + theme * 0.5);
+      gradient.addColorStop(0, lighten(color, 0.36 * strength));
+      gradient.addColorStop(1, darken(color, 0.22 * strength));
+      ctx[method.startsWith('stroke') ? 'strokeStyle' : 'fillStyle'] = gradient;
+    }
+    if (!dense && wide > 2 && tall > 2) {
+      const weight = heat ? 0.12 : candle ? 0.35 : 1;
+      ctx.shadowColor = withAlpha(color, Math.min(0.6, fx.glow * 1.1 * theme * weight));
+      ctx.shadowBlur = Math.min(16, fx.glow * 24 * theme * weight);
+      ctx.shadowOffsetY = Math.min(4, fx.shadow * 5 * theme * weight);
+    }
+    const result = ctx[method](...args);
+    ctx.restore();
+    return result;
+  };
+  return new Proxy(ctx, {
+    get(target, name) {
+      if (name === 'beginPath') return (...args) => { box = null; return target.beginPath(...args); };
+      if (name === 'moveTo' || name === 'lineTo') return (x, y) => { include(x, y); return target[name](x, y); };
+      if (name === 'rect' || name === 'roundRect') return (x, y, w, h, ...rest) => { include(x, y); include(x + w, y + h); return target[name](x, y, w, h, ...rest); };
+      if (name === 'arc') return (x, y, r, ...rest) => { include(x - r, y - r); include(x + r, y + r); return target.arc(x, y, r, ...rest); };
+      if (name === 'ellipse') return (x, y, rx, ry, ...rest) => { include(x - rx, y - ry); include(x + rx, y + ry); return target.ellipse(x, y, rx, ry, ...rest); };
+      if (name === 'quadraticCurveTo') return (cx, cy, x, y) => { include(cx, cy); include(x, y); return target.quadraticCurveTo(cx, cy, x, y); };
+      if (name === 'bezierCurveTo') return (x1, y1, x2, y2, x, y) => { include(x1, y1); include(x2, y2); include(x, y); return target.bezierCurveTo(x1, y1, x2, y2, x, y); };
+      if (name === 'fill' || name === 'stroke') return (...args) => paint(name, args, box);
+      if (name === 'fillRect' || name === 'strokeRect') return (x, y, w, h) => paint(name, [x, y, w, h], [x, y, x + w, y + h]);
+      const value = target[name];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, name, value) { target[name] = value; return true; },
+  });
+}

@@ -9,7 +9,7 @@
  */
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
-import { chartJsEffects, chartFill, chartStroke, effectRgb, lighten, darken, withAlpha, effectTheme } from './effects.js';
+import { DEFAULT_EFFECTS, effectsOf, chartJsEffects, chartFill, chartStroke, canvasEffects, effectRgb, lighten, darken, withAlpha, effectTheme } from './effects.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES } from './cdn.js';
 import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
@@ -300,7 +300,7 @@ function renderOne(def, host, spec, opts = {}) {
       const regions = [];
       ctxInfo.tip = opts.compact ? null : recordTip(regions);
       try {
-        def.canvas.draw(ctx, spec, w, height, ctxInfo);
+        def.canvas.draw(canvasEffects(ctx, spec, def.id), spec, w, height, ctxInfo);
       } catch (err) {
         drawError(ctx, w, height, err.message);
       }
@@ -308,7 +308,9 @@ function renderOne(def, host, spec, opts = {}) {
       annotate();
     };
     draw();
-    return { engine, canvas, redraw: draw };
+    window.addEventListener('beforeprint', draw);
+    window.addEventListener('afterprint', draw);
+    return { engine, canvas, redraw: draw, onPrint: draw };
   }
 
   if (engine === 'd3') {
@@ -940,10 +942,16 @@ function buildJS(def, spec) {
 
   if (engine === 'canvas') {
     const block = def.canvas;
+    const canvasSource = spec.effects?.enabled === false ? [] : [
+      `const DEFAULT_EFFECTS = ${serialize(DEFAULT_EFFECTS)};`,
+      ...[effectsOf, effectRgb, lighten, darken, withAlpha, effectTheme, canvasEffects].map(toFunctionSource),
+      '',
+    ];
     if (panels) {
       return tidy([
         ...header,
         '',
+        ...canvasSource,
         `const panels = ${panelData()};`,
         ...annots,
         '',
@@ -971,7 +979,7 @@ function buildJS(def, spec) {
         `    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
         `    ctx.clearRect(0, 0, w, h);`,
         `    const regions = [];`,
-        `    draw(ctx, panel.spec, w, h, {`,
+        `    draw(${spec.effects?.enabled === false ? 'ctx' : `canvasEffects(ctx, panel.spec, '${def.id}')`}, panel.spec, w, h, {`,
         `      width: w, height: h,`,
         `      tip: recordTip(regions),`,
         `    });`,
@@ -981,6 +989,8 @@ function buildJS(def, spec) {
         '',
         `render();`,
         `window.addEventListener('resize', render);`,
+        `window.addEventListener('beforeprint', render);`,
+        `window.addEventListener('afterprint', render);`,
         // The grid itself is never emptied — only the canvases inside it are —
         // so the overlay is painted once and left to reflow.
         ...annotationCall(onGrid, facetTarget),
@@ -991,6 +1001,7 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
+      ...canvasSource,
       `const spec = ${serialize(specForCode(spec), 0)};`,
       ...annots,
       '',
@@ -1017,7 +1028,7 @@ function buildJS(def, spec) {
       `  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
       `  ctx.clearRect(0, 0, w, h);`,
       `  const regions = [];`,
-      `  draw(ctx, spec, w, h, {`,
+      `  draw(${spec.effects?.enabled === false ? 'ctx' : `canvasEffects(ctx, spec, '${def.id}')`}, spec, w, h, {`,
       `    width: w, height: h,`,
       `    tip: recordTip(regions),`,
       `  });`,
@@ -1026,6 +1037,8 @@ function buildJS(def, spec) {
       '',
       `render();`,
       `window.addEventListener('resize', render);`,
+      `window.addEventListener('beforeprint', render);`,
+      `window.addEventListener('afterprint', render);`,
       // The wrap is never cleared — only the canvas inside it is — so the
       // overlay is painted once and left to reflow on its own.
       ...annotationCall(onGrid, 'canvas.parentElement'),

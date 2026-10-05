@@ -225,6 +225,20 @@ const results = await page.evaluate(async (ids) => {
         if (def.engine === 'd3' && !host.querySelector('svg')) r.problems.push('no svg produced');
       }
 
+      // Turning the shared effects off must preserve a real render and leave
+      // the exported drawing code free of effect helpers.
+      spec.effects.enabled = false;
+      const plain = eng.renderChart(def, host, spec);
+      if (plain.whenReady) await plain.whenReady;
+      if (plain.engine === 'error' || (def.engine === 'canvas' && !hasInk(host.querySelector('canvas')))) {
+        r.problems.push('effects-off render failed or blank');
+      }
+      eng.destroyInstance(plain);
+      const plainCode = eng.generateCode(def, spec);
+      if (def.chartjs && plainCode.js.includes('ocNeon')) r.problems.push('plain Chart.js export contains effect plugin');
+      if (def.canvas && plainCode.js.includes('canvasEffects(')) r.problems.push('plain Canvas export contains effect helper');
+      spec.effects.enabled = true;
+
       // Legend, where the chart declares one.
       const items = def.legend ? def.legend(spec) : null;
       eng.renderLegend(legendHost, items, inst);
@@ -363,6 +377,45 @@ for (const r of results) {
   checks++;
 }
 console.log(`  ${failures.length ? red('✗') : green('✓')} charts — ${passed}/${results.length} clean`);
+
+/* Effects run through the real standalone page as well as the studio. */
+const effectExports = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  return ['bar-vertical', 'bar-lollipop'].flatMap((id) => [true, false].map((enabled) => {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    spec.effects = { enabled, glow: 0.7, gradient: 0.8, shadow: 0.3 };
+    const saved = JSON.parse(JSON.stringify(spec));
+    const code = eng.generateCode(def, saved);
+    return { id, enabled, saved: saved.effects, code };
+  }));
+});
+for (const item of effectExports) {
+  check(item.saved.glow === 0.7 && item.saved.gradient === 0.8 && item.saved.shadow === 0.3,
+    `${item.id} effects spec round-trips`);
+  const path = `/test-effect-${item.id}-${item.enabled}.html`;
+  generated.set(path, item.code.deps.reduce((html, lib) => lib.local
+    ? html.replaceAll(lib.url, '/' + lib.local) : html, item.code.standalone));
+  const exportPage = await browser.newPage({ viewport: { width: 900, height: 600 } });
+  const errors = [];
+  exportPage.on('pageerror', (e) => errors.push(e.message));
+  exportPage.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await exportPage.goto(base + path, { waitUntil: 'load' });
+  const ink = await exportPage.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return false;
+    const px = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < px.length; i += 4 * 197) if (px[i] > 10) return true;
+    return false;
+  });
+  check(ink && !errors.length, `${item.id} standalone with effects ${item.enabled ? 'on' : 'off'} renders`, errors.join(' | '));
+  await exportPage.close();
+}
+await page.emulateMedia({ media: 'print' });
+check(await page.evaluate(async () => (await import('/js/studio/effects.js')).effectTheme()) === 0.12,
+  'print mode reduces effect strength');
+await page.emulateMedia({ media: 'screen' });
 
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
