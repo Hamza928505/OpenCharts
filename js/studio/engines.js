@@ -9,6 +9,7 @@
  */
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
+import { chartJsEffects, chartFill, chartStroke, effectRgb, lighten, darken, withAlpha, effectTheme } from './effects.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES } from './cdn.js';
 import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
@@ -245,7 +246,7 @@ function renderOne(def, host, spec, opts = {}) {
     wrap.appendChild(canvas);
     host.appendChild(wrap);
     try {
-      const config = applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds);
+      const config = chartJsEffects(applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds), spec);
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         config.options = { ...config.options, animation: false };
       }
@@ -254,8 +255,11 @@ function renderOne(def, host, spec, opts = {}) {
       // config wants one costs nothing after the first.
       if (usesTimeScale(config)) installDateAdapter();
       const chart = new window.Chart(canvas, config);
+      const onPrint = () => chart.update('none');
+      window.addEventListener('beforeprint', onPrint);
+      window.addEventListener('afterprint', onPrint);
       annotate();
-      return { engine, chart, canvas };
+      return { engine, chart, canvas, onPrint };
     } catch (err) {
       return failure(host, err.message);
     }
@@ -398,6 +402,10 @@ export function destroyInstance(inst) {
   if (inst.engine === 'facet') {
     (inst.panels || []).forEach(destroyInstance);
     return;
+  }
+  if (inst.onPrint) {
+    window.removeEventListener('beforeprint', inst.onPrint);
+    window.removeEventListener('afterprint', inst.onPrint);
   }
   try {
     if (inst.chart && typeof inst.chart.dispose === 'function') inst.chart.dispose();
@@ -843,22 +851,29 @@ function buildJS(def, spec) {
     (hasLegend ? ['', legendCode(legend, interactive && !panels)] : []);
 
   if (engine === 'chartjs') {
+    const effectSource = spec.effects?.enabled === false ? [] : [
+      ...[effectRgb, lighten, darken, withAlpha, effectTheme, chartFill, chartStroke].map(toFunctionSource),
+      '',
+    ];
     if (panels) {
       const bounds = sharedScaleBounds(def, panels, spec.facet);
       const built = panels.map((p) => panelEntry(p, {
-        config: applyScaleBounds(
+        config: chartJsEffects(applyScaleBounds(
           def.chartjs.build(p.spec, { width: panelWidth, height: h }), bounds,
-        ),
+        ), p.spec),
       }));
       return tidy([
         ...header,
         ...dateAdapterSource(built.some((p) => usesTimeScale(p.config))),
         '',
+        ...effectSource,
         `// One finished config per panel.`,
         `const panels = ${serialize(built, 0)};`,
         '',
         `const charts = panels.map((panel, i) =>`,
         `  new Chart(document.getElementById('chart-' + i), panel.config));`,
+        `window.addEventListener('beforeprint', () => charts.forEach(chart => chart.update('none')));`,
+        `window.addEventListener('afterprint', () => charts.forEach(chart => chart.update('none')));`,
         ...annots,
         ...(annots.length ? ['', ...annotationCall(onGrid, facetTarget)] : []),
         ...panelAnnotationCall(panels),
@@ -866,14 +881,17 @@ function buildJS(def, spec) {
       ].join('\n'));
     }
 
-    const config = def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) });
+    const config = chartJsEffects(def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) }), spec);
     const lines = [
       ...header,
       ...dateAdapterSource(usesTimeScale(config)),
       '',
+      ...effectSource,
       `const config = ${serialize(config, 0)};`,
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
+      `window.addEventListener('beforeprint', () => chart.update('none'));`,
+      `window.addEventListener('afterprint', () => chart.update('none'));`,
       ...annots,
       ...(annots.length ? ['', ...annotationCall(onGrid, `document.querySelector('.chart-wrap')`)] : []),
     ];
