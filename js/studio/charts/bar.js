@@ -23,15 +23,19 @@ const barStyleControls = [
 // through a Chart.js config can draw a line at a value.
 const axisControls = [...valueAxisControls, { ...REFERENCE_CONTROL }];
 
+// Chart.js reserves a numeric radius for the outer edge of a stack; explicit
+// corners keep the rounding on every segment.
+const allCorners = (radius) => ({ topLeft: radius, topRight: radius, bottomLeft: radius, bottomRight: radius });
+
 function barDatasets(spec, { stack = false } = {}) {
   const o = spec.opts;
-  return spec.series.map((s, i) => ({
+  return spec.series.map((s) => ({
     label: s.label,
     data: s.data,
     backgroundColor: o.outline ? withAlpha(s.color, 0.2) : s.color,
     borderColor: s.color,
     borderWidth: o.outline ? 1.5 : 0,
-    borderRadius: stack && i < spec.series.length - 1 ? 0 : o.radius,
+    borderRadius: stack ? allCorners(o.radius) : o.radius,
     borderSkipped: false,
     categoryPercentage: o.thickness,
     barPercentage: 0.92,
@@ -208,14 +212,14 @@ export const barCharts = [
           type: 'bar',
           data: {
             labels: spec.labels,
-            datasets: spec.series.map((s, si) => ({
+            datasets: spec.series.map((s) => ({
               label: s.label,
               // Keep the typed values literal. The plugin computes the shown
               // percentages from visible series before Chart.js parses them.
               _ocRaw: s.data.slice(),
               data: s.data.slice(),
               backgroundColor: s.color,
-              borderRadius: si === spec.series.length - 1 ? spec.opts.radius : 0,
+              borderRadius: allCorners(spec.opts.radius),
               borderSkipped: false,
               categoryPercentage: spec.opts.thickness,
               stack: 'total',
