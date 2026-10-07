@@ -846,7 +846,7 @@ function widgetData(ctrl, spec, notify, def) {
         // The same door a gallery tile uses, plus a note to open the matcher
         // on arrival. The file is not lost by being refused here.
         requestMatch(table);
-        location.href = 'index.html';
+        location.href = 'ai.html';
         return;
       }
       // The grid is where a near miss gets fixed — renaming a column or

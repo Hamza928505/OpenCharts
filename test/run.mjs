@@ -496,6 +496,7 @@ console.log(`  ${green('✓')} gallery — ${gallery.tiles} tiles, ${gallery.liv
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 
 /* The gallery answers the other question: "I have this table, what draws it?" */
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 const match = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const paste = async (text, header) => {
@@ -2682,7 +2683,7 @@ check(/spreadsheet|CSV/i.test(promptTab.note), 'the prompt tab says what to do w
 console.log(`  ${green('✓')} prompt tab — ${promptTab.text.length} chars, wrapped, no gutter`);
 
 // And the same brief is one click away from the gallery tile, without opening it.
-await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(900);
 
 const galleryPrompt = await page.evaluate(async () => {
@@ -5160,7 +5161,7 @@ check(turnedUnit.rules === 'labelSeries:y rowSeries:y items:y matrix:y links:n p
 
 /* The gallery: the tick box turns the table before anything ranks it, so the
  * tiles, the hand-off and the prompt all carry the turned table. */
-await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 const turnedGallery = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const app = window.openChartsGallery;
@@ -5436,7 +5437,7 @@ generated.set('/export-dated-line.html', datedHtml);
 }
 
 // The matcher says what it saw.
-await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 const dateReport = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const box = document.querySelector('#match-text');
@@ -6141,7 +6142,7 @@ console.log(`  ${green('✓')} reference lines — mean, median, target, moving 
  * published source but no entry point. `render()` and `<open-chart>` are the
  * same three calls the studio makes — newSpec, applyData, renderChart — with
  * nothing new drawn. */
-await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 const jsonIn = await page.evaluate(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const d = await import('/js/studio/dataio.js');
@@ -7242,7 +7243,7 @@ console.log(`  ${green('✓')} facets — ${facet.count} panels from a column, $
  * written with one anyway: it flagged revenue, visits, value and 41 of 42
  * measures in a wide export as identifiers, so the most obvious table in the
  * world — five regions and one measure — produced no suggestion at all. */
-await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+await page.goto(`${base}/ai.html`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(500);
 
 const report = await page.evaluate(async () => {
