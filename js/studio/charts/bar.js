@@ -23,15 +23,30 @@ const barStyleControls = [
 // through a Chart.js config can draw a line at a value.
 const axisControls = [...valueAxisControls, { ...REFERENCE_CONTROL }];
 
+// Scriptable so the top and bottom corners follow the visible series when a
+// legend item is hidden. The literal radius travels with the exported config.
+function stackCorners(ctx) {
+  const visible = ctx.chart.data.datasets.map((ds, i) =>
+    ds.stack === ctx.dataset.stack && ctx.chart.isDatasetVisible(i) ? i : -1).filter((i) => i >= 0);
+  const radius = ctx.dataset._ocRadius;
+  return {
+    topLeft: ctx.datasetIndex === visible.at(-1) ? radius : 0,
+    topRight: ctx.datasetIndex === visible.at(-1) ? radius : 0,
+    bottomLeft: ctx.datasetIndex === visible[0] ? radius : 0,
+    bottomRight: ctx.datasetIndex === visible[0] ? radius : 0,
+  };
+}
+
 function barDatasets(spec, { stack = false } = {}) {
   const o = spec.opts;
-  return spec.series.map((s, i) => ({
+  return spec.series.map((s) => ({
     label: s.label,
     data: s.data,
     backgroundColor: o.outline ? withAlpha(s.color, 0.2) : s.color,
     borderColor: s.color,
     borderWidth: o.outline ? 1.5 : 0,
-    borderRadius: stack && i < spec.series.length - 1 ? 0 : o.radius,
+    ...(stack ? { _ocRadius: o.radius } : {}),
+    borderRadius: stack ? stackCorners : o.radius,
     borderSkipped: false,
     categoryPercentage: o.thickness,
     barPercentage: 0.92,
@@ -204,24 +219,44 @@ export const barCharts = [
     ],
     chartjs: {
       build(spec) {
-        // Normalise each column to 100% here rather than in the data, so the
-        // control panel keeps showing the raw numbers the user typed.
-        const totals = spec.labels.map((_, i) =>
-          spec.series.reduce((sum, s) => sum + (s.data[i] || 0), 0) || 1);
         return {
           type: 'bar',
           data: {
             labels: spec.labels,
-            datasets: spec.series.map((s, si) => ({
+            datasets: spec.series.map((s) => ({
               label: s.label,
-              data: spec.labels.map((_, i) => +(((s.data[i] || 0) / totals[i]) * 100).toFixed(1)),
+              // Keep the typed values literal. The plugin computes the shown
+              // percentages from visible series before Chart.js parses them.
+              _ocRaw: s.data.slice(),
+              _ocRadius: spec.opts.radius,
+              data: s.data.slice(),
               backgroundColor: s.color,
-              borderRadius: si === spec.series.length - 1 ? spec.opts.radius : 0,
+              borderRadius: stackCorners,
               borderSkipped: false,
               categoryPercentage: spec.opts.thickness,
               stack: 'total',
             })),
           },
+          plugins: [{
+            id: 'ocPercentStack',
+            beforeUpdate(chart) {
+              const sets = chart.data.datasets;
+              for (let col = 0; col < chart.data.labels.length; col++) {
+                const values = sets.map((ds, i) => chart.isDatasetVisible(i)
+                  ? Math.max(0, Number(ds._ocRaw[col]) || 0) : 0);
+                const total = values.reduce((sum, value) => sum + value, 0);
+                const last = values.findLastIndex((value) => value > 0);
+                let used = 0;
+                values.forEach((value, i) => {
+                  const percent = !total || !value ? 0 : i === last
+                    ? +(100 - used).toFixed(1)
+                    : Math.round(value / total * 1000) / 10;
+                  sets[i].data[col] = percent;
+                  used += percent;
+                });
+              }
+            },
+          }],
           options: baseOpts({
             scales: {
               x: xAxis({ stacked: true }),

@@ -573,7 +573,7 @@ img, canvas, svg { max-width: 100%; display: block; }
   border-color: var(--rule-firm);
 }
 
-/* Sits over the top-right of the preview. Always present rather than revealed
+/* Sits in the preview's top strip. Always present rather than revealed
    on hover: a touch screen has no hover, and an action nobody can find is the
    same as one that is not there. */
 .card-prompt {
@@ -595,12 +595,12 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .card-prompt.ok { color: var(--accent); border-color: var(--accent); }
 .card-canvas {
-  height: 158px;
+  height: 186px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--rule);
   position: relative;
   display: grid; place-items: center;
-  padding: .6rem;
+  padding: 2.4rem .6rem .6rem;
   overflow: hidden;
 }
 .card-canvas > * { width: 100%; height: 100%; }
@@ -3270,7 +3270,7 @@ body[data-focus="1"] .stage-data { display: none; }
   .head-actions .stepper { order: 2; }
   .gallery-hero h1 { font-size: 2rem; }
   .hero-stats { display: grid; grid-template-columns: 1fr 1fr; }
-  .card-canvas { height: 140px; }
+  .card-canvas { height: 168px; }
   .seg-btn { font-size: 11px; padding: .34rem .2rem; }
 }
 

@@ -22,27 +22,32 @@ export const echartsSamples = [
     echarts: {
       height: 400,
       build(spec, env) {
+        const compact = !!env?.compact;
         const cells = (spec.cells || []).map((c) => [c.x, c.y, c.v]);
         const max = cells.reduce((m, c) => Math.max(m, Number(c[2]) || 0), 0) || 1;
         return {
-          tooltip: { position: 'top' },
-          grid: { height: '80%', top: '10%' },
-          xAxis: { type: 'category', data: spec.cols || [], splitArea: { show: true } },
-          yAxis: { type: 'category', data: spec.rows || [], splitArea: { show: true } },
+          tooltip: { show: !compact, position: 'top' },
+          grid: compact
+            ? { top: 4, right: 4, bottom: 4, left: 4 }
+            : { top: 16, right: 16, bottom: 88, left: 12, containLabel: true },
+          xAxis: { type: 'category', data: spec.cols || [], show: !compact },
+          yAxis: { type: 'category', data: spec.rows || [], inverse: true, show: !compact },
           visualMap: {
             min: 0,
             max,
-            calculable: true,
+            show: !compact,
+            calculable: !compact,
+            inRange: { color: ['#eef7f0', '#a6ddb4', '#4aa76d'] },
             orient: 'horizontal',
             left: 'center',
-            bottom: '0%',
+            bottom: 8,
           },
           series: [
             {
               name: 'Value',
               type: 'heatmap',
               data: cells,
-              label: { show: true },
+              label: { show: !compact },
               emphasis: {
                 itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0, 0, 0, 0.5)' },
               },

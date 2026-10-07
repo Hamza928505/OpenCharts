@@ -34,6 +34,7 @@ import { engineOf, ENGINE_LABEL, ENGINE_CHIP } from './engines.js';
 import { DATA_SCHEMAS, DATA_CONTROL } from './data-schemas.js';
 import { ANNOTATION_CONTROL } from './annotate.js';
 import { FACET_CONTROL } from './facet.js';
+import { DEFAULT_EFFECTS } from './effects.js';
 import { CAPTION_CONTROL } from './caption.js';
 
 /** Category display order in the gallery and the rail. */
@@ -85,6 +86,7 @@ const ALL = [
 
 /* Decorate each definition with what the UI needs, once at module load. */
 ALL.forEach((def) => {
+  def.spec.effects = { ...DEFAULT_EFFECTS, ...(def.spec.effects || {}) };
   // Attach the data editor. A chart can already declare its own `data`
   // descriptor; the schema table fills in the rest so every chart in the
   // library accepts pasted input.
@@ -110,6 +112,16 @@ ALL.forEach((def) => {
     const controls = def.controls || (def.controls = []);
     if (!controls.some((c) => c.type === 'facet')) controls.push({ ...FACET_CONTROL });
   }
+
+  const effectControls = def.controls || (def.controls = []);
+  effectControls.push(
+    { group: 'Effects', type: 'toggle', key: 'effects.enabled', label: 'Neon effects' },
+    ...['glow', 'gradient', 'shadow'].map((key) => ({
+      group: 'Effects', type: 'slider', key: `effects.${key}`,
+      label: key[0].toUpperCase() + key.slice(1), min: 0, max: 1, step: 0.05,
+      format: (value) => `${Math.round(value * 100)}%`,
+    })),
+  );
 
   // A title, a subtitle, a source line and a byline: DOM around the plate,
   // so every chart has them and no renderer knows. First of the stage tools,

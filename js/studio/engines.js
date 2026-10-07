@@ -9,6 +9,7 @@
  */
 
 import { serialize, indent, tidy, toFunctionSource } from './serialize.js';
+import { DEFAULT_EFFECTS, effectsOf, chartJsEffects, chartFill, chartStroke, canvasEffects, effectRgb, lighten, darken, withAlpha, effectTheme } from './effects.js';
 import { dependenciesFor, cdnOnly, scriptsOnly, scriptTag, describe, LIBRARIES } from './cdn.js';
 import { ready, ensureLibraries, librariesFor } from './loader.js';
 import { chartSummary, chartLabel, tableMarkup, A11Y_CSS } from './a11y.js';
@@ -245,7 +246,7 @@ function renderOne(def, host, spec, opts = {}) {
     wrap.appendChild(canvas);
     host.appendChild(wrap);
     try {
-      const config = applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds);
+      const config = chartJsEffects(applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds), spec);
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         config.options = { ...config.options, animation: false };
       }
@@ -254,8 +255,11 @@ function renderOne(def, host, spec, opts = {}) {
       // config wants one costs nothing after the first.
       if (usesTimeScale(config)) installDateAdapter();
       const chart = new window.Chart(canvas, config);
+      const onPrint = () => chart.update('none');
+      window.addEventListener('beforeprint', onPrint);
+      window.addEventListener('afterprint', onPrint);
       annotate();
-      return { engine, chart, canvas };
+      return { engine, chart, canvas, onPrint };
     } catch (err) {
       return failure(host, err.message);
     }
@@ -296,7 +300,7 @@ function renderOne(def, host, spec, opts = {}) {
       const regions = [];
       ctxInfo.tip = opts.compact ? null : recordTip(regions);
       try {
-        def.canvas.draw(ctx, spec, w, height, ctxInfo);
+        def.canvas.draw(canvasEffects(ctx, spec, def.id), spec, w, height, ctxInfo);
       } catch (err) {
         drawError(ctx, w, height, err.message);
       }
@@ -304,7 +308,9 @@ function renderOne(def, host, spec, opts = {}) {
       annotate();
     };
     draw();
-    return { engine, canvas, redraw: draw };
+    window.addEventListener('beforeprint', draw);
+    window.addEventListener('afterprint', draw);
+    return { engine, canvas, redraw: draw, onPrint: draw };
   }
 
   if (engine === 'd3') {
@@ -398,6 +404,10 @@ export function destroyInstance(inst) {
   if (inst.engine === 'facet') {
     (inst.panels || []).forEach(destroyInstance);
     return;
+  }
+  if (inst.onPrint) {
+    window.removeEventListener('beforeprint', inst.onPrint);
+    window.removeEventListener('afterprint', inst.onPrint);
   }
   try {
     if (inst.chart && typeof inst.chart.dispose === 'function') inst.chart.dispose();
@@ -843,22 +853,29 @@ function buildJS(def, spec) {
     (hasLegend ? ['', legendCode(legend, interactive && !panels)] : []);
 
   if (engine === 'chartjs') {
+    const effectSource = spec.effects?.enabled === false ? [] : [
+      ...[effectRgb, lighten, darken, withAlpha, effectTheme, chartFill, chartStroke].map(toFunctionSource),
+      '',
+    ];
     if (panels) {
       const bounds = sharedScaleBounds(def, panels, spec.facet);
       const built = panels.map((p) => panelEntry(p, {
-        config: applyScaleBounds(
+        config: chartJsEffects(applyScaleBounds(
           def.chartjs.build(p.spec, { width: panelWidth, height: h }), bounds,
-        ),
+        ), p.spec),
       }));
       return tidy([
         ...header,
         ...dateAdapterSource(built.some((p) => usesTimeScale(p.config))),
         '',
+        ...effectSource,
         `// One finished config per panel.`,
         `const panels = ${serialize(built, 0)};`,
         '',
         `const charts = panels.map((panel, i) =>`,
         `  new Chart(document.getElementById('chart-' + i), panel.config));`,
+        `window.addEventListener('beforeprint', () => charts.forEach(chart => chart.update('none')));`,
+        `window.addEventListener('afterprint', () => charts.forEach(chart => chart.update('none')));`,
         ...annots,
         ...(annots.length ? ['', ...annotationCall(onGrid, facetTarget)] : []),
         ...panelAnnotationCall(panels),
@@ -866,14 +883,17 @@ function buildJS(def, spec) {
       ].join('\n'));
     }
 
-    const config = def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) });
+    const config = chartJsEffects(def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) }), spec);
     const lines = [
       ...header,
       ...dateAdapterSource(usesTimeScale(config)),
       '',
+      ...effectSource,
       `const config = ${serialize(config, 0)};`,
       '',
       `const chart = new Chart(document.getElementById('chart'), config);`,
+      `window.addEventListener('beforeprint', () => chart.update('none'));`,
+      `window.addEventListener('afterprint', () => chart.update('none'));`,
       ...annots,
       ...(annots.length ? ['', ...annotationCall(onGrid, `document.querySelector('.chart-wrap')`)] : []),
     ];
@@ -922,10 +942,16 @@ function buildJS(def, spec) {
 
   if (engine === 'canvas') {
     const block = def.canvas;
+    const canvasSource = spec.effects?.enabled === false ? [] : [
+      `const DEFAULT_EFFECTS = ${serialize(DEFAULT_EFFECTS)};`,
+      ...[effectsOf, effectRgb, lighten, darken, withAlpha, effectTheme, canvasEffects].map(toFunctionSource),
+      '',
+    ];
     if (panels) {
       return tidy([
         ...header,
         '',
+        ...canvasSource,
         `const panels = ${panelData()};`,
         ...annots,
         '',
@@ -953,7 +979,7 @@ function buildJS(def, spec) {
         `    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
         `    ctx.clearRect(0, 0, w, h);`,
         `    const regions = [];`,
-        `    draw(ctx, panel.spec, w, h, {`,
+        `    draw(${spec.effects?.enabled === false ? 'ctx' : `canvasEffects(ctx, panel.spec, '${def.id}')`}, panel.spec, w, h, {`,
         `      width: w, height: h,`,
         `      tip: recordTip(regions),`,
         `    });`,
@@ -963,6 +989,8 @@ function buildJS(def, spec) {
         '',
         `render();`,
         `window.addEventListener('resize', render);`,
+        `window.addEventListener('beforeprint', render);`,
+        `window.addEventListener('afterprint', render);`,
         // The grid itself is never emptied — only the canvases inside it are —
         // so the overlay is painted once and left to reflow.
         ...annotationCall(onGrid, facetTarget),
@@ -973,6 +1001,7 @@ function buildJS(def, spec) {
     return tidy([
       ...header,
       '',
+      ...canvasSource,
       `const spec = ${serialize(specForCode(spec), 0)};`,
       ...annots,
       '',
@@ -999,7 +1028,7 @@ function buildJS(def, spec) {
       `  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);`,
       `  ctx.clearRect(0, 0, w, h);`,
       `  const regions = [];`,
-      `  draw(ctx, spec, w, h, {`,
+      `  draw(${spec.effects?.enabled === false ? 'ctx' : `canvasEffects(ctx, spec, '${def.id}')`}, spec, w, h, {`,
       `    width: w, height: h,`,
       `    tip: recordTip(regions),`,
       `  });`,
@@ -1008,6 +1037,8 @@ function buildJS(def, spec) {
       '',
       `render();`,
       `window.addEventListener('resize', render);`,
+      `window.addEventListener('beforeprint', render);`,
+      `window.addEventListener('afterprint', render);`,
       // The wrap is never cleared — only the canvas inside it is — so the
       // overlay is painted once and left to reflow on its own.
       ...annotationCall(onGrid, 'canvas.parentElement'),

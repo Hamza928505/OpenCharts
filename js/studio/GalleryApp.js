@@ -91,15 +91,17 @@ export class GalleryApp {
     mountThemeToggle(document.querySelector('#theme-mount'));
     onThemeChange(() => this._refreshLive());
 
-    this.searchEl.addEventListener('input', () => {
+    this.searchEl?.addEventListener('input', () => {
       this.query = this.searchEl.value;
       this.render();
     });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === '/' && !e.target.matches('input, textarea')) {
-        e.preventDefault();
-        this.searchEl.focus();
+        if (this.searchEl) {
+          e.preventDefault();
+          this.searchEl.focus();
+        }
       }
     });
 
@@ -613,6 +615,7 @@ export class GalleryApp {
   }
 
   _buildFilters() {
+    if (!this.filtersEl) return;
     const all = ['All', ...CATEGORY_ORDER.filter((c) => CHARTS.some((x) => x.category === c))];
     this.filtersEl.innerHTML = '';
     all.forEach((name) => {
@@ -634,11 +637,13 @@ export class GalleryApp {
     this.live.forEach((inst) => destroyInstance(inst));
     this.live.clear();
     this._observer.disconnect();
+    
+    if (!this.grid) return;
     this.grid.innerHTML = '';
 
     let matches = searchCharts(this.query, this.category);
     if (this.fit && this.onlyFit) matches = matches.filter((c) => this.fit.has(c.id));
-    this.countEl.textContent = `${matches.length} of ${CHART_COUNT}`;
+    if (this.countEl) this.countEl.textContent = `${matches.length} of ${CHART_COUNT}`;
 
     if (!matches.length) {
       this.grid.innerHTML = (this.fit && this.onlyFit)

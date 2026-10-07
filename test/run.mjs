@@ -225,6 +225,20 @@ const results = await page.evaluate(async (ids) => {
         if (def.engine === 'd3' && !host.querySelector('svg')) r.problems.push('no svg produced');
       }
 
+      // Turning the shared effects off must preserve a real render and leave
+      // the exported drawing code free of effect helpers.
+      spec.effects.enabled = false;
+      const plain = eng.renderChart(def, host, spec);
+      if (plain.whenReady) await plain.whenReady;
+      if (plain.engine === 'error' || (def.engine === 'canvas' && !hasInk(host.querySelector('canvas')))) {
+        r.problems.push('effects-off render failed or blank');
+      }
+      eng.destroyInstance(plain);
+      const plainCode = eng.generateCode(def, spec);
+      if (def.chartjs && plainCode.js.includes('ocNeon')) r.problems.push('plain Chart.js export contains effect plugin');
+      if (def.canvas && plainCode.js.includes('canvasEffects(')) r.problems.push('plain Canvas export contains effect helper');
+      spec.effects.enabled = true;
+
       // Legend, where the chart declares one.
       const items = def.legend ? def.legend(spec) : null;
       eng.renderLegend(legendHost, items, inst);
@@ -364,6 +378,89 @@ for (const r of results) {
 }
 console.log(`  ${failures.length ? red('✗') : green('✓')} charts — ${passed}/${results.length} clean`);
 
+/* Effects run through the real standalone page as well as the studio. */
+const effectExports = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  return ['bar-vertical', 'bar-stacked', 'bar-100stacked', 'bar-lollipop']
+    .flatMap((id) => [true, false].map((enabled) => {
+      const def = reg.getChart(id);
+      const spec = reg.newSpec(def);
+      spec.effects = { enabled, glow: 0.7, gradient: 0.8, shadow: 0.3 };
+      const saved = JSON.parse(JSON.stringify(spec));
+      const code = eng.generateCode(def, saved);
+      return { id, enabled, saved: saved.effects, code };
+    }));
+});
+for (const item of effectExports) {
+  check(item.saved.glow === 0.7 && item.saved.gradient === 0.8 && item.saved.shadow === 0.3,
+    `${item.id} effects spec round-trips`);
+  const path = `/test-effect-${item.id}-${item.enabled}.html`;
+  generated.set(path, item.code.deps.reduce((html, lib) => lib.local
+    ? html.replaceAll(lib.url, '/' + lib.local) : html, item.code.standalone));
+  const exportPage = await browser.newPage({ viewport: { width: 900, height: 600 } });
+  const errors = [];
+  exportPage.on('pageerror', (e) => errors.push(e.message));
+  exportPage.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await exportPage.goto(base + path, { waitUntil: 'load' });
+  const ink = await exportPage.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return false;
+    const px = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < px.length; i += 4 * 197) if (px[i] > 10) return true;
+    return false;
+  });
+  check(ink && !errors.length, `${item.id} standalone with effects ${item.enabled ? 'on' : 'off'} renders`, errors.join(' | '));
+  await exportPage.close();
+}
+await page.emulateMedia({ media: 'print' });
+check(await page.evaluate(async () => (await import('/js/studio/effects.js')).effectTheme()) === 0.12,
+  'print mode reduces effect strength');
+await page.emulateMedia({ media: 'screen' });
+
+const stackTotals = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:800px;position:fixed;left:-9999px';
+  document.body.appendChild(host);
+  const results = {};
+  for (const id of ['bar-stacked', 'bar-100stacked']) {
+    const def = reg.getChart(id);
+    const spec = reg.newSpec(def);
+    if (id === 'bar-100stacked') {
+      spec.series = spec.series.slice(0, 3);
+      spec.series.forEach((series) => { series.data = spec.labels.map(() => 1); });
+    }
+    const inst = eng.renderChart(def, host, spec);
+    if (inst.whenReady) await inst.whenReady;
+    const chart = inst.chart;
+    const totals = () => chart.data.labels.map((_, col) =>
+      chart.data.datasets.reduce((sum, ds, i) => sum + (chart.isDatasetVisible(i) ? ds.data[col] : 0), 0));
+    const corners = () => chart.data.datasets.map((_, i) => chart.getDatasetMeta(i).data[0].options.borderRadius);
+    chart.update('none');
+    const initial = totals();
+    const initialCorners = corners();
+    chart.getDatasetMeta(0).hidden = true;
+    chart.update('none');
+    results[id] = { initial, hidden: totals(), radius: spec.opts.radius, initialCorners, hiddenCorners: corners() };
+    eng.destroyInstance(inst);
+  }
+  host.remove();
+  return results;
+});
+check(stackTotals['bar-stacked'].initial.every((sum, i) => Math.abs(sum - [1.01, 1.28, 1.4, 1.71][i]) < 1e-9),
+  'stacked bars preserve the sums of their input series');
+check(stackTotals['bar-100stacked'].initial.every((sum) => Math.abs(sum - 100) < 1e-9)
+  && stackTotals['bar-100stacked'].hidden.every((sum) => Math.abs(sum - 100) < 1e-9),
+  '100% stacks total exactly 100 before and after a legend toggle');
+check(Object.values(stackTotals).every(({ radius, initialCorners, hiddenCorners }) =>
+  initialCorners[0].bottomLeft === radius && initialCorners[0].topLeft === 0
+  && initialCorners.at(-1).topLeft === radius && initialCorners.at(-1).bottomLeft === 0
+  && initialCorners.slice(1, -1).every((c) => !c.topLeft && !c.bottomLeft)
+  && hiddenCorners[1].bottomLeft === radius),
+  'stacks round only their visible outer corners');
+
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
 // Previews mount near the viewport. The upload/chat panel can put every tile
@@ -387,6 +484,14 @@ check(gallery.tiles === meta.total, 'gallery lists every chart', `${gallery.tile
 check(gallery.live > 0, 'gallery mounts live previews', `${gallery.live} mounted`);
 check(gallery.filters >= meta.categories, 'gallery has a filter per category');
 check(gallery.credits > 0, 'gallery credits its dependencies');
+const stackPreviewClear = await page.evaluate(() => ['bar-stacked', 'bar-100stacked'].every((id) => {
+  const shell = document.querySelector(`.card-shell:has(a[href*="${id}"])`);
+  const button = shell.querySelector('.card-prompt').getBoundingClientRect();
+  const preview = shell.querySelector('.card-canvas');
+  const box = preview.getBoundingClientRect();
+  return button.bottom <= box.top + parseFloat(getComputedStyle(preview).paddingTop);
+}));
+check(stackPreviewClear, 'stacked gallery previews leave their totals clear of the Prompt button');
 console.log(`  ${green('✓')} gallery — ${gallery.tiles} tiles, ${gallery.live} previews live`);
 await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 
