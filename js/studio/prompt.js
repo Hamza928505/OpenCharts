@@ -395,8 +395,10 @@ export function buildPrompt(def, spec, code, mode = 'full') {
     L.push('**Output B — the page.** The whole template below, reproduced in full, with only');
     L.push('the data changed. Specifically:');
     L.push('');
-    L.push('- Change only the values, the labels and the series names. Leave the layout,');
-    L.push('  the options, the helper functions and the drawing code exactly as they are.');
+    L.push('- Choose the axes that best explain my data. Use the column names and values');
+    L.push('  to assign meaningful x and y variables, and label each axis in my own terms.');
+    L.push('- Change the data, labels, series names and axis options needed to fit it.');
+    L.push('  Leave the layout, helper functions and drawing code exactly as they are.');
     L.push('- Keep every `<script>` tag and its version exactly as written. Do not switch to');
     L.push('  a different charting library, a different version, or a build step.');
     L.push('- Take the series names from my column headings and the category labels from my');
@@ -404,7 +406,8 @@ export function buildPrompt(def, spec, code, mode = 'full') {
     L.push('- If my data has more or fewer series than the example, extend or trim the');
     L.push('  arrays to match, and give each new one its own colour in the style of the');
     L.push('  colours already there.');
-    L.push('- Update any title, axis label, unit or currency prefix that would otherwise');
+    L.push('- Update any title, axis assignment, axis label, unit or currency prefix that');
+    L.push('  would otherwise');
     L.push('  still be describing the example data.');
     L.push('- Return one complete file I can save as `.html` and open in a browser. Do not');
     L.push('  abbreviate it with comments like "rest unchanged".');
