@@ -114,14 +114,16 @@ ALL.forEach((def) => {
   }
 
   const effectControls = def.controls || (def.controls = []);
-  effectControls.push(
-    { group: 'Effects', type: 'toggle', key: 'effects.enabled', label: 'Neon effects' },
-    ...['glow', 'gradient', 'shadow'].map((key) => ({
-      group: 'Effects', type: 'slider', key: `effects.${key}`,
-      label: key[0].toUpperCase() + key.slice(1), min: 0, max: 1, step: 0.05,
-      format: (value) => `${Math.round(value * 100)}%`,
-    })),
-  );
+  if (!effectControls.some((c) => c.key === 'effects.enabled')) {
+    effectControls.push(
+      { group: 'Effects', type: 'toggle', key: 'effects.enabled', label: 'Neon effects' },
+      ...['glow', 'gradient', 'shadow'].map((key) => ({
+        group: 'Effects', type: 'slider', key: `effects.${key}`,
+        label: key[0].toUpperCase() + key.slice(1), min: 0, max: 1, step: 0.05,
+        format: (value) => `${Math.round(value * 100)}%`,
+      })),
+    );
+  }
 
   // A title, a subtitle, a source line and a byline: DOM around the plate,
   // so every chart has them and no renderer knows. First of the stage tools,

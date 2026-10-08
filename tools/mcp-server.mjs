@@ -80,7 +80,7 @@ mcp.registerTool('opencharts_status', {
   inputSchema: {}, annotations: { readOnlyHint: true, openWorldHint: false },
 }, async () => {
   prune();
-  return reply({ name: 'OpenCharts MCP', connected, pairingUrl: `${origin}/#mcp=${token}`, pending: [...requests.values()].filter((item) => item.status === 'pending').length });
+  return reply({ name: 'OpenCharts MCP', connected, pairingUrl: `${origin}/ai.html#mcp=${token}`, pending: [...requests.values()].filter((item) => item.status === 'pending').length });
 });
 mcp.registerTool('opencharts_get_request', {
   description: 'Get a pending OpenCharts analysis request, its answer schema and table dimensions. Optionally wait up to 25 seconds for a browser message. Read full data in pages with opencharts_read_rows.',

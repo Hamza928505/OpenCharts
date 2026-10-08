@@ -168,7 +168,7 @@ try {
     const contentType = ({ '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' })[extname(path.pathname)] || 'application/octet-stream';
     await route.fulfill({ status: 200, contentType, body: await readFile(path) });
   });
-  await hosted.goto(published + '/', { waitUntil: 'domcontentloaded' });
+  await hosted.goto(published + '/ai.html', { waitUntil: 'domcontentloaded' });
   await hosted.locator('#match-ai-settings').click();
   await hosted.getByLabel('Local connection link').fill(pairingUrl);
   await hosted.getByRole('button', { name: 'Connect', exact: true }).click();

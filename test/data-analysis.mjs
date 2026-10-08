@@ -80,7 +80,7 @@ try {
   // No API calls or CDN access can make these calculations succeed.
   const base = `http://127.0.0.1:${server.address().port}`;
   await page.route('**/*', (route) => route.request().url().startsWith(base) ? route.continue() : route.abort());
-  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.goto(base + '/ai.html', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.openChartsGallery);
   const upload = async (value) => {
     const prior = await page.evaluateHandle(() => window.openChartsGallery.table);
@@ -227,7 +227,7 @@ try {
   await page.waitForFunction(() => window.openCharts?.spec?.points?.length === 103);
   assert.equal(await page.evaluate(() => window.openCharts.spec.caption.title), selectedTitle);
   assert.equal(await page.evaluate(() => window.openCharts.spec.points.at(-1).y), 2225);
-  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.goto(base + '/ai.html', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.openChartsGallery);
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#match-file').click();

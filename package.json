@@ -48,6 +48,8 @@
   },
   "files": [
     "index.html",
+    "ai.html",
+    "documentation.html",
     "studio.html",
     "board.html",
     "privacy.html",

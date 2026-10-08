@@ -21,7 +21,7 @@ function localURL(value) {
   let url;
   try { url = new URL(String(value || '').trim()); } catch { /* handled below */ }
   if (!url || url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-      || url.username || url.password || url.search || !['/', '/index.html'].includes(url.pathname)) {
+      || url.username || url.password || url.search || !['/', '/index.html', '/ai.html'].includes(url.pathname)) {
     throw new Error('Use the local OpenCharts link from opencharts_status, such as http://127.0.0.1:8765/#mcp=…');
   }
   return url;
