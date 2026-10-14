@@ -24,8 +24,8 @@
  *
  * The set covers the union of both country lists — the atlas in
  * `data/countries.json` and the curated list in `data/country-meta.json` — so
- * `flagFor()` can answer for any country either one names. Ten atlas entries
- * (Greenland, Taiwan, Kosovo, Israel…) are absent from the curated list and
+ * `flagFor()` can answer for any country either one names. Nine atlas entries
+ * (Greenland, Taiwan, Kosovo…) are absent from the curated list and
  * would otherwise be the only flagless rows in the picker.
  *
  * Source: flagcdn.com; its provider states that flag images are public domain

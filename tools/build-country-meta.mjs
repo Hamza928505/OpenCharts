@@ -13,7 +13,7 @@
  *   spellings. It decides how a country is *shown* once picked.
  *
  * Merging them into one file would have meant choosing one list's countries,
- * and neither is a superset: the atlas carries ten territories the curated
+ * and neither is a superset: the atlas carries nine territories the curated
  * list omits (Greenland, Taiwan, Kosovo…) and the curated list carries
  * twenty-nine microstates too small to be their own polygon at 110m
  * (San Marino, Tuvalu, Monaco…). Keyed by ISO2 and merged at load, both keep

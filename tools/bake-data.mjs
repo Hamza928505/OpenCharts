@@ -302,7 +302,7 @@ BAKE.regionValues = () => ({
   China: 52, Japan: 72, 'South Korea': 75, India: 33, Indonesia: 35,
   Thailand: 41, Vietnam: 37, Malaysia: 50, Philippines: 32, Singapore: 85,
   Australia: 77, 'New Zealand': 76,
-  'Saudi Arabia': 53, 'United Arab Emirates': 66, Israel: 67, Jordan: 40,
+  'Saudi Arabia': 53, 'United Arab Emirates': 66, Jordan: 40,
   Egypt: 30, Morocco: 34, Nigeria: 26, Kenya: 29, Ghana: 28,
   Ethiopia: 22, 'South Africa': 46,
 });

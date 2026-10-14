@@ -1,7 +1,7 @@
 /**
  * Combobox.js — a searchable dropdown.
  *
- * A native <select> is unusable at 177 countries and impossible at 12,000
+ * A native <select> is unusable at 176 countries and impossible at 12,000
  * cities, so this filters as you type and keeps the keyboard working:
  * arrows move, Enter picks, Escape closes.
  *

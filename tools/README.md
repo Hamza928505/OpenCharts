@@ -58,7 +58,7 @@ series. A walk that drifts to one end leaves them with a single column.
 
 | File | Shape | Used by |
 |---|---|---|
-| `data/countries.json` | `[[mapName, iso2, cityCount], …]` — 177 rows | the **Country** dropdown on every map |
+| `data/countries.json` | `[[mapName, iso2, cityCount], …]` — 176 rows | the **Country** dropdown on every map |
 | `data/cities/<ISO2>.json` | `[[name, lat, lon], …]`, 3dp coords | the **Pick cities** tab, fetched per country |
 | `data/cities/_index.json` | `{ ISO2: cityCount }` | the build, to pair countries with their lists |
 

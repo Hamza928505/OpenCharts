@@ -12,7 +12,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanCityName } from './place-names.mjs';
+import { cleanCityName, EXCLUDED_COUNTRIES } from './place-names.mjs';
 
 const raw = JSON.parse(readFileSync('.cache/cities-raw.json', 'utf8'));
 const OUT = 'data/cities';
@@ -23,7 +23,7 @@ mkdirSync(OUT, { recursive: true });
 const byCountry = new Map();
 for (const c of raw) {
   const iso = c.country;
-  if (!iso) continue;
+  if (!iso || EXCLUDED_COUNTRIES.has(iso)) continue;
   const lat = Number(c.lat);
   const lon = Number(c.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;

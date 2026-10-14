@@ -2110,7 +2110,7 @@ const names = await page.evaluate(async () => {
    * rule that decides this is the tool's, imported rather than restated. */
   const { NON_LATIN_SCRIPT, foldRomanisation } = await import('/tools/place-names.mjs');
   const unfolded = [];
-  for (const iso of ['JO', 'IR', 'IN', 'RU', 'JP', 'CN', 'GR', 'IL', 'EG', 'KP']) {
+  for (const iso of ['JO', 'IR', 'IN', 'RU', 'JP', 'CN', 'GR', 'EG', 'KP']) {
     for (const city of await loadCities(iso)) {
       if (foldRomanisation(city.name) !== city.name) unfolded.push(`${iso}: ${city.name}`);
     }

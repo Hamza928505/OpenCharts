@@ -8,7 +8,7 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { ENGLISH_COUNTRY, EXTRA_ISO, CORRECT_ISO } from './place-names.mjs';
+import { ENGLISH_COUNTRY, EXTRA_ISO, CORRECT_ISO, EXCLUDED_COUNTRIES } from './place-names.mjs';
 
 const names = JSON.parse(readFileSync('.cache/topo-names.json', 'utf8'));
 const raw = JSON.parse(readFileSync('.cache/cities-raw.json', 'utf8'));
@@ -88,6 +88,7 @@ for (const name of names) {
   // wrong are stated outright rather than left to the fallback.
   const label = ENGLISH_COUNTRY[name] || name;
   iso = CORRECT_ISO[label] || iso || EXTRA_ISO[label] || null;
+  if (EXCLUDED_COUNTRIES.has(iso)) continue;
 
   if (iso && cityIndex[iso]) out.push([label, iso, cityIndex[iso]]);
   else { out.push([label, iso || '', 0]); unmatched.push(label); }

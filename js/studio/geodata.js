@@ -15,8 +15,8 @@
  * counts — and decides what a map can focus on. `country-meta.json` is the
  * **presentation layer** — flag, local-language name, ISO3, region — and
  * decides how a country is shown once it has been picked. Neither list is a
- * superset of the other: the atlas carries ten territories the curated list
- * omits (Greenland, Taiwan, Kosovo, Israel) and the curated list carries
+ * superset of the other: the atlas carries nine territories the curated list
+ * omits (Greenland, Taiwan, Kosovo) and the curated list carries
  * twenty-nine microstates too small to be a polygon at 110m (San Marino,
  * Monaco, Tuvalu). Keyed by ISO2 and merged here, both keep their coverage.
  *

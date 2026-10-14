@@ -40,7 +40,8 @@ ECharts' NOTICE and D3 subcomponent license, are preserved in
 `world-atlas` is boundary *data* rather than a script. Its `countries-110m.json`
 is committed as `data/countries-110m.json` and served from the site's own
 origin, so opening a map contacts no third party; an exported map fetches the
-same file from jsDelivr. The underlying geometry derives from
+original file from jsDelivr and drops the same country as it loads. The
+underlying geometry derives from
 [Natural Earth](https://www.naturalearthdata.com/), which is released into the
 public domain.
 
@@ -50,7 +51,7 @@ public domain.
 |---|---|---|
 | `data/cities/*.json` | [cities.json](https://github.com/lutangar/cities.json) 1.1.61 by lutangar, derived from [GeoNames](https://www.geonames.org/); **modified** (see below) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 | `data/countries.json` | the above, paired with Natural Earth country names via `world-atlas` | as above |
-| `data/countries-110m.json` | [world-atlas](https://github.com/topojson/world-atlas) 2.0.2, unmodified; geometry from Natural Earth | ISC (geometry: public domain) |
+| `data/countries-110m.json` | [world-atlas](https://github.com/topojson/world-atlas) 2.0.2, **modified**: Israel (id 376) removed; geometry from Natural Earth | ISC (geometry: public domain) |
 | `data/flags.json` | [Flagpedia / flagcdn](https://flagcdn.com/), 80px PNG, vendored by `tools/build-flags.mjs` | Public domain, [per provider terms](https://flagpedia.net/terms) |
 | `data/country-meta.json` | built from `tools/countries-source.json` (see below) — ISO3, region, local-language names | Not a third-party dataset (names, codes and regions are facts) |
 
@@ -70,8 +71,8 @@ City names and coordinates © [GeoNames](https://www.geonames.org/), via
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They are
 credited here, in `tools/README.md` and in the site's footer.
 
-OpenCharts' copy is **modified**: 156,576 cities across 246 countries, split
-into one file per country; coordinates reduced to three decimal places; names
+OpenCharts' copy is **modified**: 156,143 cities across 245 countries, split
+into one file per country; Israel's cities left out; coordinates reduced to three decimal places; names
 in scientific transliteration simplified to plain spellings and some names
 respelled by the rules in `tools/place-names.mjs`; and rows identical in name
 and both coordinates merged. GeoNames and lutangar do not endorse these changes

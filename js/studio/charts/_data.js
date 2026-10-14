@@ -950,7 +950,6 @@ export const REGION_VALUES = {
   'New Zealand': 76,
   'Saudi Arabia': 53,
   'United Arab Emirates': 66,
-  Israel: 67,
   Jordan: 40,
   Egypt: 30,
   Morocco: 34,

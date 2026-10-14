@@ -29,6 +29,10 @@ function makeRng(seed) {
  * does not refetch it — and so the exported page works unchanged. The site
  * maps the CDN address to its own copy (`__ocLocalData`, set by loader.js);
  * an export has no such map and fetches the CDN.
+ *
+ * Atlas id 376 (Israel) is dropped here, the one place every map's boundaries
+ * pass through — the CDN copy an export fetches still carries it. The same id
+ * is excluded from the vendored file by `tools/place-names.mjs`.
  */
 function loadTopology(url) {
   if (!window.__ocTopoCache) window.__ocTopoCache = {};
@@ -37,6 +41,10 @@ function loadTopology(url) {
     window.__ocTopoCache[url] = fetch(src).then((r) => {
       if (!r.ok) throw new Error('Could not load boundaries: HTTP ' + r.status);
       return r.json();
+    }).then((topo) => {
+      const countries = topo.objects && topo.objects.countries;
+      if (countries) countries.geometries = countries.geometries.filter((g) => g.id !== '376');
+      return topo;
     });
   }
   return window.__ocTopoCache[url];

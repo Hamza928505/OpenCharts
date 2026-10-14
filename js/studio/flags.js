@@ -1,7 +1,7 @@
 /**
  * flags.js — the flag icon set behind the country and city pickers.
  *
- * `data/flags.json` is 204 flags as 80px-wide base64 PNG, committed rather
+ * `data/flags.json` is 203 flags as 80px-wide base64 PNG, committed rather
  * than hotlinked. `tools/build-flags.mjs` records why in full; the short
  * version is that emoji flags render as bare letters on Windows, a CDN URL
  * becomes a broken image the moment an exported chart is opened offline, and

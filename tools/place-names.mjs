@@ -14,6 +14,16 @@
  */
 
 /**
+ * Countries left out of every list this project ships — by ISO2 for the city
+ * and country lists, by ISO 3166 numeric id for the world atlas — so a rebuild
+ * cannot bring them back. The maps drop the same atlas id at run time
+ * (`loadTopology` in `js/studio/charts/geo.js`), because an export fetches the
+ * unmodified atlas from the CDN.
+ */
+export const EXCLUDED_COUNTRIES = new Set(['IL']);
+export const EXCLUDED_ATLAS_IDS = new Set(['376']);
+
+/**
  * Natural Earth's abbreviation → the name people actually write.
  *
  * Only the eleven that are genuinely abbreviated. Everything else the atlas
@@ -122,8 +132,8 @@ export const NON_LATIN_SCRIPT = new Set([
   // Arabic
   'AE', 'AF', 'BH', 'DZ', 'EG', 'EH', 'IQ', 'IR', 'JO', 'KW', 'LB', 'LY',
   'MA', 'MR', 'OM', 'PK', 'PS', 'QA', 'SA', 'SD', 'SY', 'TN', 'YE',
-  // Hebrew, Armenian, Georgian, Thaana
-  'IL', 'AM', 'GE', 'MV',
+  // Armenian, Georgian, Thaana
+  'AM', 'GE', 'MV',
   // Cyrillic
   'BG', 'BY', 'KG', 'KZ', 'MK', 'MN', 'RU', 'TJ', 'UA',
   // Greek

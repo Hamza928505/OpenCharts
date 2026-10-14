@@ -521,7 +521,7 @@ answer runs to thousands.
 ## Maps of one country
 
 Every map takes **as many countries as you want**, from a searchable list of
-all 177 on the map — type a few letters, pick, repeat. Each one becomes a chip
+all 176 on the map — type a few letters, pick, repeat. Each one becomes a chip
 you can remove. The map zooms to fit all of them together, fades the
 neighbours, and the globe turns to face the middle of them.
 
@@ -547,8 +547,8 @@ spellings. Cities
 outside the focused country can be hidden, and if that would empty the map it
 shows them anyway rather than leaving you with a blank frame.
 
-Those lists are committed to the repository, not fetched from anyone: 177
-countries and 156,576 cities across 246 of them, split one file per country so
+Those lists are committed to the repository, not fetched from anyone: 176
+countries and 156,143 cities across 245 of them, split one file per country so
 only the country you pick is ever downloaded. See `tools/README.md` for where
 they come from and how to rebuild them.
 
