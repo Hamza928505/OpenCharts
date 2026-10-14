@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy & credits — OpenCharts</title>
-<meta name="description" content="How OpenCharts handles local data, optional agent connections, and third-party libraries.">
+<meta name="description" content="How OpenCharts handles local data, optional AI connections, and third-party libraries.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/portal.css">
@@ -28,6 +28,7 @@
     <li>If you enter a data URL, your browser requests that address. The destination may receive normal connection details.</li>
     <li>Geo charts fetch world boundary data from jsDelivr when opened.</li>
     <li>If you connect an MCP agent and send a question, OpenCharts sends your message, recent chat, and table through the local bridge to that agent. Your agent provider’s own terms and privacy policy then apply. The connection link is kept in this tab’s session storage.</li>
+    <li>If you use automatic API mode, you run the local server with your own key. It sends your message, recent chat, full-table statistics, and either the complete table or a preview with rows the model requests to NVIDIA or OpenAI. The API key stays in your server process; OpenCharts does not provide a shared key. Your provider’s terms and privacy settings apply.</li>
     <li>The site does not include advertising or analytics scripts. Your hosting provider may maintain ordinary server logs under its own policy.</li>
   </ul>
 

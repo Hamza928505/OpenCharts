@@ -22,14 +22,14 @@ function localURL(value) {
   try { url = new URL(String(value || '').trim()); } catch { /* handled below */ }
   if (!url || url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
       || url.username || url.password || url.search || !['/', '/index.html', '/ai.html'].includes(url.pathname)) {
-    throw new Error('Use the local OpenCharts link from opencharts_status, such as http://127.0.0.1:8765/#mcp=…');
+    throw new Error('Use the local OpenCharts link from your server or opencharts_status, such as http://127.0.0.1:8765/#mcp=…');
   }
   return url;
 }
 export function parseAgentLink(link) {
   const url = localURL(link);
   const match = url.hash.match(/^#mcp=([a-f0-9]{64})$/i);
-  if (!match) throw new Error('The connection link must include the complete #mcp= token from opencharts_status.');
+  if (!match) throw new Error('The connection link must include its complete #mcp= token.');
   return { endpoint: url.origin, token: match[1].toLowerCase() };
 }
 function normalizeSettings(settings) {
@@ -38,7 +38,8 @@ function normalizeSettings(settings) {
   }
   const url = localURL(settings.endpoint);
   if (url.hash || !/^[a-f0-9]{64}$/i.test(settings.token)) throw new Error('The local connection link is incomplete.');
-  return { endpoint: url.origin, token: settings.token.toLowerCase() };
+  return { endpoint: url.origin, token: settings.token.toLowerCase(), mode: settings.mode === 'api' ? 'api' : 'mcp',
+    provider: settings.mode === 'api' ? settings.provider === 'nvidia' ? 'nvidia' : 'openai' : null };
 }
 export async function setAiSettings(settings) {
   const value = normalizeSettings(settings);
@@ -60,11 +61,12 @@ async function checkConnection(settings, signal) {
     headers: { 'x-opencharts-token': settings.token }, signal,
     credentials: 'omit', redirect: 'error', cache: 'no-store',
   });
-  if (!response.ok) throw new Error('The local connection was refused. Ask your agent for a fresh opencharts_status link.');
+  if (!response.ok) throw new Error('The local connection was refused. Use a fresh link from your server or agent.');
   const health = await response.json();
   if (health.name !== 'OpenCharts MCP' || health.connected !== true) {
-    throw new Error('OpenCharts MCP is not connected. Enable it in your agent, then try again.');
+    throw new Error('The local OpenCharts server is not ready. Restart it and try again.');
   }
+  return { mode: health.mode === 'api' ? 'api' : 'mcp', provider: health.provider === 'nvidia' ? 'nvidia' : 'openai' };
 }
 
 // Consume only a local connection fragment, never a chart/share fragment.
@@ -76,10 +78,10 @@ const autoConnection = (async () => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    await checkConnection(settings, controller.signal);
-    await setAiSettings(settings);
+    const connection = await checkConnection(settings, controller.signal);
+    await setAiSettings({ ...settings, ...connection });
   } catch {
-    toast('Could not connect to your local agent. Open Connect agent and paste a fresh link from opencharts_status.', 'bad', 6500);
+    toast('Could not connect to local AI. Open Connect AI and paste a fresh local link.', 'bad', 6500);
   } finally { clearTimeout(timeout); }
 })();
 export async function getAiSettings() {
@@ -100,9 +102,9 @@ export function openAiConfigDialog() {
     box.setAttribute('aria-modal', 'true');
     box.setAttribute('aria-labelledby', 'ai-config-title');
     const main = el('div', 'ask-main');
-    const title = el('h2', 'ask-title', 'Connect agent');
+    const title = el('h2', 'ask-title', 'Connect AI');
     title.id = 'ai-config-title';
-    main.append(title, el('p', 'ask-text', 'Use Codex, Claude Code or another MCP-capable agent signed in on your device. Your agent handles AI access under its own plan and usage limits.'));
+    main.append(title, el('p', 'ask-text', 'Run OpenCharts on your own device with your own API key for automatic replies, or connect a signed-in MCP agent. No shared key is provided.'));
     const label = el('label', 'dlg-label', 'Local connection link');
     label.htmlFor = 'ai-config-link';
     const input = el('input', 'link-input');
@@ -112,7 +114,7 @@ export function openAiConfigDialog() {
     input.spellcheck = false;
     input.placeholder = 'http://127.0.0.1:8765/#mcp=…';
     input.setAttribute('aria-describedby', 'ai-config-hint ai-config-error');
-    const hint = el('p', 'ask-text', 'Ask your agent to call opencharts_status. Open its local link or paste it here. Keep this link private; it connects this tab to the agent on your device.');
+    const hint = el('p', 'ask-text', 'Open the link printed by your local AI server, or ask your MCP agent to call opencharts_status. Keep the link private.');
     hint.id = 'ai-config-hint';
     const error = el('p', 'analyst-status is-bad');
     error.id = 'ai-config-error';
@@ -121,7 +123,8 @@ export function openAiConfigDialog() {
     fields.append(label, input, hint, error);
     const guide = el('details', 'ai-config-advanced');
     guide.appendChild(el('summary', null, 'First-time setup'));
-    guide.appendChild(el('p', 'ask-text', 'Download OpenCharts, install Node.js 20 or newer, and run npm install in the OpenCharts folder. Add its MCP server to your signed-in agent using the full path on your device:'));
+    guide.appendChild(el('p', 'ask-text', 'For automatic replies, each user installs Node.js 20 or newer, runs npm install, sets their own NVIDIA_API_KEY or OPENAI_API_KEY on their device, then runs npm run ai in the OpenCharts folder. Open the local link printed in the terminal. Your key stays in your server process; your provider limits and terms apply.'));
+    guide.appendChild(el('p', 'ask-text', 'To use a signed-in MCP agent instead, download OpenCharts, install Node.js 20 or newer, run npm install, and add its MCP server to your agent:'));
     for (const [name, command] of [
       ['Codex', 'codex mcp add opencharts -- node /absolute/path/to/OpenCharts/tools/mcp-server.mjs'],
       ['Claude Code', 'claude mcp add --transport stdio opencharts -- node /absolute/path/to/OpenCharts/tools/mcp-server.mjs'],
@@ -131,11 +134,11 @@ export function openAiConfigDialog() {
     }, null, 2)));
     guide.appendChild(el('p', 'ask-text', 'Restart or reconnect your agent, then ask it to call opencharts_status. After sending a message here, ask the agent to read the pending OpenCharts request and reply. Keep the agent running while you chat.'));
     const docs = el('a', null, 'Download and setup instructions');
-    docs.href = 'https://github.com/Hamza928505/OpenCharts#connect-codex-claude-code-or-another-mcp-agent';
+    docs.href = 'https://github.com/Hamza928505/OpenCharts#automatic-ai-replies-with-your-api-key';
     docs.target = '_blank';
     docs.rel = 'noopener noreferrer';
     guide.appendChild(docs);
-    main.append(fields, guide, el('p', 'ask-text', 'Only messages you send and their data are shared with the connected agent. Local analysis works without a connection. The connection is kept for this browser tab; OpenCharts does not sign into an AI account.'));
+    main.append(fields, guide, el('p', 'ask-text', 'Messages and table data you send go to your selected AI provider. Local analysis works without a connection. The connection is kept for this browser tab.'));
     const foot = el('div', 'ask-foot');
     const clear = el('button', 'btn', 'Disconnect');
     const cancel = el('button', 'btn', 'Cancel');
@@ -175,7 +178,7 @@ export function openAiConfigDialog() {
       if (!closed && !edited && settings) input.value = `${settings.endpoint}/#mcp=${settings.token}`;
     });
     cancel.addEventListener('click', () => done(false));
-    clear.addEventListener('click', () => { clearAiSettings(); toast('Agent disconnected', 'ok'); done(true); });
+    clear.addEventListener('click', () => { clearAiSettings(); toast('AI disconnected', 'ok'); done(true); });
     save.addEventListener('click', async () => {
       if (loading) return;
       let settings;
@@ -193,15 +196,15 @@ export function openAiConfigDialog() {
       cancel.focus();
       error.textContent = '';
       try {
-        await checkConnection(settings, active.signal);
+        const connection = await checkConnection(settings, active.signal);
         if (closed) return;
-        const result = await setAiSettings(settings);
-        toast(result.persisted ? 'Agent connected for this tab' : 'Agent connected for this page only', 'ok');
+        const result = await setAiSettings({ ...settings, ...connection });
+        toast(result.persisted ? 'AI connected for this tab' : 'AI connected for this page only', 'ok');
         done(true);
       } catch (err) {
         if (closed) return;
         error.textContent = err instanceof TypeError || active.signal.aborted
-          ? 'Could not reach OpenCharts MCP. Keep your agent running, allow local network access if asked, or open the local link from opencharts_status.'
+          ? 'Could not reach local OpenCharts. Keep your server or agent running, allow local network access if asked, or open its local link.'
           : err.message;
         input.setAttribute('aria-invalid', 'true');
       } finally {

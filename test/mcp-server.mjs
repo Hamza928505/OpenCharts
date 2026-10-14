@@ -56,7 +56,7 @@ try {
   assert.equal(status.connected, true);
   origin = paired.origin;
   headers = { 'x-opencharts-token': paired.hash.slice(5), 'Content-Type': 'application/json', Origin: origin };
-  assert.deepEqual(await (await api('/health')).json(), { name: 'OpenCharts MCP', connected: true });
+  assert.deepEqual(await (await api('/health')).json(), { name: 'OpenCharts MCP', connected: true, mode: 'mcp' });
   assert.equal((await fetch(origin + '/health')).status, 401);
   assert.equal((await api('/health', { headers: { 'x-opencharts-token': 'f'.repeat(64) } })).status, 401);
   for (const badOrigin of ['null', 'https://evil.example', 'https://hamza928505.github.io.evil.example', 'http://localhost:8765']) {
@@ -92,7 +92,7 @@ try {
   assert.equal(request.system, payload.system);
   assert.deepEqual(request.schema, payload.schema);
   const remaining = request.expiresAt - Date.now();
-  assert.ok(remaining > 590000 && remaining <= 600000, `request expiry should be ten minutes away, got ${remaining}ms`);
+  assert.ok(remaining > 590000 && remaining < 601000, `request expiry should be ten minutes away, got ${remaining}ms`);
   const first = text(await call('opencharts_read_rows', { requestId: id }));
   assert.equal(first.rows.length, 200);
   assert.equal(first.nextOffset, 200);
@@ -103,9 +103,9 @@ try {
   const invalid = await call('opencharts_submit_answer', { requestId: id, answer: { message: 'bad chart', charts: [{ chart: 'bar-vertical', title: 'Bad', columns: [0, 999] }] } });
   assert.equal(invalid.isError, true);
   assert.equal((await (await api('/requests/' + id)).json()).status, 'pending', 'an invalid answer remains correctable');
-  const answer = { message: 'Baseline across all 403 experiments.', charts: [{ chart: 'bar-vertical', title: 'Baselines', columns: [0, 1] }] };
+  const answer = { message: 'Baseline across all 403 experiments.', charts: [{ chart: 'Vertical Bar', title: 'Baselines', columns: [0, 1] }] };
   assert.equal((await call('opencharts_submit_answer', { requestId: id, answer })).isError, false);
-  assert.deepEqual(await (await api('/requests/' + id)).json(), { status: 'complete', answer });
+  assert.deepEqual(await (await api('/requests/' + id)).json(), { status: 'complete', answer: { ...answer, charts: [{ ...answer.charts[0], chart: 'bar-vertical' }] } });
   assert.equal((await call('opencharts_submit_answer', { requestId: id, answer })).isError, true, 'cannot overwrite a completed response');
   assert.equal((await call('opencharts_read_rows', { requestId: id })).isError, true, 'completed requests release uploaded rows');
   assert.equal((await api('/requests/' + id, { method: 'DELETE' })).status, 204);

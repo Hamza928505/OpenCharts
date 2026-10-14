@@ -22,6 +22,7 @@
 
 <link rel="stylesheet" href="css/studio.css">
 <link rel="stylesheet" href="css/portal.css">
+<link rel="stylesheet" href="css/ai.css">
 
 <!-- Rendering engines. Chart.js must load before any of its plugins. -->
 <script src="lib/chart.umd.min.js"></script>
@@ -54,36 +55,70 @@
 </header>
 
 <main id="main">
-<div style="padding-top: 60px;"></div>
-
 <section class="matchbar" id="matchbar">
-  <div class="matchbar-head">
-    <div class="matchbar-lead">
-      <h2 class="matchbar-title">Your data. A conversation. A clearer chart.</h2>
-      <p class="matchbar-sub">Bring a table, ask a question, then refine your chart together.
-      Count, average and compare locally without AI. Connect your signed-in agent to return AI analysis and charts here.</p>
+  <svg class="ai-icons" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="ai-paperclip" viewBox="0 0 24 24"><path d="m21.4 11.6-8.8 8.8a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+    <symbol id="ai-arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="ai-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="ai-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2.1-2.1a5 5 0 0 0-7.1-7.1L10 5.9M14 11a5 5 0 0 0-7.1 0l-2.1 2.1a5 5 0 0 0 7.1 7.1l2.1-2.1"/></symbol>
+    <symbol id="ai-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h6"/></symbol>
+    <symbol id="ai-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  </svg>
+  <div class="ai-hero">
+    <div class="matchbar-head">
+      <div class="matchbar-lead">
+        <h1 class="matchbar-title">Your data. A conversation. A clearer chart.</h1>
+        <p class="matchbar-sub">Ask a question, find the right chart, and refine it with your agent.</p>
+      </div>
+    </div>
+    <div class="matchbar-actions">
+      <span class="match-local">Local table analysis</span>
+      <button class="btn btn-sm" id="match-ai-settings" type="button">Connect AI</button>
+    </div>
+    <div class="match-chat">
+      <div class="match-chat-head"><h2>Conversation</h2><button class="btn btn-sm btn-ghost" id="match-chat-clear" type="button">New chat</button></div>
+      <div id="match-chat-log" class="match-chat-log" role="log" aria-label="Conversation" aria-live="polite"></div>
+      <form id="match-chat-form" class="match-chat-form">
+        <div class="ai-composer" id="ai-composer">
+          <label class="sr-only" for="match-message">Message</label>
+          <textarea id="match-message" rows="1" maxlength="12000" placeholder="Ask about your data, or describe the chart you need…" aria-describedby="match-chat-note"></textarea>
+          <div class="ai-attachments" id="ai-attachments" aria-label="Attached data sources"></div>
+          <div class="match-url ai-url-entry" id="ai-url-entry" hidden>
+            <label class="sr-only" for="match-url">Published data URL</label>
+            <input id="match-url" type="url" class="match-url-input" spellcheck="false" placeholder="https://example.com/data.csv">
+            <button id="match-url-go" type="button">Add URL</button>
+          </div>
+          <div class="ai-composer-actions">
+            <div class="ai-composer-tools">
+              <button class="ai-icon-button" id="ai-attach" type="button" aria-label="Attach data files" title="Attach data files"><svg><use href="#ai-paperclip"/></svg></button>
+              <input id="ai-files" type="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xlsm" multiple hidden>
+              <button class="ai-icon-button" id="ai-link-button" type="button" aria-label="Add a data URL" title="Add a data URL" aria-expanded="false" aria-controls="ai-url-entry"><svg><use href="#ai-link"/></svg></button>
+            </div>
+            <div class="ai-composer-submit">
+              <button id="match-chat-stop" class="ai-send-button ai-stop-button" type="button" aria-label="Stop generation" title="Stop generation" hidden><svg><use href="#ai-stop"/></svg></button>
+              <button id="match-chat-send" class="ai-send-button" type="submit" aria-label="Send message" title="Send message"><svg><use href="#ai-arrow"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="ai-composer-meta"><span id="match-chat-provider" role="status">Connect your AI to start</span><span id="match-read-summary">No table yet</span></div>
+        <p id="ai-attach-status" class="ai-attach-status" role="status"></p>
+        <p id="match-chat-note" class="dlg-note">Enter to send · Shift+Enter for a new line. Automatic replies use your own API key through a helper on your device. Sending shares your message and table with your selected AI provider. MCP mode uses your signed-in agent.</p>
+      </form>
     </div>
   </div>
 
-  <div class="matchbar-actions">
-    <span class="match-local">Private analysis on this device</span>
-    <button class="btn btn-sm" id="match-ai-settings" type="button">Connect agent</button>
-  </div>
-  <div class="match-import">
-    <div class="match-drop" id="match-drop" tabindex="0" role="button"
-           aria-label="Choose a data file, or drop one here">
+  <details class="ai-data-panel">
+    <summary>Add or edit data tables <span>CSV, TSV, text or Excel · up to 10 MB each</span></summary>
+    <p class="dlg-note">Multiple files are combined by column name. Missing values stay blank, and each row records its source file.</p>
+    <div class="match-import">
+      <div class="match-drop" id="match-drop" tabindex="0" role="button"
+           aria-label="Choose data files, or drop them here">
         <span class="match-drop-icon" aria-hidden="true">⬆</span>
-        <span class="match-drop-lead"><b>Drop a file here</b>, or <span class="match-drop-link">browse</span></span>
-        <span class="match-drop-formats">CSV, TSV, plain text or Excel (.xlsx / .xlsm) — up to 10&nbsp;MB</span>
-      </div>
-
-      <div class="match-url">
-        <input id="match-url" type="url" class="match-url-input" spellcheck="false"
-               placeholder="https://…/data.csv — a link to a published CSV or spreadsheet">
-        <button class="btn btn-sm" id="match-url-go" type="button">Fetch</button>
+        <span class="match-drop-lead"><b>Drop files here</b>, or <span class="match-drop-link">browse</span></span>
+        <span class="match-drop-formats">CSV, TSV, plain text or Excel (.xlsx / .xlsm) — up to 10&nbsp;MB each</span>
       </div>
       <div class="match-tools">
-        <button class="btn btn-sm" id="match-file" type="button">Open a file</button>
+        <button class="btn btn-sm" id="match-file" type="button">Open files</button>
         <button class="btn btn-sm btn-ghost" id="match-clear" type="button">Clear</button>
         <label class="match-check"><input type="checkbox" id="match-header" checked>
           First row is a header</label>
@@ -93,33 +128,19 @@
       </div>
       <span class="match-status" id="match-status" role="status">Commas, tabs and semicolons all work.</span>
       <details class="match-reading">
-        <summary>What was read <span id="match-read-summary">No table yet</span></summary>
+        <summary>What was read</summary>
         <div class="match-read" id="match-read">
           <p class="dlg-note">Bring a table to see its columns and chart suggestions.</p>
         </div>
       </details>
-  </div>
-  <div class="matchbar-body" id="match-body">
-    <div class="match-col match-table">
-      <textarea id="match-text" class="match-text" spellcheck="false" aria-label="Paste or edit your data table"
-                placeholder="Paste your data here…&#10;region,2023,2024&#10;North,520,680&#10;South,440,575"></textarea>
     </div>
-    <div class="match-col match-chat">
-      <div class="match-chat-head"><h3>Chat with your data</h3><button class="btn btn-sm btn-ghost" id="match-chat-clear" type="button">New chat</button></div>
-      <div id="match-chat-log" class="match-chat-log" role="log" aria-label="Conversation" aria-live="polite"></div>
-      <div class="match-chat-suggestions" aria-label="Suggested questions">
-        <button class="btn btn-sm" type="button">Suggest a chart</button>
-        <button class="btn btn-sm" type="button">What stands out?</button>
-        <button class="btn btn-sm" type="button">Show a comparison</button>
+    <div class="matchbar-body" id="match-body">
+      <div class="match-col match-table">
+        <textarea id="match-text" class="match-text" spellcheck="false" aria-label="Paste or edit your data table"
+                  placeholder="Paste your data here…&#10;region,2023,2024&#10;North,520,680&#10;South,440,575"></textarea>
       </div>
-      <form id="match-chat-form" class="match-chat-form">
-        <label for="match-message">Message</label>
-        <textarea id="match-message" rows="3" maxlength="12000" placeholder="Ask about your data, or describe the chart you need…" aria-describedby="match-chat-note"></textarea>
-        <div class="match-chat-controls"><span id="match-chat-provider" role="status">Connect an agent to start</span><button class="btn btn-sm" id="match-chat-stop" type="button" hidden>Stop</button><button class="btn" id="match-chat-send" type="submit">Send</button></div>
-        <p id="match-chat-note" class="dlg-note">Enter to send · Shift+Enter for a new line. Sending shares your full table and recent messages with the connected agent. Ask it to process the pending OpenCharts request. Its plan limits apply.</p>
-      </form>
     </div>
-  </div>
+  </details>
   <section id="match-analysis" class="local-analysis" aria-label="Local data analysis" hidden></section>
 </section>
 

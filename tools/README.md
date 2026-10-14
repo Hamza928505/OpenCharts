@@ -6,6 +6,12 @@ instead runs locally to connect a signed-in agent to the browser.
 
 ## Local MCP bridge
 
+For automatic replies using an NVIDIA or OpenAI API key, set `NVIDIA_API_KEY` or `OPENAI_API_KEY` in your
+terminal and run `npm run ai`. Open the pairing link printed by the server.
+This uses the same loopback HTTP bridge and browser chart validation; it does
+not need an MCP agent turn. Each person runs their own copy with their own key;
+the key stays in that local server process.
+
 Install dependencies with `npm install`, then configure your agent to launch
 `node /absolute/path/OpenCharts/tools/mcp-server.mjs` as a stdio MCP server.
 See [Connect an agent](../README.md#connect-codex-claude-code-or-another-mcp-agent)
@@ -22,7 +28,8 @@ The server exposes four tools:
 | `opencharts_read_rows` | Page through the uploaded table by request id, offset and limit. |
 | `opencharts_submit_answer` | Return the answer object for a request so the browser can validate and display it. |
 
-The page talks to the loopback HTTP bridge at `http://127.0.0.1:8765`. Its pairing
+MCP mode uses the loopback HTTP bridge at `http://127.0.0.1:8765`; automatic
+API mode chooses a free local port and prints its link. The pairing
 token authorizes browser requests in the `x-opencharts-token` header. The HTTP
 routes are `/health`, `POST /requests`, `GET /requests/:id` and
 `DELETE /requests/:id` (cancel). The agent uses MCP over stdio, not these HTTP
@@ -35,12 +42,12 @@ requests, 5 MB each and 20 MB combined. Completion releases the prompt and table
 the browser removes the returned answer after reading it. Stop or Disconnect
 cancels requests from the page. If a request remains pending, ask your agent to process it with
 `opencharts_get_request` and return its result with `opencharts_submit_answer`.
-The bridge does not start model calls on its own. If the hosted page cannot
+In MCP mode, the bridge does not start model calls on its own. If the hosted page cannot
 reach localhost, use the local page from `opencharts_status` instead. If the
-port is occupied, stop the previous agent's server before opening another, or
-set `MCP_PORT` in that agent's server environment. The server listens only on
-`127.0.0.1`; browser access is limited to its own origin and the OpenCharts
-GitHub Pages origin. For other deployments, use the local pairing link.
+MCP port is occupied, stop the previous agent's server before opening another,
+or set `MCP_PORT` in that agent's server environment. The server listens only on
+`127.0.0.1`; browser access is limited to its own origin and, in MCP mode, the
+OpenCharts GitHub Pages origin. For other deployments, use the local pairing link.
 
 `node test/mcp-server.mjs` checks the real stdio and HTTP bridge without making
 model requests. Browser tests use controlled replies to verify chart rendering

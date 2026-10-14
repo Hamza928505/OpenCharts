@@ -9,13 +9,12 @@
 
 import { CHARTS, CATEGORIES, CATEGORY_ORDER, CHART_COUNT, searchCharts, newSpec, engineTally } from './registry.js';
 import { renderChart, destroyInstance, generateCode } from './engines.js';
-import { prefetchLibraries } from './loader.js';
 import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
 import { parseTable, applyData, toCSV, transposeTable } from './dataio.js';
 import { isDateLabels, dateOrderIsGuess } from './timeaxis.js';
-import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
+import { readDataFile, readDataUrl } from './fileimport.js';
 import {
   rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
 } from './DataMatch.js';
@@ -70,6 +69,7 @@ export class GalleryApp {
     // all: "show me every chart" and "forget my table" are two intentions, and
     // one button used to do both.
     this.onlyFit = true;
+    this._counting = false;
 
     this._buildFilters();
     this._buildStats();
@@ -80,13 +80,13 @@ export class GalleryApp {
     this._pumping = false;
 
     this._observer = new IntersectionObserver((entries) => this._onIntersect(entries), {
-      // Generous vertical margin so the first tiles mount on load even with the
-      // upload panel open above the grid, and the next screenful is ready
-      // before it is scrolled to.
+      // Keep preview work near the viewport while the hero is animating.
       root: null,
-      rootMargin: '600px 0px',
+      rootMargin: '100px 0px',
       threshold: 0,
     });
+    window.addEventListener('scroll', () => this._pump(), { passive: true });
+    window.addEventListener('resize', () => this._pump());
 
     mountThemeToggle(document.querySelector('#theme-mount'));
     onThemeChange(() => this._refreshLive());
@@ -106,11 +106,6 @@ export class GalleryApp {
     });
 
     this.render();
-
-    // The tiles above the fold are already being built; everything else can be
-    // fetched while the thread is free, so the first scroll onto a Chart.js
-    // plugin or a map does not pay for it.
-    prefetchLibraries();
   }
 
   _buildStats() {
@@ -121,10 +116,28 @@ export class GalleryApp {
       { n: CHART_COUNT, l: 'chart types' },
       { n: CATEGORIES.length, l: 'categories' },
       { n: (tally.canvas || 0) + (tally.native || 0) + (tally.dom || 0), l: 'library-free' },
-      { n: '5', l: 'ways to export' },
+      { n: 5, l: 'ways to export' },
     ];
-    host.innerHTML = stats.map((s) =>
-      `<div class="hero-stat"><div class="n tnum">${s.n}</div><div class="l">${s.l}</div></div>`).join('');
+    const durations = [2200, 1400, 1800, 900];
+    host.innerHTML = stats.map((s, i) =>
+      `<div class="hero-stat" role="group" aria-label="${s.n} ${s.l}">`
+      + `<div class="n tnum" aria-hidden="true" style="--count:${s.n};--duration:${durations[i]}ms">`
+      + `<div class="hero-count-reel">${Array.from({ length: s.n + 1 }, (_, n) => `<span>${n}</span>`).join('')}</div></div>`
+      + `<div class="l" aria-hidden="true">${s.l}</div></div>`).join('');
+    const finish = () => {
+      this._counting = false;
+      this._pump();
+    };
+    const reel = host.querySelector('.hero-count-reel');
+    reel.addEventListener('animationend', finish, { once: true });
+    reel.addEventListener('animationcancel', finish, { once: true });
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      this._counting = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      host.classList.add('is-counting');
+    });
+    observer.observe(host);
   }
 
   /**
@@ -145,6 +158,10 @@ export class GalleryApp {
     const headerBox = bar.querySelector('#match-header');
     const swapBox = bar.querySelector('#match-swap');
     const drop = bar.querySelector('#match-drop');
+    const composer = bar.querySelector('#ai-composer');
+    const fileInput = bar.querySelector('#ai-files');
+    const attachments = bar.querySelector('#ai-attachments');
+    const attachStatus = bar.querySelector('#ai-attach-status');
     const urlInput = bar.querySelector('#match-url');
     const urlGo = bar.querySelector('#match-url-go');
     bar.querySelector('#match-ai-settings')?.addEventListener('click', () => openAiConfigDialog());
@@ -155,10 +172,20 @@ export class GalleryApp {
     // it — the header row is numeric, because the columns are years. So the
     // detection sets the box and the reader gets the final word.
     let headerAnswered = false;
+    let sources = [];
+    let sourceId = 0;
+    let sourceRevision = 0;
+    let detachedNotice = false;
+    let analysisWorker = null;
+    let analysisRevision = 0;
 
     const setStatus = (msg, tone) => {
       status.textContent = msg;
       status.className = 'match-status' + (tone ? ' ' + tone : '');
+      attachStatus.textContent = tone === 'bad' || tone === 'loading' ? msg
+        : detachedNotice ? 'The table is now an editable copy; file attachments were removed.' : '';
+      if (tone !== 'loading') detachedNotice = false;
+      attachStatus.className = 'ai-attach-status' + (tone === 'bad' ? ' bad' : '');
     };
 
     // The panel is always open now, so "reveal" only brings it into view and
@@ -166,19 +193,6 @@ export class GalleryApp {
     const reveal = () => {
       bar.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       text.focus();
-    };
-
-    /** A block of CSV from a file or a URL, dropped into the textarea. */
-    const ingest = (res, label) => {
-      if (!res) { setStatus('Nothing to read there.'); return; }
-      if (!res.ok) { setStatus(res.message, 'bad'); return; }
-      text.value = res.text;
-      headerAnswered = false;
-      // A new file is a new table, laid out its own way; a swap asked for on
-      // the last one is not an answer about this one.
-      swapBox.checked = false;
-      if (label) setStatus(`Read ${label}.`);
-      run();
     };
 
     /**
@@ -200,6 +214,9 @@ export class GalleryApp {
 
     let timer = null;
     const run = () => {
+      const revision = ++analysisRevision;
+      analysisWorker?.terminate();
+      analysisWorker = null;
       chat.reset();
       this._disposeAnalysis?.();
       this._disposeAnalysis = null;
@@ -225,26 +242,155 @@ export class GalleryApp {
         return;
       }
 
-      const ranked = rankCharts(table);
       this.table = table;
       bar.querySelector('#match-read-summary').textContent = `${table.rows.length} rows · ${table.headers.length} columns`;
-      // A chart that cannot read all forty-five of somebody's columns can very
-      // often read four of them, and which four is worth keeping: it is what
-      // the tile says, what the studio opens on, and what the prompt quotes.
-      this.projected = new Map(ranked.partial.map((e) => [e.def.id, e.table]));
-      this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
-      // A new table is a new question, so it is asked narrowed again.
-      this.onlyFit = true;
-      const profile = profileTable(table);
-      this._renderReading(read, table, ranked, profile);
-      this._disposeAnalysis = mountDataAnalysis(bar.querySelector('#match-analysis'), table, profile);
-      const total = this.fit.size;
-      setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
-      this.render();
+      setStatus('Finding charts for this table…', 'loading');
+      const finish = (ranked, profile) => {
+        if (revision !== analysisRevision) return;
+        this.projected = new Map(ranked.partial.map((e) => [e.def.id, { using: e.using }]));
+        this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
+        this.onlyFit = true;
+        this._renderReading(read, table, ranked, profile);
+        this._disposeAnalysis = mountDataAnalysis(bar.querySelector('#match-analysis'), table, profile);
+        const total = this.fit.size;
+        setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
+        this.render();
+      };
+      const fallback = () => {
+        try { finish(rankCharts(table), profileTable(table)); }
+        catch (error) { setStatus(error.message || 'Could not analyze this table.', 'bad'); }
+      };
+      try {
+        const worker = new Worker(new URL('./match-worker.js', import.meta.url), { type: 'module' });
+        analysisWorker = worker;
+        worker.onmessage = ({ data }) => {
+          if (revision !== analysisRevision) return;
+          worker.terminate();
+          analysisWorker = null;
+          if (data.error) { setStatus(data.error, 'bad'); return; }
+          const byId = new Map(CHARTS.map((def) => [def.id, def]));
+          const revive = (items) => items.map(({ id, ...entry }) => ({ ...entry, def: byId.get(id) }));
+          finish({ ...data.ranked, fits: revive(data.ranked.fits), partial: revive(data.ranked.partial), misses: revive(data.ranked.misses) }, data.profile);
+        };
+        worker.onerror = (event) => {
+          event.preventDefault();
+          worker.terminate();
+          analysisWorker = null;
+          if (revision === analysisRevision) fallback();
+        };
+        worker.postMessage(table);
+      } catch { fallback(); }
+    };
+
+    const combineSources = (items) => {
+      if (!items.length) return { ok: true, text: '' };
+      if (items.length === 1) return { ok: true, text: items[0].text };
+      if (items.reduce((size, item) => size + item.text.length, 0) > 30 * 1024 * 1024) {
+        return { ok: false, message: 'The combined data is over 30 MB. Remove a source before adding more.' };
+      }
+      const tables = items.map((item) => parseTable(item.text, true));
+      if (tables.some((table) => !table.rows.length)) {
+        return { ok: false, message: 'One of the files has no data rows.' };
+      }
+      if (tables.reduce((count, table) => count + table.rows.length, 0) > 20000) {
+        return { ok: false, message: 'The combined table exceeds 20,000 rows. Remove a source before adding more.' };
+      }
+      const headers = [];
+      const keys = [];
+      const mappings = tables.map((table) => {
+        const seen = new Map();
+        return table.headers.map((header) => {
+          const name = header.trim().toLowerCase();
+          const occurrence = (seen.get(name) || 0) + 1;
+          seen.set(name, occurrence);
+          const key = `${name}\0${occurrence}`;
+          let index = keys.indexOf(key);
+          if (index < 0) { index = headers.length; keys.push(key); headers.push(header); }
+          return index;
+        });
+      });
+      if (headers.length > 512) {
+        return { ok: false, message: 'The combined table exceeds 512 columns. Remove a source before adding more.' };
+      }
+      let sourceColumn = 'Source file';
+      while (headers.some((header) => header.trim().toLowerCase() === sourceColumn.toLowerCase())) sourceColumn += ' (OpenCharts)';
+      return {
+        ok: true,
+        text: toCSV([...headers, sourceColumn], tables.flatMap((table, index) =>
+          table.rows.map((row) => {
+            const cells = Array(headers.length).fill('');
+            row.forEach((value, column) => { cells[mappings[index][column]] = value; });
+            return [...cells, items[index].name];
+          }))),
+      };
+    };
+
+    const renderSources = () => {
+      attachments.replaceChildren();
+      for (const source of sources) {
+        const chip = document.createElement('span');
+        chip.className = 'ai-attachment';
+        chip.dataset.kind = source.kind;
+        chip.title = source.href || source.name;
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', source.kind === 'url' ? '#ai-link' : '#ai-file');
+        icon.append(use);
+        const name = document.createElement('span');
+        name.className = 'ai-attachment-name';
+        name.textContent = source.name;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.setAttribute('aria-label', `Remove ${source.name}`);
+        const x = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const xUse = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        xUse.setAttribute('href', '#ai-x');
+        x.append(xUse);
+        remove.append(x);
+        remove.addEventListener('click', () => setSources(sources.filter((item) => item.id !== source.id)));
+        chip.append(icon, name, remove);
+        attachments.append(chip);
+      }
+      headerBox.disabled = sources.length > 1;
+      headerBox.title = sources.length > 1 ? 'The first row of each attached file names its columns.' : '';
+    };
+
+    const setSources = (next) => {
+      const combined = combineSources(next);
+      if (!combined.ok) { setStatus(combined.message, 'bad'); return false; }
+      sources = next;
+      sourceRevision++;
+      renderSources();
+      text.value = combined.text;
+      headerAnswered = sources.length > 1;
+      if (headerAnswered) headerBox.checked = true;
+      swapBox.checked = false;
+      run();
+      return true;
+    };
+
+    const addSources = (incoming) => {
+      const next = sources.length ? [...sources] : text.value.trim()
+        ? [{ id: ++sourceId, name: 'Pasted table', kind: 'file', text: text.value }] : [];
+      if (next.length + incoming.length > 10) {
+        setStatus('You can attach up to 10 data sources. Remove one before adding more.', 'bad');
+        return false;
+      }
+      for (const item of incoming) {
+        const original = item.name;
+        let name = original;
+        for (let number = 2; next.some((source) => source.name === name); number++) name = `${original} (${number})`;
+        next.push({ ...item, id: ++sourceId, name });
+      }
+      return setSources(next);
     };
 
     text.addEventListener('input', () => {
       clearTimeout(timer);
+      analysisRevision++;
+      analysisWorker?.terminate();
+      analysisWorker = null;
+      if (sources.length) { sources = []; sourceRevision++; detachedNotice = true; renderSources(); }
       // A new table is a new question, so the detection gets to answer again.
       headerAnswered = false;
       timer = setTimeout(run, 220);
@@ -253,43 +399,72 @@ export class GalleryApp {
     headerBox.addEventListener('change', () => { headerAnswered = true; run(); });
     swapBox.addEventListener('change', run);
 
-    bar.querySelector('#match-file').addEventListener('click', async () => {
-      setStatus('Reading…');
-      const res = await chooseDataFile();
-      if (!res) { setStatus('No file chosen.'); return; }
-      ingest(res, res.name);
-    });
-
-    // The drop zone: click or keyboard opens the file picker, a drag drops one.
-    const pickFile = async () => {
-      setStatus('Reading…');
-      ingest(await chooseDataFile());
+    const importFiles = async (files) => {
+      if (!files.length) return;
+      if ((sources.length || (text.value.trim() ? 1 : 0)) + files.length > 10) {
+        setStatus('You can attach up to 10 data sources. Remove one before adding more.', 'bad');
+        return;
+      }
+      if (files.reduce((size, file) => size + file.size, 0) > 30 * 1024 * 1024) {
+        setStatus('The selected files are over 30 MB combined. Choose fewer files.', 'bad');
+        return;
+      }
+      const started = sourceRevision;
+      setStatus(`Reading ${files.length} file${files.length === 1 ? '' : 's'}…`, 'loading');
+      const incoming = [];
+      for (const file of files) {
+        const res = await readDataFile(file);
+        if (started !== sourceRevision) return;
+        if (!res.ok) { setStatus(`${file.name}: ${res.message}`, 'bad'); return; }
+        incoming.push({ name: file.name, kind: 'file', text: res.text });
+      }
+      addSources(incoming);
     };
+    fileInput.addEventListener('change', () => {
+      const files = [...fileInput.files];
+      fileInput.value = '';
+      importFiles(files);
+    });
+    const pickFile = () => fileInput.click();
+    bar.querySelector('#match-file').addEventListener('click', pickFile);
     drop.addEventListener('click', pickFile);
     drop.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickFile(); }
     });
-    drop.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      drop.classList.add('is-over');
-    });
-    drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
-    drop.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      drop.classList.remove('is-over');
-      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file) { setStatus('That was not a file.', 'bad'); return; }
-      setStatus(`Reading ${file.name}…`);
-      ingest(await readDataFile(file), file.name);
-    });
+    for (const target of [drop, composer]) {
+      target.addEventListener('dragover', (event) => { event.preventDefault(); target.classList.add('is-over'); });
+      target.addEventListener('dragleave', () => target.classList.remove('is-over'));
+      target.addEventListener('drop', (event) => {
+        event.preventDefault();
+        target.classList.remove('is-over');
+        importFiles([...(event.dataTransfer?.files || [])]);
+      });
+    }
 
     // Fetch a published CSV or spreadsheet by URL. One request, no credentials —
     // readDataUrl enforces the rest.
     const fetchUrl = async () => {
       const href = urlInput.value.trim();
       if (!href) { setStatus('Paste a link first.', 'bad'); return; }
-      setStatus('Fetching…');
-      ingest(await readDataUrl(href), 'the linked file');
+      if ((sources.length || (text.value.trim() ? 1 : 0)) >= 10) {
+        setStatus('You can attach up to 10 data sources. Remove one before adding more.', 'bad');
+        return;
+      }
+      const started = sourceRevision;
+      setStatus('Fetching data…', 'loading');
+      const res = await readDataUrl(href);
+      if (started !== sourceRevision) return;
+      if (!res.ok) { setStatus(res.message, 'bad'); return; }
+      const url = new URL(href);
+      const basename = url.pathname.split('/').pop();
+      let name;
+      try { name = decodeURIComponent(basename) || url.hostname; }
+      catch { name = basename || url.hostname; }
+      if (addSources([{ name, kind: 'url', text: res.text, href }])) {
+        urlInput.value = '';
+        bar.querySelector('#ai-url-entry').hidden = true;
+        bar.querySelector('#ai-link-button').setAttribute('aria-expanded', 'false');
+      }
     };
     urlGo.addEventListener('click', fetchUrl);
     urlInput.addEventListener('keydown', (e) => {
@@ -297,6 +472,9 @@ export class GalleryApp {
     });
 
     bar.querySelector('#match-clear').addEventListener('click', () => {
+      sources = [];
+      sourceRevision++;
+      renderSources();
       text.value = '';
       headerAnswered = false;
       swapBox.checked = false;
@@ -611,7 +789,15 @@ export class GalleryApp {
    * they would be free to disagree about which columns the reader was shown.
    */
   _tableFor(def) {
-    return this.projected.get(def.id) || this.table;
+    const slice = this.projected.get(def.id);
+    if (!slice) return this.table;
+    if (!slice.table) slice.table = {
+      headers: slice.using.map((column) => this.table.headers[column]),
+      rows: this.table.rows.map((row) => slice.using.map((column) => row[column] ?? '')),
+      hadHeader: true,
+      skipped: 0,
+    };
+    return slice.table;
   }
 
   _buildFilters() {
@@ -752,12 +938,13 @@ export class GalleryApp {
     // naming the example's instead would promise a table they have not got.
     if (this.table) {
       const slice = this.projected.get(def.id);
-      const cols = (slice ? slice.headers : expectedColumnsFor(def)).map(oneLine);
+      const cols = (slice ? slice.using.map((column) => this.table.headers[column]) : expectedColumnsFor(def)).map(oneLine);
       if (cols.length) {
         const fit = document.createElement('div');
         fit.className = 'card-fit' + (slice ? ' part' : '');
-        fit.textContent = 'reads ' + cols.join(', ');
-        fit.title = cols.join(', ');
+        const sampled = this.table.rows.length > 800 && ['Line & Area', 'Scatter'].includes(def.category);
+        fit.textContent = 'reads ' + cols.join(', ') + (sampled ? ' · preview sample' : '');
+        fit.title = cols.join(', ') + (sampled ? '. Preview samples rows; opening uses the full table.' : '');
         body.appendChild(fit);
       }
     }
@@ -870,6 +1057,7 @@ export class GalleryApp {
     this._pumping = true;
     requestAnimationFrame(() => {
       this._pumping = false;
+      if (this._counting || this.grid.getBoundingClientRect().top > innerHeight * .7) return;
       const started = performance.now();
       for (const [id, host] of this._pending) {
         this._pending.delete(id);
@@ -902,12 +1090,15 @@ export class GalleryApp {
    *     it replaced, and a blank tile in a grid of ninety says nothing about
    *     which chart went wrong.
    */
-  _specFor(def) {
+  _specFor(def, preview = false) {
     const table = this.table && this._tableFor(def);
     if (!table) return newSpec(def);
     const spec = newSpec(def);
     try {
-      const res = applyData(def, spec, table);
+      const sampled = preview && table.rows.length > 800 && ['Line & Area', 'Scatter'].includes(def.category);
+      const stride = sampled ? Math.ceil(table.rows.length / 800) : 1;
+      const input = sampled ? { ...table, rows: table.rows.filter((_, index) => index % stride === 0 || index === table.rows.length - 1) } : table;
+      const res = applyData(def, spec, input);
       if (!res.ok) return newSpec(def);
       if (typeof def.onChange === 'function') def.onChange(spec);
       return spec;
@@ -921,7 +1112,7 @@ export class GalleryApp {
     const def = CHARTS.find((c) => c.id === id);
     if (!def) return;
     try {
-      const inst = renderChart(def, host, this._specFor(def),
+      const inst = renderChart(def, host, this._specFor(def, true),
         { height: PREVIEW_HEIGHT, compact: true });
       this.live.set(id, inst);
     } catch (err) {

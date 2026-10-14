@@ -481,7 +481,13 @@ img, canvas, svg { max-width: 100%; display: block; }
   font-size: 1.7rem; font-weight: 500;
   line-height: 1; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
+  height: 1em; overflow: hidden;
 }
+.hero-count-reel span { display: block; height: 1em; }
+.hero-stats.is-counting .hero-count-reel {
+  animation: hero-count var(--duration) steps(var(--count), end) forwards;
+}
+@keyframes hero-count { to { transform: translateY(calc(-100% + 1em)); } }
 .hero-stat .l {
   font-family: var(--mono);
   font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
@@ -882,7 +888,6 @@ img, canvas, svg { max-width: 100%; display: block; }
 .match-chat-message[data-role="user"] { margin-left: 1.5rem; border: 1px solid var(--rule); }
 .match-chat-message b { display: block; font-size: 12px; margin-bottom: .35rem; color: var(--ink-soft); }
 .match-chat-message p { font-size: 14px; white-space: pre-wrap; }
-.match-chat-suggestions { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
 .match-chat-form { display: grid; gap: .5rem; }
 .match-chat-form label { font-size: 12px; font-weight: 600; }
 .match-chat-form textarea { width: 100%; min-height: 90px; resize: vertical; padding: .8rem; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); font: inherit; }

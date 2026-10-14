@@ -10,6 +10,14 @@ const reply = { message: 'Baseline comparisons and their distribution, using all
   { chart: 'histogram', title: 'Baseline distribution', columns: [1] },
 ] };
 const wire = JSON.stringify(reply);
+const aliases = parseChatAnswer(JSON.stringify({ message: 'Known charts', charts: [
+  { id: 'bar-vertical', title: 'Baseline', columns: [0, 1] },
+  { chart: 'Histogram', title: 'Distribution', columns: [1] },
+] }));
+assert.equal(aliases.ok, true);
+assert.deepEqual(aliases.answer.charts.map((chart) => chart.chart), ['bar-vertical', 'histogram']);
+assert.equal(buildChatCharts(aliases.answer, table).ok, true);
+assert.match(parseChatAnswer(JSON.stringify({ ...reply, charts: [{ chart: 'not-a-chart', title: 'Bad', columns: [0, 1] }] })).error, /Unknown chart ID/);
 const result = buildChatCharts(parseChatAnswer('```json\n' + wire + '\n```').answer, table);
 assert.equal(result.ok, true);
 assert.equal(result.answer.charts.length, 2);
@@ -34,8 +42,18 @@ assert.equal(buildChatCharts(reply, null).ok, false);
 assert.equal(buildChatCharts({ ...reply, charts: [{ ...reply.charts[0], columns: [0, 999] }] }, table).ok, false);
 const badTable = { ...table, rows: [...table.rows, ['EXP104', 'not a number', '0']] };
 assert.equal(buildChatCharts(reply, badTable).ok, false);
+const missingAt = new Set([2, 12, 13, 89, 99]);
+const missingTable = { ...table, rows: table.rows.map((row, index) => missingAt.has(index) ? [row[0], '—', row[2]] : row) };
+const available = buildChatCharts({ message: 'Baseline', charts: [reply.charts[0]] }, missingTable);
+assert.equal(available.ok, true);
+assert.equal(available.answer.charts[0].rowCount, 98);
+assert.equal(available.answer.charts[0].excludedRows, 5);
+assert.equal(available.answer.charts[0].spec.series[0].data.length, 98);
+assert.match(available.answer.charts[0].spec.caption.source, /98 of 103 uploaded rows; 5 unavailable excluded/);
+assert.equal(missingTable.rows[2][1], '—', 'source cells stay unchanged');
 const longTable = { ...table, rows: Array(201).fill(table.rows[0]).concat([['EXP202', '', '0']]) };
-assert.equal(buildChatCharts(reply, longTable).ok, false, 'validate beyond the sample and do not invent zero for missing data');
+assert.equal(buildChatCharts(reply, longTable).answer.charts[0].excludedRows, 1, 'missing data beyond row 200 is excluded without becoming zero');
+assert.equal(buildChatCharts(reply, { ...longTable, rows: [...longTable.rows.slice(0, -1), ['EXP202', 'not a number', '0']] }).ok, false, 'unrecognized values beyond row 200 still fail');
 
 const originalFetch = globalThis.fetch;
 const token = 'a'.repeat(64);

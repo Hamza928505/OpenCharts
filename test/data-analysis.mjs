@@ -82,6 +82,7 @@ try {
   await page.route('**/*', (route) => route.request().url().startsWith(base) ? route.continue() : route.abort());
   await page.goto(base + '/ai.html', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.openChartsGallery);
+  await page.locator('.ai-data-panel > summary').click();
   const upload = async (value) => {
     const prior = await page.evaluateHandle(() => window.openChartsGallery.table);
     await page.locator('#match-text').fill(value);
@@ -229,13 +230,17 @@ try {
   assert.equal(await page.evaluate(() => window.openCharts.spec.points.at(-1).y), 2225);
   await page.goto(base + '/ai.html', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.openChartsGallery);
+  await page.locator('.ai-data-panel > summary').click();
   const chooser = page.waitForEvent('filechooser');
   await page.locator('#match-file').click();
   await (await chooser).setFiles({ name: 'full-data.csv', mimeType: 'text/csv', buffer: Buffer.from(wide) });
   await page.waitForFunction(() => window.openChartsGallery.table?.rows.length === 103);
+  await recommendations.locator('.analysis-suggestion').first().waitFor();
   assert.equal(await recommendations.locator('.analysis-suggestion').count(), 4);
   const urlCsv = 'Category,Amount\nNorth,10\nNorth,20\nSouth,40';
   await page.route(base + '/recommendations.csv', (route) => route.fulfill({ status: 200, contentType: 'text/csv', body: urlCsv }));
+  await page.locator('#match-clear').click();
+  await page.locator('#ai-link-button').click();
   await page.locator('#match-url').fill(base + '/recommendations.csv');
   await page.locator('#match-url-go').click();
   await page.waitForFunction(() => window.openChartsGallery.table?.rows.length === 3);

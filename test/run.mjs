@@ -462,7 +462,35 @@ check(Object.values(stackTotals).every(({ radius, initialCorners, hiddenCorners 
   'stacks round only their visible outer corners');
 
 /* Suite 3 — the gallery works as a page, not just as modules. */
+await page.setViewportSize({ width: 1280, height: 320 });
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
+const statTargets = await page.locator('.hero-stat').evaluateAll((els) =>
+  els.map((el) => Number(el.getAttribute('aria-label').split(' ')[0])));
+const statValues = () => page.locator('.hero-count-reel').evaluateAll((els) => els.map((el) =>
+  Math.round(-new DOMMatrix(getComputedStyle(el).transform).m42 / el.firstElementChild.getBoundingClientRect().height)));
+check((await statValues()).every((n) => n === 0), 'hero counts start at zero before they enter view');
+await page.evaluate(() => {
+  const host = document.querySelector('#hero-stats');
+  host.counterWrites = 0;
+  host.counterObserver = new MutationObserver((records) => { host.counterWrites += records.length; });
+  host.counterObserver.observe(host, { subtree: true, childList: true, characterData: true });
+});
+await page.locator('#hero-stats').scrollIntoViewIfNeeded();
+await page.waitForTimeout(1000);
+const midCounts = await statValues();
+check(midCounts[0] > 0 && midCounts[0] < statTargets[0] && midCounts[3] === statTargets[3],
+  'hero counts advance at different speeds', midCounts.join(','));
+await page.waitForFunction((targets) => [...document.querySelectorAll('.hero-count-reel')]
+  .every((el, i) => Math.round(-new DOMMatrix(getComputedStyle(el).transform).m42
+    / el.firstElementChild.getBoundingClientRect().height) === targets[i]), statTargets);
+check((await statValues()).every((n, i) => n === statTargets[i]), 'hero counts finish at their exact values');
+const statWrites = await page.evaluate(() => {
+  const host = document.querySelector('#hero-stats');
+  host.counterObserver.disconnect();
+  return host.counterWrites;
+});
+check(statWrites === 0, 'hero counts animate without text updates', String(statWrites));
+await page.setViewportSize({ width: 1280, height: 900 });
 // Previews mount near the viewport. The upload/chat panel can put every tile
 // below that boundary, so bring one into view before checking its renderer.
 await page.locator('.card-canvas').first().scrollIntoViewIfNeeded();
@@ -3007,7 +3035,7 @@ check(/Copied/.test(stageBtn.feedback), 'the button says it copied', stageBtn.fe
 check(stageBtn.shorter && !stageBtn.shortHasCode, 'it follows the Full / Data only choice');
 console.log(`  ${green('✓')} chart page prompt — one click from the stage bar`);
 
-/* The agent connection replaces API key storage and direct provider calls. */
+/* The browser pairs locally and never stores the provider API key. */
 await page.goto(`${base}/studio.html?chart=bar-vertical`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
 const agentControl = await page.evaluate(async () => {
@@ -3016,13 +3044,13 @@ const agentControl = await page.evaluate(async () => {
   return {
     button: !!document.querySelector('#btn-ai-config'),
     connectsAgent: [...document.querySelectorAll('.stage-actions .btn')]
-      .some((b) => /Connect agent/i.test(b.textContent + (b.title || ''))),
+      .some((b) => /Connect AI/i.test(b.textContent + (b.title || ''))),
     consumesConnection: analyst.includes('getAiSettings('),
     noKeyControl: !config.includes('type = \'password\'') && !config.includes('setApiKey('),
   };
 });
 check(agentControl.button && agentControl.connectsAgent,
-  'the stage bar offers Connect agent');
+  'the stage bar offers Connect AI');
 check(agentControl.consumesConnection, 'the analyst consumes the paired connection');
 check(agentControl.noKeyControl, 'the connection no longer collects AI API keys');
 
@@ -3185,10 +3213,10 @@ const analystNoAgent = await page.evaluate(async () => {
   await sleep(600);
   return {
     status: (document.querySelector('.analyst-status.is-bad') || {}).textContent || '',
-    settings: [...document.querySelectorAll('.analyst .btn')].some((b) => b.textContent.trim() === 'Connect agent'),
+    settings: [...document.querySelectorAll('.analyst .btn')].some((b) => b.textContent.trim() === 'Connect AI'),
   };
 });
-check(/Connect agent/i.test(analystNoAgent.status),
+check(/Connect AI/i.test(analystNoAgent.status),
   'without an agent the panel explains how to connect',
   analystNoAgent.status.slice(0, 90));
 check(analystNoAgent.settings, 'with the button to do it right there');

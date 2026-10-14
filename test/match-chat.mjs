@@ -45,6 +45,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.getByText('Paired with local agent', { exact: true }).waitFor();
   assert.deepEqual(await page.evaluate(() => [localStorage.getItem('opencharts.ai-key'), localStorage.getItem('opencharts.ai-settings')]), [null, null]);
+  await page.locator('.ai-data-panel > summary').click();
   await page.locator('#match-text').fill('region,value\nNorth,680\nSouth,575');
   await page.waitForFunction(() => document.querySelector('#match-read-summary').textContent.includes('2 rows'));
   assert.equal(await page.locator('.match-reading').evaluate((el) => el.open), false);
@@ -79,11 +80,8 @@ try {
   assert.equal(brief.currentChart.spec, undefined);
   read(await call('opencharts_submit_answer', { requestId: followup.id, answer: { message: 'North is 105 higher than South.', charts: [] } }));
   await page.getByText('North is 105 higher than South.', { exact: true }).waitFor();
-  const editorHeight = await page.locator('#match-text').evaluate((el) => el.getBoundingClientRect().height);
-  const chatHeight = await page.locator('.match-chat').evaluate((el) => el.getBoundingClientRect().height);
-  assert.ok(Math.abs(chatHeight - editorHeight) < 16, 'data textarea height aligns with chat');
   await page.locator('#match-chat-clear').click();
-  assert.equal(await page.locator('.match-chat-message').count(), 1);
+  assert.equal(await page.locator('.match-chat-message').count(), 0);
   assert.equal(await page.locator('.match-chart-card').count(), 0);
 
   await page.locator('#match-message').fill('Stop this request');
@@ -146,10 +144,10 @@ try {
   await page.screenshot({ path: 'test/screenshots/mcp-setup-dark.png' });
   await page.evaluate(async () => (await import('/js/studio/theme.js')).setTheme('light'));
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-  await page.getByText('Connect an agent to start', { exact: true }).waitFor();
+  await page.getByText('Connect your AI to start', { exact: true }).waitFor();
   await page.locator('#match-message').fill('Hi');
   await page.locator('#match-chat-send').click();
-  await page.getByText(/Connect your signed-in agent using Connect agent first/).waitFor();
+  await page.getByText(/Connect a local AI server or signed-in agent using Connect AI first/).waitFor();
   assert.equal(await page.locator('#match-message').inputValue(), 'Hi');
   assert.equal(read(await call('opencharts_status')).pending, 0);
   await page.locator('#match-ai-settings').click();

@@ -76,7 +76,7 @@ export function analystPanel(def, spec, { onApply } = {}) {
   const ask = el('button', 'btn btn-sm btn-primary', state.busy ? 'Asking…' : 'Ask');
   ask.type = 'button';
   ask.disabled = state.busy;
-  const settings = el('button', 'btn btn-sm', 'Connect agent');
+  const settings = el('button', 'btn btn-sm', 'Connect AI');
   settings.type = 'button';
   settings.addEventListener('click', async () => { await openAiConfigDialog(); repaint(); });
   row.append(ask, settings);
@@ -148,7 +148,7 @@ export function analystPanel(def, spec, { onApply } = {}) {
     state.busy = true;
     state.answer = null;
     state.raw = '';
-    state.status = 'Sending to your local agent connection…';
+    state.status = 'Sending to your local AI connection…';
     state.controller = new AbortController();
     state.tone = '';
     repaint();
@@ -181,7 +181,7 @@ export function analystPanel(def, spec, { onApply } = {}) {
   getAiSettings().then((settings) => {
     if (settings || state.status || !root.isConnected || state.node !== root) return;
     const note = el('p', 'analyst-status is-bad',
-      'No agent is paired with this tab. Use Connect agent to link Codex, Claude Code or another MCP client signed in on your device.');
+      'No local AI is connected to this tab. Use Connect AI to link the API server or an MCP agent.');
     root.insertBefore(note, row.nextSibling);
     status.hidden = true;
   }).catch(() => { /* storage refused; the Ask button says so instead */ });

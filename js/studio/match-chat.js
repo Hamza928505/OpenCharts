@@ -3,7 +3,7 @@ import { getAiSettings } from './ai-config.js';
 import { getChart } from './registry.js';
 import { renderChart, destroyInstance } from './engines.js';
 
-/** One in-memory conversation per imported table, answered by the paired MCP agent. */
+/** One in-memory conversation per imported table, answered by local AI. */
 export function mountMatchChat(root, getTable) {
   const log = root.querySelector('#match-chat-log');
   const form = root.querySelector('#match-chat-form');
@@ -18,6 +18,13 @@ export function mountMatchChat(root, getTable) {
   let revision = 0;
   const charts = [];
   const selectors = [];
+  const hasAttachments = () => root.querySelector('#ai-attachments').childElementCount > 0;
+
+  const resizeInput = () => {
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 240)}px`;
+    send.disabled = !!controller || (!input.value.trim() && !hasAttachments());
+  };
 
   const bubble = (role, text) => {
     const node = document.createElement('div');
@@ -32,9 +39,9 @@ export function mountMatchChat(root, getTable) {
     return node;
   };
   const busy = (value) => {
-    send.disabled = value;
+    send.disabled = value || (!input.value.trim() && !hasAttachments());
+    send.hidden = value;
     stop.hidden = !value;
-    send.textContent = value ? 'Waiting…' : 'Send';
   };
   const reset = () => {
     revision++;
@@ -46,25 +53,27 @@ export function mountMatchChat(root, getTable) {
     current = null;
     input.placeholder = initialPlaceholder;
     log.replaceChildren();
-    bubble('assistant', 'Connect your signed-in agent, then send a question about your data. Ask the agent to process the pending OpenCharts request; its reply and charts will appear here. Local analysis works without an agent.');
     busy(false);
   };
   const submit = async () => {
-    const request = input.value.trim();
-    if (!request || controller) return;
+    const message = input.value.trim() || (hasAttachments() ? 'Suggest a chart from the attached data.' : '');
+    if (!message || controller) return;
     const turn = revision;
     const active = new AbortController();
     controller = active;
     busy(true);
-    bubble('user', request);
+    bubble('user', message);
     input.value = '';
-    const pending = bubble('assistant', 'Sending to your local agent connection…');
+    resizeInput();
+    const pending = bubble('assistant', 'Sending to your local AI connection…');
     try {
       const settings = await getAiSettings();
       if (turn !== revision) return;
-      provider.textContent = settings ? 'Paired with local agent' : 'Connect an agent to start';
+      provider.textContent = settings?.mode === 'api' ? `Using ${settings.provider === 'nvidia' ? 'NVIDIA' : 'OpenAI'} API key`
+        : settings ? 'Paired with local agent' : 'Connect your AI to start';
       const result = await askAnalyst({
-        request, conversation: history, table: getTable(),
+        request: message, conversation: history, table: getTable(),
+        sourceFiles: [...root.querySelectorAll('.ai-attachment-name')].map((node) => node.textContent),
         def: current && getChart(current.chart), spec: current?.spec,
         chartContext: current && { chart: current.chart, title: current.title, columns: current.columns },
         signal: active.signal,
@@ -77,7 +86,7 @@ export function mountMatchChat(root, getTable) {
       if (active.signal.aborted) throw new Error('Request stopped or timed out. You can send your message again.');
       if (!result.ok) throw new Error(result.error);
       const answer = result.answer;
-      history.push({ role: 'user', content: request }, { role: 'assistant', content: JSON.stringify({
+      history.push({ role: 'user', content: message }, { role: 'assistant', content: JSON.stringify({
         message: answer.message, charts: answer.charts.map(({ chart, title, columns }) => ({ chart, title, columns })),
       }) });
       // ponytail: retain twelve messages; add a conversation summary if longer context is needed.
@@ -91,7 +100,7 @@ export function mountMatchChat(root, getTable) {
         heading.textContent = chart.title;
         const source = document.createElement('p');
         source.className = 'match-chart-source';
-        source.textContent = `Source: ${chart.rowCount} uploaded rows · ${chart.columns.map((index) => getTable().headers[index]).join(' / ')}`;
+        source.textContent = `Source: ${chart.excludedRows ? `${chart.rowCount} of ${chart.totalRows} uploaded rows (${chart.excludedRows} unavailable excluded)` : `${chart.rowCount} uploaded rows`} · ${chart.columns.map((index) => getTable().headers[index]).join(' / ')}`;
         const host = document.createElement('div');
         host.className = 'match-chat-chart';
         host.setAttribute('aria-label', chart.title);
@@ -116,7 +125,7 @@ export function mountMatchChat(root, getTable) {
       if (turn !== revision) return;
       pending.remove();
       bubble('assistant', active.signal.aborted ? 'Request stopped or timed out. You can send your message again.' : error.message);
-      if (!input.value) input.value = request;
+      if (!input.value) { input.value = message; resizeInput(); }
     } finally {
       if (turn === revision) { controller = null; busy(false); }
     }
@@ -125,17 +134,24 @@ export function mountMatchChat(root, getTable) {
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); }
   });
+  input.addEventListener('input', resizeInput);
+  root.querySelector('#ai-attach').addEventListener('click', () => root.querySelector('#ai-files').click());
+  root.querySelector('#ai-link-button').addEventListener('click', (event) => {
+    const entry = root.querySelector('#ai-url-entry');
+    entry.hidden = !entry.hidden;
+    event.currentTarget.setAttribute('aria-expanded', String(!entry.hidden));
+    if (!entry.hidden) root.querySelector('#match-url').focus();
+  });
   stop.addEventListener('click', () => controller?.abort());
   root.querySelector('#match-chat-clear').addEventListener('click', () => { reset(); input.focus(); });
-  root.querySelectorAll('.match-chat-suggestions button').forEach((button) => {
-    button.addEventListener('click', () => { input.value = button.textContent; input.focus(); });
-  });
   const connectionChanged = () => {
     controller?.abort();
-    getAiSettings().then((settings) => { provider.textContent = settings ? 'Paired with local agent' : 'Connect an agent to start'; });
+    getAiSettings().then((settings) => { provider.textContent = settings?.mode === 'api' ? `Using ${settings.provider === 'nvidia' ? 'NVIDIA' : 'OpenAI'} API key`
+      : settings ? 'Paired with local agent' : 'Connect your AI to start'; });
   };
   window.addEventListener('opencharts-agent-change', connectionChanged);
   connectionChanged();
   reset();
+  resizeInput();
   return { reset };
 }

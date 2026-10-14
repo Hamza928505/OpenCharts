@@ -68,8 +68,15 @@ function mountRecommendations(host, table, profile) {
       try {
         const built = buildAnalysisChart(table, plan);
         const preview = card.querySelector('.analysis-preview');
-        card.querySelector('[data-chart-source]').textContent = built.note;
-        instances.push(renderChart(built.def, preview, built.spec, { height: 240, label: `${plan.title}. ${built.note}` }));
+        let previewSpec = built.spec;
+        let previewNote = built.note;
+        if (plan.kind === 'relationship' && built.spec.points.length > 800) {
+          const stride = Math.ceil(built.spec.points.length / 800);
+          previewSpec = { ...built.spec, points: built.spec.points.filter((_, index) => index % stride === 0) };
+          previewNote += ` Preview shows ${previewSpec.points.length} sampled points; opening or downloading uses all rows.`;
+        }
+        card.querySelector('[data-chart-source]').textContent = previewNote;
+        instances.push(renderChart(built.def, preview, previewSpec, { height: 240, label: `${plan.title}. ${previewNote}` }));
         const carry = (event) => {
           if (!handOff(built.table, { chart: plan.id, spec: built.spec })) {
             event.preventDefault();

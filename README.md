@@ -314,10 +314,44 @@ happens until you press **Apply**. Apply goes through the same door a pasted
 spec does, so it joins the undo history like any other edit and you can take it
 back.
 
+### Automatic AI replies with your API key
+
+Each user creates their own NVIDIA or OpenAI API key and runs the local helper
+on their own computer. OpenCharts does not provide a shared API key. The helper
+listens only on `127.0.0.1`, so visitors open its local page rather than sending
+AI requests through the public site or anyone else's account.
+
+Clone this repository, install [Node.js](https://nodejs.org/) 20 or newer, and run
+`npm install`. Set `NVIDIA_API_KEY` or `OPENAI_API_KEY` in your terminal and run `npm run ai` from the
+OpenCharts folder. Open the local `ai.html#mcp=...` link printed by the server.
+The API helper chooses a free local port, even if an MCP agent is already using
+8765. Keep that terminal open while using the assistant. Each message starts an API
+request automatically. NVIDIA keys use `nvidia/nemotron-3.5-lightning-30b-a3b` by default;
+set `NVIDIA_MODEL` to the model ID shown in your NVIDIA API catalog. OpenAI keys
+use `gpt-6-luna` by default; set `OPENAI_MODEL` to change it. NVIDIA takes precedence
+if both keys are set. Check your NVIDIA model's trial rate limit in your account;
+OpenAI usage is billed to your OpenAI account.
+
+For an NVIDIA key in PowerShell, you can enter it without putting it in your command history:
+
+```powershell
+$secret = Read-Host 'NVIDIA API key' -AsSecureString
+$env:NVIDIA_API_KEY = [System.Net.NetworkCredential]::new('', $secret).Password
+npm run ai
+```
+
+The key stays in the local server process. It is not entered into the web page
+or stored by the browser. The server sends your question, recent chat, and
+statistics calculated from the full uploaded table to the selected provider. Compact tables
+are sent in full; for larger tables, the model receives a 40-row preview and
+can request more rows from the local server.
+Replies use the same chart validation as the MCP route. Stop cancels the request;
+leaving the page also asks the server to cancel it. The local pairing link changes
+on restart.
+
 ### Connect Codex, Claude Code or another MCP agent
 
-OpenCharts no longer asks for an AI provider, model name or API key. Its optional
-MCP server connects the page to an agent you run and sign into, such as Codex or
+The optional MCP mode connects the page to an agent you run and sign into, such as Codex or
 Claude Code. Choose your model and account in that agent. Your subscription must
 include access to the agent; its normal usage limits still apply. MCP is a tool
 connection, not a source of free or unlimited inference.
@@ -344,7 +378,7 @@ the [Codex MCP setup](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and
    `opencharts_status`.
 2. Open the pairing link it returns, such as
    `http://127.0.0.1:8765/#mcp=...`. This serves OpenCharts locally and connects
-   the tab. Alternatively, paste the full link into **Connect agent** on the
+   the tab. Alternatively, paste the full link into **Connect AI** on the
    hosted site. If the browser blocks access to a local service, use the local
    link instead.
 3. Upload your table and send a message in OpenCharts. Then tell the agent:
@@ -367,7 +401,7 @@ without it. [Bridge details and troubleshooting](tools/README.md#local-mcp-bridg
 
 ### Chart replies in the main-page chat
 
-All connected agents use one response contract:
+Both automatic API replies and connected agents use one response contract:
 
 ```json
 {
@@ -378,8 +412,8 @@ All connected agents use one response contract:
 
 Column indices refer to the uploaded table (zero-based). The request includes a
 40-row preview; the agent can retrieve additional rows with `opencharts_read_rows`.
-The browser builds each chart from **all local rows** using the selected columns
-and the existing chart data adapters. The model
+The browser checks all local rows, then builds each chart from rows with available
+values in its selected numeric columns. The chart reports any excluded rows. The model
 does not copy numerical values or executable chart code into its answer. Replies
 can contain up to three charts; greetings and clarification questions use an
 empty array. **Discuss this chart** selects the chart for the next follow-up.
