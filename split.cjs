@@ -5,7 +5,7 @@ let html = fs.readFileSync('index.html', 'utf8');
 const newNav = `  <nav aria-label="Main navigation">
     <a class="nav-link" href="documentation.html">How it works</a>
     <a class="nav-link" href="index.html">Charts</a>
-    <a class="nav-link" href="ai.html">AI Assistant</a>
+    <a class="nav-link" href="ai.html">Your data</a>
     <a class="btn btn-sm btn-primary" href="studio.html">Open studio</a>
     <span id="theme-mount"></span>
   </nav>`;
@@ -38,7 +38,7 @@ let aiHtml = html
   .replace(gridRegex, '')
   .replace(stepsRegex, '')
   .replace(connectRegex, '')
-  .replace('<title>OpenCharts — Make a chart you can keep</title>', '<title>AI Assistant — OpenCharts</title>');
+  .replace('<title>OpenCharts — Make a chart you can keep</title>', '<title>Your data — OpenCharts</title>');
 fs.writeFileSync('ai.html', aiHtml);
 
 // Write documentation.html (Steps & Connect)

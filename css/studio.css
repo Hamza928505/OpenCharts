@@ -801,10 +801,7 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .match-import { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .65rem 1.4rem; margin-top: .8rem; }
 .match-import .match-drop { min-height: 80px; grid-column: 1; grid-row: span 2; }
-.matchbar-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.4rem; margin-top: .8rem; align-items: stretch;
-}
+.matchbar-body { display: grid; gap: 1.4rem; margin-top: .8rem; }
 .matchbar-body[hidden] { display: none; }
 .match-col { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
 
@@ -846,10 +843,6 @@ img, canvas, svg { max-width: 100%; display: block; }
 }
 .match-text:focus { outline: none; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
 .match-tools { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.match-ai-note {
-  margin: .15rem 0 0; max-width: 66ch;
-  color: var(--ink-soft); font-size: 11.5px; line-height: 1.5;
-}
 .match-check {
   display: inline-flex; align-items: center; gap: .35rem;
   font-size: 12.5px; color: var(--ink-soft); cursor: pointer; user-select: none;
@@ -874,28 +867,7 @@ img, canvas, svg { max-width: 100%; display: block; }
 .match-reading { margin-top: .8rem; }
 .match-reading summary { cursor: pointer; padding: .6rem 0; font-size: 13px; }
 .match-reading summary span { color: var(--ink-soft); margin-left: .4rem; }
-.match-chat { border: 1px solid var(--rule); border-radius: var(--r); padding: 1rem; background: var(--paper); }
-.match-chat-head, .match-chat-controls { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
-.match-chat-head h3 { font-size: 15px; }
-.match-chat-log { display: grid; gap: .75rem; padding: 1rem 0; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
-.match-chat-message { min-width: 0; padding: .8rem; border-radius: var(--r); background: var(--surface-2); overflow-wrap: anywhere; }
-.match-chat-message[data-role="user"] { margin-left: 1.5rem; border: 1px solid var(--rule); }
-.match-chat-message b { display: block; font-size: 12px; margin-bottom: .35rem; color: var(--ink-soft); }
-.match-chat-message p { font-size: 14px; white-space: pre-wrap; }
-.match-chat-suggestions { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
-.match-chat-form { display: grid; gap: .5rem; }
-.match-chat-form label { font-size: 12px; font-weight: 600; }
-.match-chat-form textarea { width: 100%; min-height: 90px; resize: vertical; padding: .8rem; border: 1px solid var(--rule); border-radius: var(--r); background: var(--paper); color: var(--ink); font: inherit; }
-.match-chat-controls span { font-size: 12px; color: var(--ink-soft); flex: 1; }
-.match-chat-chart { margin-top: .8rem; min-width: 0; }
-.match-chart-card { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--rule); min-width: 0; }
-.match-chart-card h3 { font-size: 15px; overflow-wrap: anywhere; }
-.match-chart-card .match-chart-source { font-size: 12px; color: var(--ink-soft); margin-top: .25rem; }
-.match-chart-card .btn { margin-top: .6rem; }
-.match-chart-card .btn[aria-pressed="true"] { border-color: var(--accent); }
-.match-chat .btn { min-height: 44px; }
-.match-chat [hidden] { display: none; }
-.match-table { min-height: 0; }
+.match-table, .match-text { min-height: 240px; }
 .match-shape { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); margin-bottom: .6rem; }
 .match-cols { display: flex; gap: .4rem; flex-wrap: wrap; }
 .match-col-chip {
@@ -932,9 +904,6 @@ img, canvas, svg { max-width: 100%; display: block; }
   .matchbar { padding-left: 1.15rem; padding-right: 1.15rem; }
   .match-import { grid-template-columns: 1fr; }
   .match-import .match-drop { min-height: 80px; grid-column: auto; grid-row: auto; }
-  .matchbar-body { grid-template-columns: 1fr; }
-  .match-table { min-height: 240px; }
-  .match-text { min-height: 240px; }
 }
 @media (max-width: 640px) {
   .matchbar { padding-top: 1rem; padding-bottom: 1rem; }
@@ -2187,17 +2156,6 @@ input[type="range"]::-moz-range-thumb {
 }
 .ask-list .ask-more { color: var(--ink-faint); list-style: none; margin-left: -1.1rem; }
 .ask-foot { display: flex; justify-content: flex-end; gap: .45rem; margin-top: .9rem; }
-.ai-config { width: min(520px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
-.ai-config .link-input, .ai-config select { width: 100%; min-width: 0; }
-.ai-config .ask-text { overflow-wrap: anywhere; }
-.ai-config-advanced { margin: 12px 0; }
-.ai-config-advanced summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; padding: 8px 0; }
-.ai-config-advanced .dlg-label:not([hidden]) { display: block; margin-top: 12px; }
-.ai-config-advanced .btn { margin-top: 8px; }
-.ai-config .ask-foot { flex-wrap: wrap; }
-.ai-config-fields { display: grid; gap: .5rem; margin-top: 1rem; }
-.ai-config-command { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; margin: .5rem 0; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-sm); font: 12px/1.6 var(--mono); }
-.ai-config .btn, .ai-config .link-input, .ai-config-advanced summary { min-height: 44px; }
 .btn-danger { background: var(--bad); border-color: var(--bad); }
 
 @media (max-width: 720px) {
@@ -3830,73 +3788,3 @@ body[data-focus="1"] .stage-data { display: none; }
   .board-grid { grid-template-columns: minmax(0, 1fr); }
   .board-pick { max-width: 100%; }
 }
-
-/* ── The AI Analyst tab ──────────────────────────────────────────────────────
- *
- * The eighth code view and the third that is not code. Like the Colours tab it
- * mounts a component into `.code-body`, which is a `pre` — so it re-declares
- * the face and the white-space rather than inheriting the monospace the code
- * tabs need.
- */
-.analyst {
-  font-family: var(--sans);
-  white-space: normal;
-  padding: 1.1rem 1.2rem 1.3rem;
-  display: flex;
-  flex-direction: column;
-  gap: .7rem;
-}
-
-.analyst-lead {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  max-width: 66ch;
-}
-
-.analyst-input {
-  font: inherit;
-  font-size: 13px;
-  min-height: 62px;
-  resize: vertical;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--rule-firm);
-  border-radius: var(--r-sm);
-  padding: .55rem .65rem;
-}
-.analyst-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-.analyst-row { display: flex; gap: .45rem; flex-wrap: wrap; align-items: center; }
-
-.analyst-status { margin: 0; font-size: 12.5px; color: var(--ink-soft); max-width: 66ch; line-height: 1.55; }
-.analyst-status.is-ok { color: var(--accent); }
-.analyst-status.is-bad { color: var(--bad); }
-
-.analyst-diff {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--ink-faint);
-}
-
-/* The answer, and — when it was not one — the text that came back instead.
-   Kept rather than swallowed: a reader can only correct what they can see. */
-.analyst-preview,
-.analyst-raw {
-  margin: 0;
-  max-height: 340px;
-  overflow: auto;
-  padding: .7rem .8rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--code-ink);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.analyst-raw { color: var(--ink-soft); }

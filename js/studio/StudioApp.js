@@ -26,7 +26,6 @@ import { tableMarkup } from './a11y.js';
 import { attachAnnotationDrags } from './annotate.js';
 import { captionHead, captionFoot, captionLines } from './caption.js';
 import { saveChart, getSaved, thumbnailOf } from './shelf.js';
-import { openAiConfigDialog } from './ai-config.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -353,8 +352,6 @@ export class StudioApp {
     $('#btn-save')?.addEventListener('click', () => this._save());
     $('#btn-embed')?.addEventListener('click', () => this._embed());
     $('#btn-prompt')?.addEventListener('click', () => this._copyPrompt());
-    // Pair this tab with the user's local MCP agent bridge.
-    $('#btn-ai-config')?.addEventListener('click', () => openAiConfigDialog());
 
     // Restore the rail the way it was left. Read once, here, rather than at
     // module load: a private window can throw on read too.

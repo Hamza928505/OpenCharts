@@ -1123,7 +1123,7 @@ palette, and a second copy of that statement is a second thing to keep true.
 
 ### The Spec view
 
-The sixth of eight code views is the chart as *data*: `{ chart, spec }` as
+The sixth of seven code views is the chart as *data*: `{ chart, spec }` as
 indented JSON.
 Nothing new is computed for it — the share link already proves every spec
 round-trips through serialisation — it is simply exposed where a person can
@@ -1147,7 +1147,7 @@ Two things the editor has to get right, both checked:
 
 ### The Colours tab
 
-The seventh view in the code panel, and one of the three that are not code.
+The seventh and last view in the code panel, and one of the two that are not code.
 The sidebar edits a colour beside its series and the data table edits one
 against its column or row — both answer *what colour is this one*. Neither
 answers *do these twelve work together*, which is the question a palette
@@ -2059,7 +2059,7 @@ chart is neutral.
 
 ### The AI prompt
 
-The **AI Prompt** tab is the fifth of eight code views, and one of the three that
+The **AI Prompt** tab is the fifth of seven code views, and one of the two that
 are not
 code: it is the whole chart written as a brief to hand to an assistant along
 with somebody's own spreadsheet. `prompt.js` assembles it from what the studio
@@ -2176,71 +2176,6 @@ Three things it has to get right, each checked:
   opening the tile would carry into the studio. The format *example* stays put
   either way: it illustrates the shape, and replacing it with the reader's own
   rows would leave the brief with no statement of the format at all.
-
-### The AI Analyst
-
-The AI Prompt tab hands a brief to an assistant somewhere else and asks the
-reader to carry the answer back by hand. This closes that loop inside the
-studio: the table already on screen, the catalogue of what this library can
-draw and one sentence from the reader go to the paired local MCP bridge. The
-reader's signed-in agent processes that request and returns `{ chart, spec }`,
-the object the Spec view already prints.
-
-Two existing studio rules still apply:
-
-- **The answer lands through the door a pasted spec uses.** `_applySpec` merges
-  over `newSpec`, opens another chart when the id differs, and banks an undo
-  step. So there is no second way into the studio's state, and nothing a model
-  says can reach past that one function. The panel calls it and nothing else.
-- **Nothing is applied unseen.** The reply is previewed as JSON with a line
-  saying what applying it would change — which chart it opens, which top-level
-  fields differ — and `Apply` is a button beside `Discard`. A model that quietly
-  renamed every series would otherwise do exactly that.
-
-`analyst.js` is the brief, the call and the parse, with no DOM in it;
-`analyst-ui.js` is the panel, the way `palette-ui.js` is `cvd.js`'s. The brief
-reuses what the prompt already maintains — `SHAPE_GUIDE` (now exported) and
-`expectedFormat(def)` — so the model is told each chart's data shape from the
-same table `checkTableShape` enforces, and the catalogue is derived from the
-registry rather than written out. A faceted spec sends `facetSource`, the same
-substitution `a11y.js` and the prompt make, because `toText` on one writes a
-table with the split already spent.
-
-**One contract, enforced.** The reply must be one JSON object naming a chart
-this registry has and carrying a `spec` object; a markdown fence is tolerated
-because models add them, and everything else is refused **with the raw text
-kept on screen**. A reader can only correct what they can see, and a panel that
-went blank would be indistinguishable from a broken feature.
-
-**The browser queues work; the agent runs it.** `tools/mcp-server.mjs` exposes
-stdio MCP tools to Codex, Claude Code or another local MCP client, and a
-token-protected loopback HTTP bridge to the page. `analyst.js` posts the request,
-response schema and full table to `/requests`, polls for the answer, and deletes
-the request on completion, cancellation or timeout. The agent reads a request
-with `opencharts_get_request`, pages through data with `opencharts_read_rows`,
-and responds through `opencharts_submit_answer`. Sending a browser message does
-not automatically start a model turn; the reader asks the agent to process it.
-
-For main-page chat, the contract is `{ message, charts }`, where chart plans name
-registered chart ids and zero-based table column indices. The brief previews
-40 rows; all rows remain available through MCP. The browser uses the full local
-table to build chart suggestions. Both the bridge and browser validate replies;
-neither executes model-supplied JavaScript.
-
-#### The agent connection
-
-`ai-config.js` owns **Connect agent**, which accepts the pairing link returned
-by `opencharts_status`. It validates the loopback address and temporary token;
-the token travels in `x-opencharts-token`, never in a request body or chart
-export. Obsolete API keys and provider settings are cleared from local storage.
-There are no provider, model or API-key controls in the app.
-
-Model choice, login and subscription limits belong to the agent. The bridge
-does not read agent credentials or invoke a model API. Requests and tables are
-held in memory and expire; restarting requires a new pairing link. The agent
-may send its received data to its model service. Static local analysis remains
-available without any connection. See the README and `tools/README.md` for
-setup and the four MCP tools.
 
 ### The data dialog
 
@@ -2577,11 +2512,8 @@ the values it changed are shown by the series widget next door.
 | `palette-ui.js` | The colour-vision warning, the whole-palette editor, and the colour-by-value panel |
 | `colourby.js` | Threshold, gradient and diverging rules — the ramps, the arithmetic, and which value belongs to which colour |
 | `reference.js` | Lines at a value — mean, median, target, moving average, trend — as extra Chart.js datasets, and the sentences that say their numbers |
-| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours/AI Analyst tabs, copy, download, paste-a-spec, undo/redo |
+| `CodePanel.js` | HTML/CSS/JS/Standalone/AI Prompt/Spec/Colours tabs, copy, download, paste-a-spec, undo/redo |
 | `prompt.js` | The AI brief — the chart's format, current table and code, as one copyable message |
-| `analyst.js` | Briefs, local MCP request queue/polling and response validation for studio specs and chat chart plans |
-| `analyst-ui.js` | The AI Analyst tab — the request box, the preview, and Apply through `_applySpec` |
-| `ai-config.js` | Pairing-link validation and the Connect agent dialog; no provider API credentials |
 | `StudioApp.js` | Studio page orchestration |
 | `GalleryApp.js` | Gallery grid with lazy live previews — of the reader's own table once they bring one — and the per-tile prompt button |
 | `highlight.js` | Small syntax highlighter for the code panel |
@@ -2641,7 +2573,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **903 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -2655,7 +2587,7 @@ for columns), annotating a chart,
 queued previews and forgiving hover, splitting one table into small
 multiples, editing a colour wherever it is shown, undo and redo across the
 whole spec, a resizable controls column, what comes out of the printer, several
-saved charts on one board, asking an assistant for a chart, and console
+saved charts on one board, and console
 cleanliness.
 
 A second check has now earned as much: **what the editor writes, it must be

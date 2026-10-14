@@ -45,12 +45,6 @@ jobs:
       - name: Run the suite
         run: npm test
 
-      - name: Check MCP bridge and agent chat (no model calls)
-        run: |
-          node test/mcp-server.mjs
-          node test/ai-response.mjs
-          node test/match-chat.mjs
-
       # A failing run is far easier to diagnose with the screenshots the
       # suite leaves behind.
       - name: Upload failure artefacts

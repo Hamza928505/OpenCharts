@@ -79,9 +79,7 @@ every tile, in the studio and in the prompt. The data editor has the same
 thing as a button on the table, undoable, and as a step in the Shape tab.
 
 The file is read in the browser, and the table travels to the studio in local
-storage for up to six hours. Local analysis needs no network. If you connect an agent and send an
-AI request, its context and table are shared with that agent through the local
-MCP bridge described below.
+storage for up to six hours. Local analysis needs no network.
 
 ## Keeping a chart
 
@@ -174,7 +172,7 @@ Server, and so on. There is no build step and nothing to install.
 
 | Page | What it is |
 |---|---|
-| `index.html` | Project home, connection steps, library credits, and the searchable live chart gallery. |
+| `index.html` | Project home, library credits, and the searchable live chart gallery. |
 | `studio.html` | Start with a data file or pasted table, open a compatible chart, or manage saved charts. |
 | `studio.html?chart=<id>` | The editor. Controls on the left, live preview top right, generated code below. |
 | `board.html` | Several charts you saved, on one page — and that page as one file. |
@@ -212,7 +210,7 @@ BI platform has are missing on purpose, and each one is the same trade.
 
 ## Code output
 
-Each chart emits eight views:
+Each chart emits seven views:
 
 - **HTML** — the markup fragment (`<canvas>` / `<div>` plus the legend slot)
 - **CSS** — only the rules that chart actually uses
@@ -226,8 +224,6 @@ Each chart emits eight views:
   the wrong studio opens the chart it belongs to.
 - **Colours** — not code at all: the whole palette at once, a swatch and a name
   per series, with a warning if two of them merge for a colour-blind reader.
-- **AI Analyst** — ask for a chart in a sentence and get a spec back, previewed
-  before it is applied. Connect your signed-in agent through MCP; see below.
 
 Undo and redo sit in that same bar and cover the whole chart — every colour,
 slider, toggle, note and split, not just the data table.
@@ -303,97 +299,6 @@ from memory.
 The prompt follows whatever is on screen. Edit the colours, swap the data,
 change the axis — copy it afterwards and the brief describes that chart, not
 the library default.
-
-## Asking for a chart in a sentence
-
-The **AI Analyst** tab in the code panel takes one line — *"revenue by region,
-highlight the North"* — and answers with a chart. It sends the table you are
-looking at, the list of charts this library has, and your sentence; what comes
-back is previewed as JSON with a line saying what it would change, and nothing
-happens until you press **Apply**. Apply goes through the same door a pasted
-spec does, so it joins the undo history like any other edit and you can take it
-back.
-
-### Connect Codex, Claude Code or another MCP agent
-
-OpenCharts no longer asks for an AI provider, model name or API key. Its optional
-MCP server connects the page to an agent you run and sign into, such as Codex or
-Claude Code. Choose your model and account in that agent. Your subscription must
-include access to the agent; its normal usage limits still apply. MCP is a tool
-connection, not a source of free or unlimited inference.
-
-Clone this repository, install [Node.js](https://nodejs.org/) 20 or newer, and run
-`npm install` in its folder. Register the server in **one** agent, replacing the
-example path with the absolute path to your clone:
-
-```bash
-# Codex
-codex mcp add opencharts -- node /absolute/path/OpenCharts/tools/mcp-server.mjs
-
-# Claude Code
-claude mcp add --transport stdio opencharts -- node /absolute/path/OpenCharts/tools/mcp-server.mjs
-```
-
-On Windows, quote the path, for example
-`node "C:/Users/you/OpenCharts/tools/mcp-server.mjs"`. Other local MCP clients
-can launch the same `node` command and script using stdio. These commands follow
-the [Codex MCP setup](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and
-[Claude Code MCP setup](https://code.claude.com/docs/en/mcp).
-
-1. Open your signed-in agent, enable the OpenCharts MCP tools, and ask it to call
-   `opencharts_status`.
-2. Open the pairing link it returns, such as
-   `http://127.0.0.1:8765/#mcp=...`. This serves OpenCharts locally and connects
-   the tab. Alternatively, paste the full link into **Connect agent** on the
-   hosted site. If the browser blocks access to a local service, use the local
-   link instead.
-3. Upload your table and send a message in OpenCharts. Then tell the agent:
-   **"Process my pending OpenCharts request and submit the answer using its MCP
-   tools."** The agent reads the request, retrieves rows if needed, and submits
-   an answer. The page displays it and draws valid chart suggestions.
-
-Keep the agent session open. A browser message queues work; it does not start an
-agent turn automatically. For another message, ask the agent to process the next
-request. The studio's **AI Analyst** previews a returned spec and changes the
-chart only when you press **Apply**. Malformed replies do not change the chart.
-
-The bridge runs on your computer and keeps requests in memory. The pairing link
-contains a temporary access token, not an AI API key; keep it private and use the
-new link after restarting the server. The agent receives the data you send for
-analysis and may send it to its model service under that account's data policy.
-OpenCharts does not read or forward your agent's login credentials. Disconnect
-to stop using the bridge; **Analyze without AI** and **AI Prompt** remain usable
-without it. [Bridge details and troubleshooting](tools/README.md#local-mcp-bridge).
-
-### Chart replies in the main-page chat
-
-All connected agents use one response contract:
-
-```json
-{
-  "message": "Here is the baseline comparison.",
-  "charts": [{ "chart": "bar-vertical", "title": "Baseline by experiment", "columns": [0, 1] }]
-}
-```
-
-Column indices refer to the uploaded table (zero-based). The request includes a
-40-row preview; the agent can retrieve additional rows with `opencharts_read_rows`.
-The browser builds each chart from **all local rows** using the selected columns
-and the existing chart data adapters. The model
-does not copy numerical values or executable chart code into its answer. Replies
-can contain up to three charts; greetings and clarification questions use an
-empty array. **Discuss this chart** selects the chart for the next follow-up.
-
-The MCP request supplies the response schema. The agent sends its answer through
-`opencharts_submit_answer`, and the browser validates the chart identifiers and
-column selections before rendering. An invalid reply is reported instead of
-being rendered with fabricated values or default example data.
-
-Column plans currently select/reorder existing columns, not arbitrary filtering,
-grouping, calculations or style edits. Use the studio tools for those changes.
-
-The **AI Prompt** tab also writes a complete brief to paste into whatever
-assistant you already use, without setting up an MCP connection.
 
 ## Not sure how to read a chart?
 
@@ -741,7 +646,7 @@ Finance, Geo, KPI & Micro, and Custom Engine.
 ## Tests
 
 ```bash
-npm install          # once — MCP dependencies and Playwright
+npm install          # once — Playwright
 npx playwright install chromium
 npm test             # renders all <!-- count:charts -->115<!-- /count --> charts and checks them
 ```
@@ -758,7 +663,7 @@ format, code and current data.
 Beyond that it drives the things a person does: pasting a wide export and
 seeing which charts can read it, reshaping a table, splitting one into panels,
 annotating a chart, undoing an edit, hovering a two-pixel mark, reading a
-spreadsheet, printing a chart, putting three charts on a board, asking an assistant for a chart, and refusing six hostile ones. **903 checks**, and it fails if
+spreadsheet, printing a chart, putting three charts on a board, and refusing six hostile ones. **904 checks**, and it fails if
 anything writes to the console.
 
 ```bash
