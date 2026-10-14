@@ -15,7 +15,7 @@ node tools/build-wiki.mjs OpenCharts.wiki
 
 | Script | Writes | Rerun when |
 |---|---|---|
-| `vendor-libraries.mjs` | six runtime builds in `lib/` and their original notices in `lib/licenses/` | their pinned versions in `js/studio/cdn.js` change |
+| `vendor-libraries.mjs` | six runtime builds in `lib/`, the map atlas in `data/countries-110m.json`, and their original notices in `lib/licenses/` | their pinned versions in `js/studio/cdn.js` change |
 | `place-names.mjs` | nothing (the spelling rules the others import) | — |
 | `build-cities.mjs` | `data/cities/*.json` | you want a newer gazetteer |
 | `build-countries.mjs` | `data/countries.json` | after the above |
@@ -79,7 +79,8 @@ first:
 ```bash
 mkdir -p .cache
 
-# 1. The gazetteer — GeoNames-derived, ~170k cities, MIT.
+# 1. The gazetteer — GeoNames-derived, ~170k cities, CC BY 4.0 (credited in
+#    THIRD-PARTY-NOTICES.md and the site footer; our copy is modified).
 curl -L https://cdn.jsdelivr.net/npm/cities.json@1.1.61/cities.json \
   -o .cache/cities-raw.json
 

@@ -103,12 +103,12 @@ export const LIBRARIES = {
     license: 'ISC',
     provider: 'jsDelivr',
     homepage: 'https://github.com/topojson/world-atlas',
-    // Fetched at runtime rather than vendored: ~110KB of boundary data does
-    // not belong in a chart library's repository.
+    // Served from `local` on this site so a map contacts no third party;
+    // exported code keeps `url`, because an export has no `data/` folder.
     url: 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json',
-    local: null,
+    local: 'data/countries-110m.json',
     kind: 'data',
-    role: 'Natural Earth country boundaries, fetched at runtime',
+    role: 'Natural Earth country boundaries for the Geo charts',
   },
 
   boxplot: {
@@ -283,6 +283,20 @@ export const ASSETS = {
     url: null,
     local: 'data/flags.json',
     role: 'Flag icons for the country and city pickers, vendored by tools/build-flags.mjs',
+  },
+  // CC BY 4.0 owes credit where the data is used, and a note that it was
+  // changed — which it was, by tools/build-cities.mjs and clean-place-names.mjs.
+  cities: {
+    key: 'cities',
+    kind: 'asset',
+    name: 'GeoNames, via cities.json (city names and coordinates)',
+    version: '1.1.61',
+    license: 'CC BY 4.0',
+    provider: 'geonames.org',
+    homepage: 'https://www.geonames.org/',
+    url: null,
+    local: 'data/cities/',
+    role: 'Cities for the place pickers and city maps. Modified: coordinates rounded, transliterated names simplified, exact duplicates merged',
   },
 };
 

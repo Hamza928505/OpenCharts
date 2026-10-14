@@ -4,7 +4,8 @@
     "description": "Countries with flag icons and city names in English and local language.",
     "flag_icons": "Emoji plus images from flagcdn.com (provider states public domain: https://flagpedia.net/terms).",
     "cities_local": "null when the local language rendering matches the English list.",
-    "notes": "Covers UN member states plus Vatican City and Palestine."
+    "notes": "Covers UN member states plus Vatican City and Palestine.",
+    "provenance": "Compiled for OpenCharts in commit bc22a91 (September 2026); no third-party dataset is named as its source. See THIRD-PARTY-NOTICES.md."
   },
   "countries": [
     {

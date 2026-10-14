@@ -55,16 +55,28 @@ try {
       rendered.push(def.id);
       destroyInstance(instance);
     }
-    return { rendered, scripts: keys.map((key) => LIBRARIES[key].local),
+    // A map's boundaries come from the site's own copy, not the CDN its
+    // exported code names.
+    const map = CHARTS.find((def) => def.d3?.libraries?.includes('worldAtlas'));
+    const mapHost = document.createElement('div');
+    mapHost.style.cssText = 'width:640px;height:320px';
+    document.body.append(mapHost);
+    const mapInstance = renderChart(map, mapHost, newSpec(map), { height: 320 });
+    await mapInstance.whenReady;
+    for (let i = 0; i < 50 && mapHost.querySelectorAll('path').length < 100; i++) await new Promise((r) => setTimeout(r, 100));
+    const countries = mapHost.querySelectorAll('path').length;
+    destroyInstance(mapInstance);
+    return { rendered, countries, scripts: keys.map((key) => LIBRARIES[key].local),
       topojson: typeof window.topojson.feature, rows: window.aq.from([{ value: 1 }]).numRows() };
   });
   assert.equal(result.rendered.length, 4);
+  assert.ok(result.countries >= 100, `a map draws its countries from the local atlas (${result.countries} paths)`);
   assert.equal(result.topojson, 'function');
   assert.equal(result.rows, 1);
   assert.deepEqual(errors, []);
   assert.deepEqual(external, [], 'no runtime script should contact a third-party origin');
   for (const path of result.scripts) assert.equal(requests.filter((url) => url.endsWith('/' + path)).length, 1, path + ' loads once');
-  console.log('Local libraries: all nine scripts loaded once under /OpenCharts/, four plugin/engine charts rendered, no CDN requests.');
+  console.log(`Local libraries: all nine scripts loaded once under /OpenCharts/, four plugin/engine charts and a ${result.countries}-path map rendered, no CDN requests.`);
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

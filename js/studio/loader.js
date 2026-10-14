@@ -34,6 +34,16 @@ const inFlight = new Map();
 /** Resolve a base for `local` paths that works from any page in the site. */
 const localUrl = (path) => new URL('../../' + path, import.meta.url).href;
 
+// Data files are fetched by serialised helpers (`loadTopology`) that have to
+// name the CDN address, because an export has no `data/` folder beside it.
+// On this site they read this map instead, so a map makes no third-party
+// request. Keyed by that CDN address.
+if (typeof window !== 'undefined') {
+  window.__ocLocalData = Object.fromEntries(Object.values(LIBRARIES)
+    .filter((lib) => lib.kind === 'data' && lib.local)
+    .map((lib) => [lib.url, localUrl(lib.local)]));
+}
+
 /**
  * Is this library already usable?
  *

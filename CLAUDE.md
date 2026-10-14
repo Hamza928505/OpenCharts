@@ -208,10 +208,14 @@ keeps its numbers. Adding a chart means running the tool, or the build says so.
 
 ### Geo charts
 
-The six charts in the `Geo` category fetch `world-atlas` boundaries at runtime
-instead of vendoring them, and declare it with `libraries: ['topojson',
-'worldAtlas']` on the `d3` block — the same mechanism Chart.js charts use for
-`plugins`. Two consequences worth knowing:
+The six charts in the `Geo` category read `world-atlas` boundaries, and
+declare it with `libraries: ['topojson', 'worldAtlas']` on the `d3` block — the
+same mechanism Chart.js charts use for `plugins`. The site serves its own copy
+(`data/countries-110m.json`); the serialised `mount` still names the CDN
+address, because an export has no `data/` folder, and `loader.js` maps that
+address to the local file through `window.__ocLocalData`, which only the site
+sets. So a map on the site contacts no third party and an export still works.
+Two consequences worth knowing:
 
 - Their `mount` is **synchronous but populates asynchronously**: it creates the
   `<svg>` immediately and fills it when the fetch resolves. `renderChart` does
@@ -2706,9 +2710,10 @@ This project does not use formal build tools, test runners, or linters. All deve
 No npm install. The studio pages load:
 - Chart.js 4.4.1 and D3 v7 from `lib/`, eagerly — the only two script tags in
   either page
-- Everything else through `loader.js`, on demand: the sankey plugin from
-  `lib/`, and chartjs-chart-matrix, chartjs-chart-treemap,
-  chartjs-chart-boxplot, topojson-client, Arquero and Apache ECharts from a CDN
+- Everything else through `loader.js`, on demand and also from `lib/`: the
+  sankey, matrix, treemap and boxplot plugins, topojson-client, Arquero and
+  Apache ECharts; the map atlas from `data/countries-110m.json`. The site
+  makes no third-party request; only exported code names CDN URLs
 - System font fallbacks for the interface; no third-party font request at page load
 
 Bootstrap and SweetAlert2 have been **removed from the project entirely** — the

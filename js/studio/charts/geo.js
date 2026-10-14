@@ -2,10 +2,11 @@
  * Geo charts: choropleth, proportional symbol, dot density, flow map,
  * tile grid map and non-contiguous cartogram.
  *
- * Boundary data is fetched from a CDN at runtime rather than vendored — a
- * world topology is ~110KB and does not belong in a chart library's repo. Each
- * chart declares `libraries: ['topojson', 'worldAtlas']`, which is what puts
- * both entries in the Sources panel and in the exported code's header.
+ * Boundary data is `data/countries-110m.json` on this site, so opening a map
+ * contacts no third party; exported code fetches the same file from the CDN,
+ * since an export has no `data/` folder. Each chart declares
+ * `libraries: ['topojson', 'worldAtlas']`, which is what puts both entries in
+ * the Sources panel and in the exported code's header.
  *
  * The tile map is the exception: it needs no boundary data at all, because its
  * whole premise is that every country becomes an identically sized square.
@@ -25,12 +26,15 @@ function makeRng(seed) {
 
 /**
  * Fetch and memoise a topology on `window`, so switching charts in the studio
- * does not refetch it — and so the exported page works unchanged.
+ * does not refetch it — and so the exported page works unchanged. The site
+ * maps the CDN address to its own copy (`__ocLocalData`, set by loader.js);
+ * an export has no such map and fetches the CDN.
  */
 function loadTopology(url) {
   if (!window.__ocTopoCache) window.__ocTopoCache = {};
   if (!window.__ocTopoCache[url]) {
-    window.__ocTopoCache[url] = fetch(url).then((r) => {
+    const src = (window.__ocLocalData && window.__ocLocalData[url]) || url;
+    window.__ocTopoCache[url] = fetch(src).then((r) => {
       if (!r.ok) throw new Error('Could not load boundaries: HTTP ' + r.status);
       return r.json();
     });

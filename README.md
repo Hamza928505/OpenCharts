@@ -605,7 +605,7 @@ Nothing here loads a library behind your back.
 The site's nine runtime chart scripts are served from its own `lib/` folder,
 including the six plugins/engines that previously required CDN requests.
 Browser tracking protection can remain enabled. Standalone exports still use
-the pinned CDN URLs; map boundary data and web fonts still require a network.
+the pinned CDN URLs, map boundaries included.
 
 - The studio shows a **Sources** panel under every chart: each library it needs,
   with version, licence, CDN provider and the exact URL, copyable on its own.
@@ -622,9 +622,9 @@ Versions are pinned in `js/studio/cdn.js`, which is the single source of truth
 for all of the above. It matches the builds vendored in `lib/`; if you update
 one, update the other in the same commit.
 
-The map charts are the one case that fetches *data* rather than a script: the
-`world-atlas` country boundaries (~110KB) are pulled from a CDN at runtime
-rather than committed here. That entry appears in the Sources panel like any
+The map charts also need *data* rather than a script: the `world-atlas`
+country boundaries (~110KB), served from `data/countries-110m.json` so opening
+a map contacts no third party. That entry appears in the Sources panel like any
 other dependency, and is labelled as data rather than a script tag.
 
 ## Rendering engines
