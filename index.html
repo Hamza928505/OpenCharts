@@ -56,27 +56,47 @@
 <main id="main">
 <section class="gallery-hero" aria-labelledby="home-title">
   <div class="hero-copy">
-    <div>
-      <div class="hero-kicker">
-        <span class="eyebrow">Every chart, editable</span>
-        <span class="pill pill-accent">HTML · CSS · JS</span>
-      </div>
-      <h1 class="display" id="home-title">Pick a chart. Change it. <em>Take the code.</em></h1>
+    <div class="hero-intro">
+      <h1 class="display" id="home-title">Make a chart. <em>Keep the code.</em></h1>
       <p class="lede">
-        Every chart here opens in a studio where the data, the colours and the
-        options are live controls. What you see is generated from the same
-        definition that produces the code below it — so the snippet you copy is
-        the chart you built, not an approximation of it.
+        Bring a table, find a chart that fits, and edit it live. Take the HTML,
+        CSS and JavaScript behind the result into your own page.
       </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#library">Explore charts</a>
+        <a class="btn" href="studio.html">Open studio</a>
+      </div>
     </div>
-    <div class="hero-note">
-      <p><strong>Five ways out.</strong> The studio emits the markup, the stylesheet
-      and the script separately, plus a <code>standalone</code> page that inlines all
-      three and runs the moment you open it — and an <code>AI prompt</code> you can
-      hand to any assistant along with your own spreadsheet.</p>
-      <p style="margin-top:.7rem">Charts run on Chart.js, D3, plain Canvas 2D or the
-      dependency-free OpenCharts engine — the badge on each tile tells you which
-      before you commit to it.</p>
+    <div class="hero-demo" aria-hidden="true">
+      <div class="hero-scene">
+        <div class="hero-plane hero-plane-data">
+          <div class="hero-plane-head">sample.csv <span>DATA</span></div>
+          <div class="hero-data-row hero-data-heading"><span>quarter</span><span>value</span></div>
+          <div class="hero-data-row"><span>Q1</span><span>42</span></div>
+          <div class="hero-data-row"><span>Q2</span><span>68</span></div>
+          <div class="hero-data-row"><span>Q3</span><span>56</span></div>
+          <div class="hero-data-row"><span>Q4</span><span>84</span></div>
+        </div>
+        <div class="hero-plane hero-plane-chart">
+          <div class="hero-plane-head">Sample values <span>BAR CHART</span></div>
+          <div class="hero-plot">
+            <div class="hero-gridline hero-gridline-top"></div>
+            <div class="hero-gridline hero-gridline-middle"></div>
+            <div class="hero-bars">
+              <div class="hero-bar-item"><span class="hero-bar" style="--bar-height:42%;--bar-delay:.42s"></span><span>Q1</span></div>
+              <div class="hero-bar-item"><span class="hero-bar" style="--bar-height:68%;--bar-delay:.52s"></span><span>Q2</span></div>
+              <div class="hero-bar-item"><span class="hero-bar" style="--bar-height:56%;--bar-delay:.62s"></span><span>Q3</span></div>
+              <div class="hero-bar-item"><span class="hero-bar" style="--bar-height:84%;--bar-delay:.72s"></span><span>Q4</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-plane hero-plane-code">
+          <div class="hero-plane-head">your-page.js <span>CODE</span></div>
+          <pre><code><span class="hero-code-line">render(host, {</span>
+  chart: 'bar-vertical', data: rows
+});</code></pre>
+        </div>
+      </div>
     </div>
   </div>
   <div class="hero-stats" id="hero-stats"></div>
