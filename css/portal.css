@@ -192,4 +192,6 @@ html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   .hero-scene, .hero-plane, .hero-bar, .hero-code-line { animation: none !important; transition: none !important; }
   .hero-demo:hover .hero-scene { transform: rotateX(8deg) rotateY(-10deg); }
+  .hero-stats.is-counting .hero-count-reel { animation: none; }
+  .hero-count-reel { transform: translateY(calc(-100% + 1em)); }
 }

@@ -119,10 +119,22 @@ export class GalleryApp {
       { n: CHART_COUNT, l: 'chart types' },
       { n: CATEGORIES.length, l: 'categories' },
       { n: (tally.canvas || 0) + (tally.native || 0) + (tally.dom || 0), l: 'library-free' },
-      { n: '5', l: 'ways to export' },
+      { n: 5, l: 'ways to export' },
     ];
-    host.innerHTML = stats.map((s) =>
-      `<div class="hero-stat"><div class="n tnum">${s.n}</div><div class="l">${s.l}</div></div>`).join('');
+    // Each number is a reel of 0…n that CSS steps through once the row is in
+    // view; the group's label is what a screen reader hears.
+    const durations = [2200, 1400, 1800, 900];
+    host.innerHTML = stats.map((s, i) =>
+      `<div class="hero-stat" role="group" aria-label="${s.n} ${s.l}">`
+      + `<div class="n tnum" aria-hidden="true" style="--count:${s.n};--duration:${durations[i]}ms">`
+      + `<div class="hero-count-reel">${Array.from({ length: s.n + 1 }, (_, n) => `<span>${n}</span>`).join('')}</div></div>`
+      + `<div class="l" aria-hidden="true">${s.l}</div></div>`).join('');
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      host.classList.add('is-counting');
+    });
+    observer.observe(host);
   }
 
   /**
