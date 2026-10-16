@@ -229,18 +229,21 @@ export function boundKeys(def) {
 /** Write a dot-path into a spec, making the objects on the way if need be. */
 function setPath(obj, path, value) {
   const parts = String(path).split('.');
-  if (!parts.length) return;
+  if (!parts.length || parts.some((p) => !p)) return;
   const blocked = new Set(['__proto__', 'prototype', 'constructor']);
   if (parts.some((p) => blocked.has(p))) return;
 
   let node = obj;
   for (let i = 0; i < parts.length - 1; i++) {
+    if (!node || typeof node !== 'object') return;
     const key = parts[i];
-    if (!Object.prototype.hasOwnProperty.call(node, key) || !node[key] || typeof node[key] !== 'object') {
+    const own = Object.prototype.hasOwnProperty.call(node, key) ? node[key] : null;
+    if (!own || typeof own !== 'object') {
       node[key] = Object.create(null);
     }
     node = node[key];
   }
+  if (!node || typeof node !== 'object') return;
   node[parts[parts.length - 1]] = value;
 }
 
