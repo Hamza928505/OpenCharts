@@ -2181,6 +2181,17 @@ Three things it has to get right, each checked:
   either way: it illustrates the shape, and replacing it with the reader's own
   rows would leave the brief with no statement of the format at all.
 
+### The choose-chart skill
+
+`.claude/skills/choose-chart/` is a Claude Code skill: an assistant working in
+this repository answers "which chart?" by running `choose.mjs`, which calls
+`profileTable`, `rankCharts` and `recommendCharts` under Node and prints each
+pick with its reason, its `watch` line and a share link holding the table. It
+adds no rule of its own, so an assistant and the gallery's matcher cannot
+disagree; improving `recommend.js` improves both. It is repository tooling,
+not part of the site. The suite holds its list to the registry and decodes its
+link to check the table reached it.
+
 ### The data dialog
 
 `DataDialog.js` has three ways in and **one source of truth**: the grid holds
@@ -2577,7 +2588,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **907 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

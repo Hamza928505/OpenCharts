@@ -141,6 +141,31 @@ check(counts.status === 0, 'README, CLAUDE.md and package.json quote the registr
 check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
   'and the checker itself counts what the page counts', counts.stdout.trim());
 
+/* The choose-chart skill answers from the library, not from memory.
+ *
+ * `.claude/skills/choose-chart/choose.mjs` runs profile, rankCharts and
+ * recommend under Node, so a change to any of their shapes would hand an
+ * assistant an empty or stale answer with nothing failing. Held here: it
+ * lists every chart, its pick is one of them, and the link it hands out
+ * carries the table — a link that opens on the example is "the data must
+ * reach the chart" failing somewhere new. Scoped: the suite is one module. */
+{
+  const skill = (args, input) => spawnSync(process.execPath,
+    [join(ROOT, '.claude/skills/choose-chart/choose.mjs'), ...args], { cwd: ROOT, input, encoding: 'utf8' });
+  const listed = skill(['--list']).stdout.trim().split('\n').map((l) => l.split(' | ')[0]);
+  check(listed.join() === meta.ids.join(), 'the choose-chart skill lists every chart in the registry',
+    `${listed.length} listed, ${meta.total} registered`);
+  const chosen = skill(['-'], 'region,sales\nNorth,520\nSouth,410\nEast,613\n');
+  const pick = (chosen.stdout.match(/^1\. (\S+)/m) || [])[1];
+  const token = (chosen.stdout.match(/[?&]s=([\w-]+)/) || [])[1];
+  check(chosen.status === 0 && meta.ids.includes(pick), 'and picks a chart that exists',
+    (chosen.stderr || chosen.stdout).slice(0, 200));
+  const carried = token ? await page.evaluate(async (t) =>
+    JSON.stringify(await (await import('/js/studio/share.js')).decodeSpec(t)), token) : '';
+  check(/North/.test(carried) && /613/.test(carried),
+    'and its link opens that chart holding the table, not the example', String(carried).slice(0, 200));
+}
+
 /* The README answers two readers, and says what this is not.
  *
  * A developer arriving at a chart library wants to know how to import it, and
