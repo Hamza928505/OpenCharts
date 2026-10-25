@@ -155,15 +155,41 @@ check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
   const listed = skill(['--list']).stdout.trim().split('\n').map((l) => l.split(' | ')[0]);
   check(listed.join() === meta.ids.join(), 'the choose-chart skill lists every chart in the registry',
     `${listed.length} listed, ${meta.total} registered`);
+  const linked = async (stdout) => {
+    const token = (stdout.match(/[?&]s=([\w-]+)/) || [])[1];
+    return token ? page.evaluate(async (t) =>
+      JSON.stringify(await (await import('/js/studio/share.js')).decodeSpec(t)), token) : '';
+  };
   const chosen = skill(['-'], 'region,sales\nNorth,520\nSouth,410\nEast,613\n');
   const pick = (chosen.stdout.match(/^1\. (\S+)/m) || [])[1];
-  const token = (chosen.stdout.match(/[?&]s=([\w-]+)/) || [])[1];
   check(chosen.status === 0 && meta.ids.includes(pick), 'and picks a chart that exists',
     (chosen.stderr || chosen.stdout).slice(0, 200));
-  const carried = token ? await page.evaluate(async (t) =>
-    JSON.stringify(await (await import('/js/studio/share.js')).decodeSpec(t)), token) : '';
+  const carried = await linked(chosen.stdout);
   check(/North/.test(carried) && /613/.test(carried),
     'and its link opens that chart holding the table, not the example', String(carried).slice(0, 200));
+
+  /* What it checks on top of the library, each from a public file it got
+   * wrong: NOAA's `#` header block, a column the reader did not ask for,
+   * a bar per row of raw observations, and a reason about one column over a
+   * chart that holds another. */
+  const kept = skill(['--columns', 'region,profit', '-'],
+    '# note\n# more\nregion,sales,profit\nNorth,520,80\nSouth,410,60\nEast,613,95\n');
+  const keptSpec = await linked(kept.stdout);
+  check(/Skipped 2 comment/.test(kept.stdout) && /95/.test(keptSpec) && !/613/.test(keptSpec),
+    'and it skips a comment block and keeps only the columns it is told to', kept.stdout.slice(0, 200));
+  check(/labels repeat/.test(skill(['--chart', 'bar-vertical', '-'], 'species,len\na,1\na,2\nb,3\nb,4\n').stdout),
+    'and it says when a bar chart would draw one bar per row of raw observations');
+  const pairs = [[5, 1], [1, 2], [4, 3], [2, 4], [6, 5], [3, 6], [5, 7], [1, 8], [4, 9], [2, 10], [6, 11], [3, 12]];
+  const offTopic = skill(['-'], 'name,noise,x,y\n'
+    + pairs.map(([n, x], i) => `${'pqr'[i % 3]},${n},${x},${x * 2}`).join('\n') + '\n');
+  check(/! the reason is about "/.test(offTopic.stdout),
+    'and when a chart holds other columns than the ones its reason names', offTopic.stdout.slice(0, 200));
+  // The example's dress comes off too: its axis titles, and a 0–100 axis that
+  // squashed 150 iris flowers into one corner of the plate.
+  const fitted = (JSON.parse(await linked(skill(['--chart', 'scatter-clusters', '-'],
+    'kind,weight,mpg\nusa,3504,18\nusa,3693,15\neurope,1835,26\njapan,2372,24\njapan,2130,27\n').stdout) || '{}').opts) || {};
+  check(fitted.xTitle === 'weight' && fitted.yTitle === 'mpg' && fitted.xMax === 4000 && fitted.yMax === 30,
+    'and its link drops the example\'s axis titles and an axis sized for the example', JSON.stringify(fitted));
 }
 
 /* The README answers two readers, and says what this is not.

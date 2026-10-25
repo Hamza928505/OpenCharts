@@ -2192,6 +2192,31 @@ disagree; improving `recommend.js` improves both. It is repository tooling,
 not part of the site. The suite holds its list to the registry and decodes its
 link to check the table reached it.
 
+**What it adds is a look at the result.** Run on twelve public datasets, the
+top pick drew the wrong thing on ten: a bar per row of 150 iris flowers, a
+line of the `year` column where the reason was about passengers, a histogram
+with a group per date. So each suggestion prints what the chart *holds* once
+it has read the table — `def.toText(spec)`, the table the data editor would
+open on — and flags three things with a `!`: labels that repeat on a
+one-mark-per-row chart, a distribution whose groups are one per row or are
+numbers, and a column the reason names whose first value the chart does not
+hold. `--columns` lets the assistant choose the columns instead. The SKILL.md
+tells it to resolve every `!` before handing over a link.
+
+**And the link takes off the example's dress.** `applyData` replaces the
+numbers and keeps the presentation, so a link put 3,260 commits on an axis
+reading `$3500K`, and 150 iris flowers under "Avg order value ($)" on a 0–100
+axis that squashed them into a corner. `fitToData` clears prefixes, suffixes
+and unit names and gives the x and y titles the reader's own column names.
+Each column is traced by its values, because a chart may put the first column
+on x. It also sizes each bound slider to the data, measuring error bars to the
+end of the whisker, because those axes are hard scales. Controls are found by
+label, the rule `facet.js` learned: `opts.max` is an axis on one chart and a
+circle on another. It prints what it changed. Other wording the reader did not
+rewrite, such as a series called "Product" or a pie's "of traffic", is listed
+rather than cleared, since whether it still fits is a judgement. The reader's
+own units are theirs to add.
+
 ### The data dialog
 
 `DataDialog.js` has three ways in and **one source of truth**: the grid holds
@@ -2588,7 +2613,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **907 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **911 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
