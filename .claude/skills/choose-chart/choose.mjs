@@ -8,7 +8,9 @@
  *
  *   --columns a,b,c          keep only these columns, in this order, before anything reads them
  *   --header / --no-header   settle the header row instead of guessing it
+ *   --skip N                 drop the first N lines, notes above the data, before reading
  *   --swap                   turn the table rows-for-columns first
+ *   --save <file>            write the table the chart reads as CSV, for a studio upload
  *   --base <url>             point links at another copy of the site
  *
  * Nothing here holds an opinion of its own. `profile.js` describes the table,
@@ -23,8 +25,8 @@
  * the `year` column where the reason was about passengers.
  */
 
-import { readFileSync } from 'node:fs';
-import { parseTable, transposeTable, applyData, expectedFormat } from '../../../js/studio/dataio.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { parseTable, transposeTable, applyData, expectedFormat, looksNumeric } from '../../../js/studio/dataio.js';
 import { profileTable } from '../../../js/studio/profile.js';
 import { toNumber } from '../../../js/studio/transform.js';
 import { rankCharts } from '../../../js/studio/DataMatch.js';
@@ -32,6 +34,8 @@ import { recommendCharts, summarise } from '../../../js/studio/recommend.js';
 import { CHARTS, getChart, newSpec, searchCharts } from '../../../js/studio/registry.js';
 import { helpFor } from '../../../js/studio/chart-help.js';
 import { encodeSpec, URL_COMFORTABLE } from '../../../js/studio/share.js';
+import { parseDateLabel, dateOrder, isDateLabels } from '../../../js/studio/timeaxis.js';
+import { PALETTE } from '../../../js/studio/palette.js';
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -49,6 +53,8 @@ const fail = (message) => { console.error(message); process.exit(1); };
 const base = (option('--base') || 'https://hamza928505.github.io/OpenCharts/').replace(/\/?$/, '/');
 const chartId = option('--chart');
 const columns = option('--columns');
+const skip = Number(option('--skip') || 0);
+const save = option('--save');
 const list = flag('--list');
 const swap = flag('--swap');
 const yes = flag('--header');
@@ -57,9 +63,14 @@ const header = yes ? true : no ? false : undefined;
 const source = args[0];
 const names = (table, using) => using.map((c) => table.headers[c]).join(', ');
 const cells = (row) => row.slice(0, 8).map((c) => String(c).slice(0, 30)).join(', ') + (row.length > 8 ? ', …' : '');
+const approx = (v) => Number(v.toPrecision(3)).toLocaleString('en-US');
+if (!Number.isInteger(skip) || skip < 0) fail('--skip takes a number of lines, such as --skip 8.');
 
 /** Shapes that draw one mark per row, labelled by the first column. */
 const PER_ROW = new Set(['labelSeries', 'labelValue', 'items', 'matrix', 'rowSeries', 'pairs']);
+
+/** Past 8 KB of path a web server refuses the request: GitHub Pages answers 414. */
+const SERVER_LIMIT = 8192;
 
 function readTable() {
   if (!source) return null;
@@ -75,7 +86,11 @@ function readTable() {
   let lead = 0;
   while (lead < lines.length && /^\s*(#|$)/.test(lines[lead])) lead++;
   const comments = lines.slice(0, lead).filter((l) => l.trim()).length;
-  const parsed = parseTable(lines.slice(lead).join('\n'), header);
+  // Notes that look like rows go only when asked; --skip counts filled lines.
+  const rest = lines.slice(lead);
+  for (let dropped = 0; dropped < skip && rest.length;) if (rest.shift().trim()) dropped++;
+  const text = rest.join('\n');
+  const parsed = parseTable(text, header);
   if (!parsed.headers.length) fail('No table in that input — expected CSV, TSV or JSON rows.');
   // A headerless table is turned without the `Label, Series 1` it was given.
   let table = swap
@@ -90,7 +105,26 @@ function readTable() {
     });
     table = { headers: picked.map((i) => table.headers[i]), rows: table.rows.map((r) => picked.map((i) => r[i])) };
   }
-  return { ...parsed, table, comments };
+  return { ...parsed, table, comments, notes: skip ? null : notesAbove(text, parsed) };
+}
+
+/**
+ * Rows of notes above the data. An ONS download opens with "Title", "CDID",
+ * "Unit" and five more, two cells each like the rows under them, so neither
+ * the parser's title rule nor its header guess can tell them from data; every
+ * chart then reads a column of words and numbers. They hold no number where
+ * the rows below do. A header is one such row, and a title the parser already
+ * dropped is another, so it takes more than those. Returns their first cells.
+ */
+function notesAbove(text, parsed) {
+  const rows = parseTable(text, false).rows;
+  const number = (r) => r.some((c) => c !== '' && looksNumeric(c));
+  const k = rows.findIndex(number);
+  const below = rows.slice(k);
+  const known = (parsed.skipped || 0) + (parsed.hadHeader ? 1 : 0);
+  return k > Math.max(1, known) && below.length >= 3 && below.filter(number).length >= 0.9 * below.length
+    ? rows.slice(0, k).map((r) => r[0])
+    : null;
 }
 
 /** The chart after reading the table: its spec, and the table it now holds. */
@@ -101,10 +135,34 @@ function held(def, table) {
 }
 
 /**
+ * Labels that are dates but do not run one way. A long table (symbol, date,
+ * price) holds one run of dates per symbol, one after another, and an ONS
+ * download holds its years, then its quarters, then its months. A chart
+ * through either doubles back in time. Says how, or returns ''.
+ */
+function timeRuns(labels) {
+  if (!isDateLabels(labels)) return '';
+  const { dayFirst } = dateOrder(labels);
+  const t = labels.map((l) => parseDateLabel(l, dayFirst));
+  const back = t.map((v, i) => i > 0 && v < t[i - 1]);
+  const first = back.indexOf(true);
+  // Newest first is an order too; only a column that goes both ways is mixed.
+  if (first > 0 && t.some((v, i) => i > 0 && v > t[i - 1])) {
+    const n = back.filter(Boolean).length;
+    return `the dates run backwards ${n} time${n === 1 ? '' : 's'}, first "${labels[first - 1]}" → "${labels[first]}"`;
+  }
+  const known = t.filter(Number.isFinite);
+  const repeats = known.length - new Set(known).size;
+  return repeats ? `${repeats} of the ${known.length} dates repeat an earlier one` : '';
+}
+
+/**
  * Print what the chart holds and say where that differs from what was meant.
- * Two checks, both from failures on public data: labels that repeat (raw
- * rows drawn one bar each), and a column the reason names whose first value
- * the chart does not hold (the reason argues one thing, the link draws another).
+ * Each check is a failure on public data: labels that repeat (raw rows drawn
+ * one bar each), dates that double back (a long table), measures a hundredfold
+ * apart on one axis, blank cells drawn as 0, more colour groups than colours,
+ * and a column the reason names whose first value the chart does not hold
+ * (the reason argues one thing, the link draws another).
  */
 function report(def, whole, table, why) {
   const h = held(def, table);
@@ -125,10 +183,47 @@ function report(def, whole, table, why) {
     out('   ! the groups are numbers, so a measure was read as group names. A blank cell in the'
       + ' measure does this; this chart cannot take the table as it is.');
   }
-  if (PER_ROW.has(shape) && named && labels < h.rows.length) {
+  const time = h.headers[0] === 'label' ? timeRuns(h.rows.map((r) => r[0])) : '';
+  if (time) {
+    out(`   ! ${time}: the rows hold more than one series, or more than one kind of period, so the chart`
+      + ' draws the same dates more than once. Keep one (the studio\'s Shape tab can filter rows); a line per'
+      + ' series needs a column per series, which the studio cannot make from these rows.');
+  }
+  if (PER_ROW.has(shape) && named && labels < h.rows.length && !time) {
     out(`   ! labels repeat: one mark per row, ${h.rows.length} rows, ${labels} different label${labels === 1 ? '' : 's'}.`
       + ' Fine for steps in time; for observations of a few groups, group them first (the studio\'s'
       + ' Shape tab) or choose a chart made for raw rows.');
+  }
+  if (shape === 'xyGroups' && labels > PALETTE.length) {
+    out(`   ! ${labels} groups and ${PALETTE.length} colours${labels === h.rows.length ? ' (every row is its own group)' : ''}:`
+      + ' the colours repeat, so the groups cannot be told apart. Keep a column of a few groups, or none, with --columns.');
+  }
+  // Measures a fiftyfold apart share one axis badly: CO₂'s uncertainty beside
+  // its mean, a stock's volume beside its price. A chart with a right axis
+  // is made for exactly that.
+  if (shape === 'labelSeries' && !(def.controls || []).some((c) => /^right axis/i.test(String(c.label || '')))) {
+    const peaks = h.headers.slice(1).map((name, i) =>
+      [name, h.rows.reduce((m, r) => Math.max(m, Math.abs(toNumber(r[i + 1])) || 0), 0)]);
+    const top = Math.max(0, ...peaks.map(([, p]) => p));
+    const small = peaks.filter(([, p]) => p > 0 && p * 50 < top).map(([name]) => `"${name}"`);
+    if (small.length) {
+      const one = small.length === 1;
+      out(`   ! "${peaks.find(([, p]) => p === top)[0]}" reaches ${approx(top)} and ${small.slice(0, 3).join(', ')}${small.length > 3 ? ', …' : ''}`
+        + ` ${one ? 'stays' : 'stay'} under a fiftieth of that: on one axis ${one ? 'it is' : 'they are'} too small to see.`
+        + ' Leave one side out with --columns, or give the small side its own axis (mixed-bar-line has two).');
+    }
+  }
+  // dataio reads a blank cell as 0: a month nobody measured draws as zero
+  // unemployment, and a penguin with no measurements sits at the origin.
+  const zeros = (rows) => rows.reduce((n, r) => n + r.filter((c) => toNumber(c) === 0).length, 0);
+  const holes = table.headers.map((_, c) => c).filter((c) =>
+    table.rows.some((r) => r[c] === '') && table.rows.some((r) => Number.isFinite(toNumber(r[c]))));
+  const blank = table.rows.reduce((n, r) => n + holes.filter((c) => r[c] === '').length, 0);
+  const drawn = Math.min(blank, zeros(h.rows) - zeros(table.rows));
+  if (drawn > 0) {
+    out(`   ! ${drawn} blank cell${drawn === 1 ? '' : 's'} in ${holes.map((c) => `"${table.headers[c]}"`).join(', ')}`
+      + ` ${drawn === 1 ? 'is' : 'are'} drawn as 0, a value nobody measured. Say so; if those rows should not be`
+      + ' drawn, the studio\'s Shape tab can filter them out.');
   }
   const first = h.rows[0] || [];
   const same = (a, b) => String(a).trim() === String(b).trim() || toNumber(a) === toNumber(b);
@@ -154,6 +249,24 @@ const niceUp = (v) => {
   if (!(v > 0)) return 0;
   const p = 10 ** Math.floor(Math.log10(v));
   return +(Math.ceil((v / p) * 2) / 2 * p).toPrecision(12);
+};
+/** 1, 2, 2.5 or 5 of a power of ten: a tick step that reads cleanly. */
+const niceStep = (span) => {
+  const p = 10 ** Math.floor(Math.log10(span));
+  return [1, 2, 2.5, 5, 10].find((f) => f * p >= span) * p;
+};
+/**
+ * Where an axis should run for data from lo to hi. Zero stays in, unless the
+ * chart lets its minimum be set, which says a position rather than a length
+ * is read off it: then data far from zero (penguin flippers of 172–231mm, the
+ * years 1565–1821) gets an axis of its own instead of one two-thirds empty.
+ */
+const bounds = (lo, hi, positional) => {
+  if (positional && (lo > 0 ? lo : -hi) > 2 * (hi - lo)) {
+    const s = niceStep((hi - lo) / 5);
+    return [Math.floor(lo / s) * s, Math.ceil(hi / s) * s].map((v) => +v.toPrecision(12));
+  }
+  return [lo >= 0 ? 0 : -niceUp(-lo), niceUp(hi)];
 };
 
 /**
@@ -183,10 +296,13 @@ function fitToData(def, h, table) {
     const want = h.rows.map((r) => toNumber(r[i])).filter(Number.isFinite);
     const hits = want.length ? table.headers.filter((_, c) => {
       const have = new Set(table.rows.map((r) => toNumber(r[c])));
+      // A blank the chart drew as 0 is still that column's.
+      if (table.rows.some((r) => r[c] === '')) have.add(0);
       return want.every((v) => have.has(v));
     }) : [];
     return hits.length === 1 ? hits[0] : '';
   };
+  const settable = (def.controls || []).some((c) => /^(axis|scale) minimum$/i.test(String(c.label || '')));
   for (const c of def.controls || []) {
     const label = String(c.label || '');
     const now = c.key ? getPath(h.spec, c.key) : undefined;
@@ -198,8 +314,20 @@ function fitToData(def, h, table) {
     } else if (c.type === 'slider' && /^(axis|scale|x|y) (maximum|minimum)$/i.test(label)) {
       const axis = /^[xy] /i.test(label) ? col(label[0].toLowerCase()) : -1;
       const [lo, hi] = extent(axis >= 0 ? [axis] : measures);
-      if (!Number.isFinite(hi)) continue;
-      next = /maximum/i.test(label) ? niceUp(hi) : (lo >= 0 ? 0 : -niceUp(-lo));
+      // One value, or none, says nothing about where an axis should run.
+      if (!(hi > lo)) continue;
+      const [min, max] = bounds(lo, hi, axis >= 0 || settable);
+      next = /maximum/i.test(label) ? max : min;
+      // A scatter's minimum and units have no control of their own. They sit
+      // beside its maximum (opts.xMax, opts.xMin, opts.xPrefix), and an
+      // example's yMin of 2 hides every point below it.
+      for (const [part, value] of axis >= 0 ? [['Min', min], ['Prefix', ''], ['Suffix', '']] : []) {
+        const key = c.key.replace(/Max$/, part);
+        const was = getPath(h.spec, key);
+        if (key === c.key || was === undefined || was === value) continue;
+        setPath(h.spec, key, value);
+        changed.push(`${label.replace(/maximum$/i, part === 'Min' ? 'minimum' : part.toLowerCase())} ${JSON.stringify(was)} → ${JSON.stringify(value)}`);
+      }
     } else if (c.type === 'text' && now && now === getPath(example, c.key)) {
       // Wording the reader did not rewrite. Which of it still fits is a judgement.
       kept.push(`${label} ${JSON.stringify(now)}`);
@@ -213,24 +341,53 @@ function fitToData(def, h, table) {
   if (kept.length) out(`Still the example's: ${kept.join(', ')}.`);
 }
 
-/** The studio, opened on this chart — holding the table when a spec is given. */
-async function link(def, spec) {
+/** The table the chart reads, as CSV, for a studio upload when no link can hold it. */
+function saveTable(t) {
+  const cell = (v) => (/[",\r\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  writeFileSync(save, [t.headers, ...t.rows].map((r) => r.map(cell).join(',')).join('\n') + '\n');
+  out(`Saved the ${t.rows.length} rows of ${t.headers.join(', ')} it reads to ${save}.`);
+}
+
+/**
+ * Print the studio link: this chart, holding the table when a spec is given.
+ * A server refuses a link past 8 KB before the page can read it, so that one
+ * opens on the example and says how the table gets in instead.
+ */
+async function link(def, spec, title) {
   const url = new URL('studio.html', base);
   url.searchParams.set('chart', def.id);
+  const plain = url.toString();
   if (spec) url.searchParams.set('s', await encodeSpec(spec));
   const text = url.toString();
-  return text.length > URL_COMFORTABLE
-    ? `${text}\n  (${text.length} characters: some apps cut long links. If it opens on the example, paste the table into the studio's data editor instead.)`
-    : text;
+  if (spec && url.pathname.length + url.search.length > SERVER_LIMIT) {
+    out(`${title} on its example, since no link can hold this table:`);
+    out(`  ${plain}`);
+    out(`  (With the table the link is ${text.length} characters, and web servers refuse links past ${SERVER_LIMIT}:`
+      + ' GitHub Pages answers "414 URI Too Long". Paste or upload the table in the chart\'s data editor; '
+      + (save ? `${save} holds the columns it reads.)` : 'rerun with --save <file.csv> for a file of the columns it reads.)'));
+    return;
+  }
+  out(spec ? `${title} with this data:` : `${title} (example data):`);
+  out(`  ${text}`);
+  if (text.length > URL_COMFORTABLE) {
+    out(`  (${text.length} characters: some apps cut long links. If it opens on the example, paste the table into the studio's data editor instead.)`);
+  }
 }
 
 function describeInput(input) {
   const { table } = input;
   if (input.comments) out(`Skipped ${input.comments} comment line(s) at the top.`);
+  if (skip) out(`Skipped the first ${skip} line(s), as asked.`);
   if (columns !== null) out(`Kept columns: ${table.headers.join(', ')}`);
   out(`Header row: ${input.hadHeader ? 'yes' : 'no'}`
     + (header === undefined ? ' (guessed; rerun with --header or --no-header if that is wrong)' : '')
     + (input.skipped ? `; ${input.skipped} title row(s) above it skipped` : ''));
+  if (input.notes) {
+    const n = input.notes.length;
+    out(`Note (bad): the first ${n} rows hold no numbers and the rows below do: `
+      + `${input.notes.slice(0, 4).map((c) => JSON.stringify(c)).join(', ')}${n > 4 ? ', …' : ''}. Notes above the data?`
+      + ` Rerun with --skip ${n}, or --skip ${n - 1} if the last of them is the header row.`);
+  }
   if (table.rows.length <= 1) {
     out(`Note (bad): only ${table.rows.length} row. If this is JSON, the rows may sit inside another object`
       + ' or array (the World Bank API answers [metadata, rows]): save just the list of rows and run again.');
@@ -278,9 +435,9 @@ if (list) {
         : `Your table: it cannot read it — ${(miss && miss.message) || 'the shape does not match'}`);
     if (fit || part) h = report(def, input.table, (fit || part).table || input.table, null);
     if (h) fitToData(def, h, (fit || part).table || input.table);
+    if (save && (fit || part)) saveTable((fit || part).table || input.table);
   }
-  out(h ? 'Open it with this data:' : 'Open it (example data):');
-  out(`  ${await link(def, h && h.spec)}`);
+  await link(def, h && h.spec, 'Open it');
 } else {
   const input = readTable();
   if (!input) fail('Give a file, "-" for stdin, --chart <id> or --list.');
@@ -318,8 +475,8 @@ if (list) {
   if (top) {
     const h = holds.get(top.def.id) || held(top.def, top.table || table);
     if (h) fitToData(top.def, h, top.table || table);
-    out(`Open ${top.def.id} with this data:`);
-    out(`  ${await link(top.def, h && h.spec)}`);
+    if (save) saveTable(top.table || table);
+    await link(top.def, h && h.spec, `Open ${top.def.id}`);
     out('Another chart, or other columns: --chart <id> [--columns a,b,c] and the same input.');
   } else {
     out('No chart reads this table. Try --swap, or --header / --no-header.');

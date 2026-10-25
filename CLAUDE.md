@@ -2197,11 +2197,35 @@ top pick drew the wrong thing on ten: a bar per row of 150 iris flowers, a
 line of the `year` column where the reason was about passengers, a histogram
 with a group per date. So each suggestion prints what the chart *holds* once
 it has read the table — `def.toText(spec)`, the table the data editor would
-open on — and flags three things with a `!`: labels that repeat on a
+open on — and flags what is wrong with it with a `!`: labels that repeat on a
 one-mark-per-row chart, a distribution whose groups are one per row or are
 numbers, and a column the reason names whose first value the chart does not
 hold. `--columns` lets the assistant choose the columns instead. The SKILL.md
 tells it to resolve every `!` before handing over a link.
+
+**A second round, on twelve files it had never seen, added four more.** Each
+is a way a chart held the right columns and still drew the wrong thing:
+
+- **Dates that run backwards or repeat.** A long table (one row per stock per
+  date) drew five stocks as one line doubling back in time, and an ONS series
+  holds its years, then its quarters, then its months. The labels are read by
+  `timeaxis.js`, the parser the axis itself uses. A column that runs newest
+  first is an order, so only one that goes both ways is flagged.
+- **Measures fiftyfold apart on one axis**, such as CO₂'s uncertainty flat
+  along the bottom of its mean. A chart with a right axis is exempt, being
+  the answer.
+- **Blank cells**, which `dataio` reads as 0. They are counted by comparing
+  zeros in the reader's table with zeros in the held one, so a real 0 is not
+  blamed.
+- **More groups than `PALETTE` has colours**, where the colours repeat and
+  the groups cannot be told apart.
+
+There is a note for **rows of notes above the data** too. An ONS download
+opens with eight two-cell rows ("Title", "CDID", "Unit" …) shaped like the
+data under them, so neither the parser's title rule nor its header guess can
+drop them, and every chart read a column of words and numbers. They hold no
+number where nearly every row below does, which is what `notesAbove` checks;
+`--skip N` drops them.
 
 **And the link takes off the example's dress.** `applyData` replaces the
 numbers and keeps the presentation, so a link put 3,260 commits on an axis
@@ -2212,10 +2236,27 @@ Each column is traced by its values, because a chart may put the first column
 on x. It also sizes each bound slider to the data, measuring error bars to the
 end of the whisker, because those axes are hard scales. Controls are found by
 label, the rule `facet.js` learned: `opts.max` is an axis on one chart and a
-circle on another. It prints what it changed. Other wording the reader did not
-rewrite, such as a series called "Product" or a pie's "of traffic", is listed
-rather than cleared, since whether it still fits is a judgement. The reader's
-own units are theirs to add.
+circle on another. On the scatters a minimum and its units have no control of
+their own, so they are found from the maximum they sit beside (`opts.xMax`,
+`opts.xMin`, `opts.xPrefix`): the example's `yMin` of 2 hid every point below
+it. An axis that reads position (an x or y slider, or a chart whose minimum is
+a slider at all) does not have to hold zero, so data far from it gets an axis
+of its own: flippers of 172–231mm run 160–240 rather than 0–250. It prints
+what it changed. Other wording the reader did not rewrite, such as a series
+called "Product" or a pie's "of traffic", is listed rather than cleared, since
+whether it still fits is a judgement. The reader's own units are theirs to
+add.
+
+**A link can be too long to open.** The share link carries the table in its
+query string, and GitHub Pages answers a request target past 8,192 characters
+with `414 URI Too Long`. That limit was measured rather than assumed: 8,221
+characters of URL open and 8,222 do not. Seven final links across the two
+rounds were past it. Six had rendered on a local `http.server`, whose limit
+is 64 KB, so nothing looked wrong until the seventh, at 92,683 characters,
+failed there too. Past the limit the script
+prints the chart's plain link and says why, and `--save` writes the table the
+chart reads as CSV for the studio's upload. The fix in the site itself would
+be to carry the table in the fragment, which is never sent to a server.
 
 ### The data dialog
 
@@ -2613,7 +2654,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **911 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **918 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

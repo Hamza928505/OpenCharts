@@ -21,7 +21,8 @@
 
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -190,6 +191,46 @@ check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
     'kind,weight,mpg\nusa,3504,18\nusa,3693,15\neurope,1835,26\njapan,2372,24\njapan,2130,27\n').stdout) || '{}').opts) || {};
   check(fitted.xTitle === 'weight' && fitted.yTitle === 'mpg' && fitted.xMax === 4000 && fitted.yMax === 30,
     'and its link drops the example\'s axis titles and an axis sized for the example', JSON.stringify(fitted));
+
+  /* A second round, on twelve files the first had not seen: five stocks in
+   * one long table, CO₂'s uncertainty beside its mean, blank cells, an ONS
+   * download whose first eight rows are notes, and links past the 8 KB that
+   * GitHub Pages answers with a 414. */
+  check(/the dates run backwards/.test(skill(['--chart', 'line-basic', '-'],
+    'date,price\n2000-01,10\n2000-02,11\n2000-01,20\n2000-02,21\n').stdout),
+    'and it says when one line would hold several series, one after another');
+  check(/too small to see/.test(skill(['--chart', 'line-multi', '-'],
+    'year,mean,unc\n2000,370,0.1\n2001,372,0.12\n2002,374,0.11\n').stdout),
+    'and when a measure is too small to see beside another on one axis');
+  check(/1 blank cell in "rate" is drawn as 0/.test(skill(['--chart', 'line-basic', '-'],
+    'month,rate\nJan,4\nFeb,\nMar,5\n').stdout),
+    'and when a blank cell would be drawn as a zero nobody measured');
+  check(/\b10 groups and \d+ colours/.test(skill(['--chart', 'scatter-clusters', '-'], 'kind,x,y\n'
+    + Array.from({ length: 10 }, (_, i) => `g${i},${i},${i * 2}\ng${i},${i + 1},${i * 3}`).join('\n') + '\n').stdout),
+    'and when there are more groups than colours to tell them apart');
+  const notes = 'Title,Inflation\nUnit,%\nSource,ONS\n1989,5.7\n1990,8.0\n1991,7.5\n1992,4.6\n';
+  const skipped = skill(['--skip', '3', '-'], notes);
+  check(/--skip 3\b/.test(skill(['-'], notes).stdout) && /^1\. line-basic/m.test(skipped.stdout)
+    && /5\.7/.test(await linked(skipped.stdout)),
+    'and it spots notes above the data, and reads the table once they are skipped', skipped.stdout.slice(0, 200));
+  const saved = join(tmpdir(), `oc-choose-${process.pid}.csv`);
+  const dead = skill(['--chart', 'scatter-basic', '--save', saved, '-'],
+    'x,y\n' + Array.from({ length: 2000 }, (_, i) => `${i},${(i * 7919) % 9973}`).join('\n') + '\n');
+  const file = await readFile(saved, 'utf8').catch(() => '');
+  await rm(saved, { force: true });
+  check(/no link can hold this table/.test(dead.stdout) && !/[?&]s=/.test(dead.stdout)
+    && file.split('\n').length === 2002 && file.startsWith('x,y\n0,0\n'),
+    'and a table too big for any link goes to a file, not into a link the server refuses', dead.stdout.slice(-300));
+  // An axis far from zero starts near its data; the example's own minimum
+  // and units, which sit beside its maximum with no control, come off too.
+  const flippers = (JSON.parse(await linked(skill(['--chart', 'scatter-clusters', '-'],
+    'kind,flipper,mass\na,172,3000\nb,231,6000\na,190,4000\n').stdout) || '{}').opts) || {};
+  const small = (JSON.parse(await linked(skill(['--chart', 'scatter-basic', '-'],
+    'x,y\n1,0.5\n2,1.5\n3,1\n').stdout) || '{}').opts) || {};
+  check(flippers.xMin === 160 && flippers.xMax === 240 && flippers.yMin === 0
+    && small.yMin === 0 && small.xPrefix === '',
+    'and its axes start near data far from zero, without the example\'s minimum or units',
+    JSON.stringify({ flippers, small }));
 }
 
 /* The README answers two readers, and says what this is not.
