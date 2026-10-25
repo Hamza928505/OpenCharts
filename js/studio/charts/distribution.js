@@ -173,12 +173,17 @@ export const distributionCharts = [
           type: 'boxplot',
           data: {
             labels: spec.groups.map((g) => g.label),
-            datasets: spec.groups.map((g) => {
+            datasets: spec.groups.map((g, i) => {
               const values = g.values || [];
               return {
                 label: g.label,
                 // The boxplot controller takes one array of raw values per slot.
-                data: [values],
+                // A group keeps its own dataset, so the legend can hide it, and
+                // fills only its own slot; `grouped: false` centres that box on
+                // its label at full width. `[values]` filled slot 0 for every
+                // group, and drew every box over the first label.
+                data: spec.groups.map((_, j) => (j === i ? values : null)),
+                grouped: false,
                 backgroundColor: withAlpha(g.color, spec.opts.alpha),
                 borderColor: g.color,
                 borderWidth: spec.opts.borderWidth,

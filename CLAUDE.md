@@ -2577,7 +2577,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **905 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
@@ -2637,6 +2637,12 @@ nothing from the spec at all.
   chart's data and requires the prompt to change — falling back to perturbing
   *names* for the three edge-list charts whose examples hold no numbers, since
   skipping them would leave three charts free to hand out a stale brief.
+- A chart can draw every mark in the wrong place and pass every check, because
+  "it renders, it is not blank, the data reaches it" never asks *where*. The
+  box plot gave each group a dataset holding its values at slot 0, so all five
+  boxes bunched over the first label at a seventh of a slot wide, on its own
+  example. Each group now fills only its own slot, with `grouped: false`, and
+  the suite measures every box against the label it belongs to.
 
 Exports are served over http from the project root during tests rather than
 via `setContent`, so relative imports and CDN scripts resolve the way they

@@ -461,6 +461,33 @@ check(Object.values(stackTotals).every(({ radius, initialCorners, hiddenCorners 
   && hiddenCorners[1].bottomLeft === radius),
   'stacks round only their visible outer corners');
 
+/* Every box over its own label. Each group's dataset held its values at slot
+ * 0, so all of them bunched over the first label, a seventh of a slot wide —
+ * on the chart's own example, past every check above, which asks whether a
+ * chart draws and never where. */
+const boxes = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:800px;height:400px;position:fixed;left:-9999px';
+  document.body.appendChild(host);
+  const def = reg.getChart('box-plot');
+  const inst = eng.renderChart(def, host, reg.newSpec(def));
+  if (inst.whenReady) await inst.whenReady;
+  const chart = inst.chart;
+  const x = chart.scales.x;
+  const step = x.getPixelForValue(1) - x.getPixelForValue(0);
+  const out = chart.data.datasets.map((_, i) => {
+    const box = chart.getDatasetMeta(i).data[i];
+    return { off: Math.round(box.x - x.getPixelForValue(i)), wide: box.width / step };
+  });
+  eng.destroyInstance(inst);
+  host.remove();
+  return out;
+});
+check(boxes.length > 1 && boxes.every((b) => Math.abs(b.off) < 1 && b.wide > 0.5),
+  'a box plot draws each box over its own label, at the width of its slot', JSON.stringify(boxes));
+
 /* Suite 3 — the gallery works as a page, not just as modules. */
 await page.goto(`${base}/index.html`, { waitUntil: 'networkidle' });
 // Previews mount near the viewport. The upload/chat panel can put every tile
