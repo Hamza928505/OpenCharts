@@ -164,6 +164,13 @@ export function valueAxis(spec, values = [], extra = {}) {
   }
   const min = asBound(ax.min);
   const max = asBound(ax.max);
+  const callback = tickFormat({
+    prefix: o.prefix, suffix: o.suffix,
+    separator: format === 'thousands',
+    compact: format === 'compact',
+    decimals: o.decimals == null ? null : o.decimals,
+    locale: ax.locale || '',
+  });
 
   return yAxis({
     ...(scale ? { type: scale } : {}),
@@ -171,13 +178,9 @@ export function valueAxis(spec, values = [], extra = {}) {
     ...(max !== undefined ? { max } : {}),
     ticks: {
       ...TICK,
-      callback: tickFormat({
-        prefix: o.prefix, suffix: o.suffix,
-        separator: format === 'thousands',
-        compact: format === 'compact',
-        decimals: o.decimals == null ? null : o.decimals,
-        locale: ax.locale || '',
-      }),
+      // With nothing to add, the tick is Chart.js's own, which takes its
+      // decimals from the step; plain only asks it not to group thousands.
+      ...(callback ? { callback } : { format: { useGrouping: false } }),
       ...extraTicks,
     },
     ...rest,

@@ -5822,6 +5822,44 @@ generated.set('/export-axis.html', axis.standalone);
   check(!errs.length && shown.type === 'logarithmic' && /^\d+(,\d+)?\s?(Mio\.?|M)$/.test(shown.tick),
     'an export runs on a log axis with German compact ticks', errs[0] || JSON.stringify(shown));
 }
+
+/* A tick reads as the number it is. `tickFormat()` returns `undefined` when
+ * there is nothing to format, twenty axes stored that as `ticks.callback`,
+ * and Chart.js fills a default in only where a key is absent — so its numeric
+ * formatter never ran, and NASA's temperature anomalies, stepping by 0.2, read
+ * 0.3999999999999999 in the studio and in four exports. A prefix did the same
+ * through `'$' + v`. */
+const tickText = await page.evaluate(async () => {
+  const { CHARTS, newSpec } = await import('/js/studio/registry.js');
+  const { renderChart, generateCode, destroyInstance } = await import('/js/studio/engines.js');
+  const { applyData } = await import('/js/studio/dataio.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:800px;height:400px;position:fixed;left:-9999px';
+  document.body.appendChild(host);
+  const labels = (prefix) => {
+    const def = CHARTS.find((c) => c.id === 'line-basic');
+    const spec = newSpec(def);
+    applyData(def, spec, 'year,anomaly\n1880,-0.6\n1900,-0.1\n1950,0.4\n2020,1.2');
+    Object.assign(spec.opts, { prefix, suffix: '' });
+    const inst = renderChart(def, host, spec);
+    const out = inst.chart.scales.y.ticks.map((t) => t.label);
+    destroyInstance(inst);
+    return out;
+  };
+  const shown = { plain: labels(''), prefixed: labels('$') };
+  host.remove();
+  return {
+    ...shown,
+    undefinedCallbacks: CHARTS.filter((d) => d.chartjs && /callback: undefined/.test(generateCode(d, newSpec(d)).js))
+      .map((d) => d.id),
+  };
+});
+const noisy = [...tickText.plain, ...tickText.prefixed].filter((l) => /\d\.\d{5,}/.test(l));
+check(!noisy.length && tickText.plain.includes('0.4') && tickText.prefixed.includes('$0.4'),
+  'an axis stepping by a fraction reads 0.4, not 0.3999999999999999, with or without a prefix',
+  [...tickText.plain, '|', ...tickText.prefixed].join(' '));
+check(!tickText.undefinedCallbacks.length, 'and no export hands Chart.js a tick callback of undefined',
+  tickText.undefinedCallbacks.join(', '));
 console.log(`  ${green('✓')} axis — format, locale, scale and bounds on nine charts, refused where log cannot`);
 
 /* Suite — a line at a value.

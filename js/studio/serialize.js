@@ -159,7 +159,9 @@ export function tickFormat({
   // export formats numbers the way the author saw them rather than the way
   // the reader's browser happens to. Blank means the browser's own.
   const loc = locale ? q(locale) : 'undefined';
-  let value = 'v';
+  // A tick is a step the scale added up, so 0.1 + 0.2 arrives as
+  // 0.30000000000000004; twelve significant figures print it as 0.3.
+  let value = 'Number(v.toPrecision(12))';
   if (compact) {
     // 1234567 → 1.2M. `Intl` has done this since 2020 in every browser that
     // runs the rest of this library, and it knows what a lakh is.

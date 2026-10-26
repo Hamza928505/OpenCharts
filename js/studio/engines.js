@@ -211,6 +211,27 @@ function renderFacetGrid(def, host, spec, panels, opts) {
   };
 }
 
+/**
+ * A chart's finished Chart.js config, with no option left holding `undefined`.
+ *
+ * Chart.js fills a default in only where a key is *absent*, so a key holding
+ * `undefined` is not a gap to fill but a value that shadows the default.
+ * `tickFormat()` returns `undefined` when there is nothing to format, twenty
+ * axes store that as `ticks.callback`, and the numeric formatter never ran:
+ * an axis stepping by 0.1 printed 0.30000000000000004, and every export
+ * printed `callback: undefined` to do it again. The preview and both exports
+ * are built here, so they are all fixed here.
+ */
+function builtConfig(def, spec, ctx, bounds) {
+  const config = chartJsEffects(applyScaleBounds(def.chartjs.build(spec, ctx), bounds), spec);
+  const prune = (o) => Object.keys(o).forEach((k) => {
+    if (o[k] === undefined) delete o[k];
+    else if (o[k] && Object.getPrototypeOf(o[k]) === Object.prototype) prune(o[k]);
+  });
+  if (config.options) prune(config.options);
+  return config;
+}
+
 function renderOne(def, host, spec, opts = {}) {
   host.innerHTML = '';
   // A canvas is a rectangle of pixels and an SVG of paths is barely better, so
@@ -246,7 +267,7 @@ function renderOne(def, host, spec, opts = {}) {
     wrap.appendChild(canvas);
     host.appendChild(wrap);
     try {
-      const config = chartJsEffects(applyScaleBounds(def.chartjs.build(spec, ctxInfo), opts.bounds), spec);
+      const config = builtConfig(def, spec, ctxInfo, opts.bounds);
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         config.options = { ...config.options, animation: false };
       }
@@ -860,9 +881,7 @@ function buildJS(def, spec) {
     if (panels) {
       const bounds = sharedScaleBounds(def, panels, spec.facet);
       const built = panels.map((p) => panelEntry(p, {
-        config: chartJsEffects(applyScaleBounds(
-          def.chartjs.build(p.spec, { width: panelWidth, height: h }), bounds,
-        ), p.spec),
+        config: builtConfig(def, p.spec, { width: panelWidth, height: h }, bounds),
       }));
       return tidy([
         ...header,
@@ -883,7 +902,7 @@ function buildJS(def, spec) {
       ].join('\n'));
     }
 
-    const config = chartJsEffects(def.chartjs.build(spec, { width: 800, height: heightFor(def, {}) }), spec);
+    const config = builtConfig(def, spec, { width: 800, height: heightFor(def, {}) });
     const lines = [
       ...header,
       ...dateAdapterSource(usesTimeScale(config)),

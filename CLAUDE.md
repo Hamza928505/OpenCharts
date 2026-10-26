@@ -1860,8 +1860,17 @@ so a bound is a decision and never a default — and `valueAxis(spec, values,
 extra)` is the scale it builds. The bar and line families carry it, nine
 charts; `opts.axis` on their specs holds `AXIS_DEFAULTS`.
 
-Four rules, each checked:
+Five rules, each checked:
 
+- **A tick reads as the number it is.** Chart.js fills a default in only
+  where a key is *absent*, so `callback: undefined` — what `tickFormat()`
+  returns with nothing to format, stored by twenty axes — shadowed its numeric
+  formatter, and an axis stepping by 0.2 read `0.3999999999999999` in the
+  studio and in four exports. `builtConfig` in `engines.js` drops every
+  `undefined` option on the way to the preview and both exports; `tickFormat`
+  prints `Number(v.toPrecision(12))` rather than `v`, which is the same noise
+  behind a prefix; and *plain* is Chart.js's own formatter told
+  `useGrouping: false`.
 - **Everything is a literal in the export.** `tickFormat` bakes the locale
   and the compact notation in — `new Intl.NumberFormat('de-DE', { notation:
   'compact' })` — so an export formats numbers the way the author saw them,
@@ -2577,7 +2586,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **906 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
