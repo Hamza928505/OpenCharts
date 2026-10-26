@@ -31,28 +31,22 @@
 
 import { CHARTS } from './registry.js';
 import { CHART_HELP, helpFor } from './chart-help.js';
+import { LIMITS } from './profile.js';
 
 /**
  * What each suggestion is *for*, so a surface can say which question it answers.
  * `analysis-charts.js` uses the same words for its plan kinds.
  */
 export const GOALS = ['comparison', 'distribution', 'relationship', 'trend',
-  'composition', 'frequency', 'multivariate'];
+  'composition', 'frequency', 'multivariate', 'geographic'];
 
 /**
- * The cut-offs the rules and `analysis-charts.js` both read. They were typed
- * twice, and two copies of a threshold drift: one surface would call 13 groups
- * "few enough for bars" while the other called them too many.
+ * The cut-offs the rules and `analysis-charts.js` both read, defined beside the
+ * profiler that needs one of them. They were typed twice, and two copies of a
+ * threshold drift: one surface would call 13 groups "few enough for bars" while
+ * the other called them too many.
  */
-export const LIMITS = {
-  fewCategories: 12, // most a vertical bar or box plot labels legibly
-  manyCategories: 60, // past this a bar per value stops being readable
-  pieMax: 5, // most slices a pie stays readable at
-  gridSide: 20, // most rows or columns a heatmap axis carries
-  gridCells: 400, // most cells in a two-way grid
-  distributionRows: 30, // fewest rows worth drawing a shape from
-  manyMeasures: 4, // measures per row before parallel axes make sense
-};
+export { LIMITS };
 
 /**
  * The rules.
@@ -66,6 +60,17 @@ export const LIMITS = {
  * with.
  */
 const RULES = [
+  {
+    id: 'geographic',
+    goal: 'geographic',
+    when: (p) => (p.geo || []).some((c) => c.geo.kind === 'country') && p.numbers.length >= 1,
+    charts: () => ['choropleth', 'bar-horizontal', 'treemap'],
+    weight: 95,
+    why: (p) => `"${p.geo.find((c) => c.geo.kind === 'country').name}" names countries and `
+      + (p.numbers.length === 1 ? `"${p.numbers[0].name}" measures something`
+        : `${p.numbers.length} columns measure something`),
+    encodes: () => 'a map shades each country by its value, wherever the names match the atlas it draws.',
+  },
   {
     id: 'time-series',
     goal: 'trend',
@@ -206,6 +211,7 @@ export function namedCharts() {
       numbers: measures.slice(0, howMany),
       categories: [{ name: 'c', distinct: 4 }, { name: 'c2', distinct: 4 }],
       dates: [{ name: 'd' }],
+      geo: [{ name: 'g', geo: { kind: 'country' } }],
       correlations: [{ a: 'n', b: 'n2', r: 0.9 }],
       separators: [{ by: 'c', measure: 'n', groups: 4, spread: 0.5 }],
     };
