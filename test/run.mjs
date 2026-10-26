@@ -2419,6 +2419,35 @@ const unbalanced = Object.entries(globeDrag).filter(([, v]) => !v.balanced).map(
 check(!notTurning.length, 'every globe projection can be dragged to rotate', notTurning.join(', '));
 check(!notGrab.length, 'a draggable globe says so with a grab cursor', notGrab.join(', '));
 check(!unbalanced.length, 'a drag removes the listeners it added', unbalanced.join(', '));
+
+// The World Bank's file carries "World" and every income group beside its
+// countries. None is on the map, so none may set the colour key.
+const mapKey = await page.evaluate(async () => {
+  const reg = await import('/js/studio/registry.js');
+  const eng = await import('/js/studio/engines.js');
+  const host = document.createElement('div');
+  host.style.cssText = 'width:600px;height:440px;position:fixed;left:-9999px;top:0';
+  document.body.appendChild(host);
+  const def = reg.getChart('choropleth');
+  const spec = reg.newSpec(def);
+  spec.regionValues = { World: 8.1e9, India: 1.45e9, China: 1.41e9, France: 6.8e7, Chile: 2e7 };
+  const inst = eng.renderChart(def, host, spec);
+  for (let i = 0; i < 60 && !host.querySelector('[data-tip^="India:"]'); i++) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const key = host.querySelector('svg').lastElementChild;
+  const swatches = [...key.querySelectorAll('rect')];
+  const india = host.querySelector('[data-tip^="India:"]');
+  const out = {
+    top: !!india && india.getAttribute('fill') === swatches[swatches.length - 1].getAttribute('fill'),
+    wide: [...key.querySelectorAll('text')].filter((t) => t.getComputedTextLength() > 26).map((t) => t.textContent),
+  };
+  eng.destroyInstance(inst);
+  host.remove();
+  return out;
+});
+check(mapKey.top, 'a "World" row is not a country, so it does not set the map\'s colour key');
+check(!mapKey.wide.length, 'the colour key\'s numbers fit under their swatches', mapKey.wide.join(', '));
 console.log(`  ${green('✓')} geo focus — country clipping, unknown names, globe rotation`);
 
 /* Suite 14 — a shared link round-trips an edited chart. */

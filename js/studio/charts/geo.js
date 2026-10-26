@@ -307,10 +307,13 @@ export const geoCharts = [
           const projection = makeProjection(o.projection, geo, W, H - (o.showLegend ? 30 : 0), o.rotate, extent);
           const path = d3.geoPath(projection);
 
+          // The key spans the countries on the map and nothing else. A
+          // "World" row beside them, as the World Bank's files carry, would
+          // push every real country into the palest band.
+          const value = new Map(geo.features.map((d) => [d, valueFor(d.properties.name || String(d.id), spec.regionValues)]));
+          const drawn = [...value.values()].filter((v) => v != null);
           // Quantise a continuous scale so the key reads as discrete bands.
-          const domain = spec.regionValues && Object.keys(spec.regionValues).length
-            ? d3.extent(Object.values(spec.regionValues))
-            : [0, 100];
+          const domain = drawn.length ? d3.extent(drawn) : [0, 100];
           const colour = d3.scaleQuantize()
             .domain(domain[0] === domain[1] ? [domain[0], domain[0] + 1] : domain)
             .range(d3.quantize(d3.interpolateRgb(spec.lowColor, spec.highColor), o.steps));
@@ -328,18 +331,20 @@ export const geoCharts = [
             .attr('d', path)
             .attr('fill', (d) => {
               if (focus.length && !inFocus(d)) return o.neighbourColor;
-              const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
+              const v = value.get(d);
               return v == null ? o.noDataColor : colour(v);
             })
             .attr('stroke', '#ffffff')
             .attr('stroke-width', o.strokeWidth)
             .attr('data-tip', (d) => {
-              const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
+              const v = value.get(d);
               return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
             });
 
           if (o.showLegend) {
             const swatch = 26;
+            // 1.4B fits under a swatch; 1408975000 runs into the next three.
+            const short = new Intl.NumberFormat(undefined, { notation: 'compact' });
             const key = svg.append('g').attr('transform', `translate(14,${H - 22})`);
             colour.range().forEach((c, i) => {
               key.append('rect')
@@ -350,7 +355,7 @@ export const geoCharts = [
                 .attr('font-size', 9)
                 .attr('font-family', '"DM Sans", system-ui, sans-serif')
                 .attr('fill', 'currentColor')
-                .text(Math.round(domain[0] + ((domain[1] - domain[0]) / o.steps) * i));
+                .text(short.format(domain[0] + ((domain[1] - domain[0]) / o.steps) * i));
             });
           }
         }).catch((err) => geoMessage(host, err.message));
@@ -408,6 +413,10 @@ export const geoCharts = [
 
         loadTopology(url).then((topo) => {
           const geo = topojson.feature(topo, topo.objects.countries);
+          // A turn moves the countries, not their values. The key spans the
+          // countries on the map: a "World" row is not one of them.
+          const value = new Map(geo.features.map((d) => [d, valueFor(d.properties.name || String(d.id), spec.regionValues)]));
+          const drawn = [...value.values()].filter((v) => v != null);
 
           const draw = () => {
             svg.selectAll('*').remove();
@@ -417,9 +426,7 @@ export const geoCharts = [
             const projection = makeProjection('globe', geo, W, H, o.rotate, extent);
             const path = d3.geoPath(projection);
 
-            const domain = spec.regionValues && Object.keys(spec.regionValues).length
-              ? d3.extent(Object.values(spec.regionValues))
-              : [0, 100];
+            const domain = drawn.length ? d3.extent(drawn) : [0, 100];
             const colour = d3.scaleQuantize()
               .domain(domain[0] === domain[1] ? [domain[0], domain[0] + 1] : domain)
               .range(d3.quantize(d3.interpolateRgb(spec.lowColor, spec.highColor), o.steps));
@@ -455,13 +462,13 @@ export const geoCharts = [
             svg.append('g').selectAll('path').data(geo.features).join('path')
               .attr('d', path)
               .attr('fill', (d) => {
-                const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
+                const v = value.get(d);
                 return v == null ? o.noDataColor : colour(v);
               })
               .attr('stroke', '#ffffff')
               .attr('stroke-width', o.strokeWidth)
               .attr('data-tip', (d) => {
-                const v = valueFor(d.properties.name || String(d.id), spec.regionValues);
+                const v = value.get(d);
                 return d.properties.name + ': ' + (v == null ? 'no data' : v.toFixed(1) + o.suffix);
               });
 

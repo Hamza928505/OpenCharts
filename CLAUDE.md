@@ -230,6 +230,13 @@ in the Sources panel and the code comments but are never emitted as a
 `<script>` tag — use `scriptsOnly()` when generating tags, `cdnOnly()` when
 listing dependencies.
 
+**The choropleth's and the globe's colour keys span the countries on the map,
+never every row of the table.** The World Bank's population file carries
+"World" and every income group beside its countries. Read as values, "World"
+put the top of the key at 8.1 billion and left every country but China and
+India in the palest band. The key prints its numbers compactly too: 1408975000
+under a 26px swatch ran into the next three labels.
+
 ### No chart generates its own data
 
 Twenty-four charts used to draw a simulation from a seed and a row of parameter
@@ -2577,7 +2584,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **906 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above
