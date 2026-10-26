@@ -646,6 +646,25 @@ carries `score` and `scoreType: 'relative'` so a program reading it cannot take
 `test/recommend-ranking.mjs` holds all of it, including that every rule has a
 weight and every weight a rule.
 
+### Measuring the recommender
+
+`node test/benchmark.mjs` (`npm run benchmark`) scores what the skill would
+offer - the whole-table suggestions, the aggregated views, and the two together -
+for sixteen real public tables in `test/benchmark/data`, against graded labels,
+and fails if any measure drops below `baseline.json`. **Read
+`test/benchmark/README.md` before quoting a number.** The labels were proposed by
+the assistant and are marked `reviewed: false`; the run prints that first. Sixteen
+tables can show a regression and cannot show an accuracy. Four files are held out:
+they were labelled in a commit before the recommender was run on them and are
+never to be tuned against, though the same person labelled them.
+
+The weights in `recommend-weights.js` may be tuned against the `dev` split only,
+and a change that moves the baseline is committed with `--update` and a sentence
+saying why. The first run's findings (a country table with other columns never
+gets a map, a long table of groups leads with one line, calendar parts read as
+measures, the aggregated views barely vary) are listed in that README and are the
+next things to fix.
+
 ### Which chart fits a table
 
 `DataMatch.js` asks `checkTableShape` for every chart at once and hands the
