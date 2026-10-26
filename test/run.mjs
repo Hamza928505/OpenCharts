@@ -2145,7 +2145,12 @@ const names = await page.evaluate(async () => {
       same("C\u00f4te d'Ivoire", 'Ivory Coast'),
       same('United States of America', 'USA'),
     ],
-    distinct: !same('Congo', 'Dem. Rep. Congo'),
+    distinct: !same('Congo', 'Dem. Rep. Congo') && !same('Congo, Rep.', 'Congo, Dem. Rep.'),
+    // A population map drawn from the World Bank's own file left Russia,
+    // Egypt, Iran and both Koreas grey: its spellings were not the atlas's.
+    worldBank: ['Russian Federation', 'Egypt, Arab Rep.', 'Iran, Islamic Rep.', 'Congo, Dem. Rep.', 'Congo, Rep.',
+      'Korea, Rep.', "Korea, Dem. People's Rep.", 'Turkiye', 'Venezuela, RB', 'Lao PDR', 'Bahamas, The']
+      .filter((n) => !countries.some((c) => same(c.name, n))),
   };
 });
 
@@ -2168,6 +2173,7 @@ check(names.congo === 'CG' && names.drc === 'CD',
 check(names.matches.every(Boolean), 'every spelling of a country resolves to one key',
   names.matches.join(','));
 check(names.distinct, 'and a country whose name contains another stays distinct');
+check(!names.worldBank.length, 'the World Bank\'s spellings land on the map', names.worldBank.join(', '));
 
 /* The country's cities, ticked straight onto the map from the sidebar. */
 await page.goto(`${base}/studio.html?chart=city-map`, { waitUntil: 'networkidle' });

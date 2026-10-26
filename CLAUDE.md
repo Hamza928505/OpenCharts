@@ -2345,6 +2345,13 @@ why. It folds accents before normalising, so `Cote d'Ivoire` typed without them
 matches the atlas. It is serialised into exported maps, so it references
 nothing outside itself and rides in every geo chart's `helpers: []`.
 
+**It knows the World Bank's spellings**, because the World Bank's own population
+file is what a world map gets drawn from. `Russian Federation`,
+`Egypt, Arab Rep.`, `Korea, Rep.` and sixteen more left nineteen countries
+holding 770 million people grey, Iran and both Congos among them. An alias is
+added for a spelling seen in a real file, never one imagined, and the suite
+holds them to the atlas.
+
 `geodata.js` owns both lists. `loadCountries()` reads `data/countries.json`
 (`[[mapName, iso2, cityCount], …]`); `loadCities(iso2)` reads
 `data/cities/<ISO2>.json` (`[[name, lat, lon], …]`) and caches it. Cities are
@@ -2577,7 +2584,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **905 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

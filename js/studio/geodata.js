@@ -208,6 +208,15 @@ export function countryKey(name) {
     swaziland: 'eswatini', czechrepublic: 'czechia', macedonia: 'northmacedonia',
     southkorea: 'southkorea', korea: 'southkorea', northkorea: 'northkorea',
     vatican: 'vaticancity', eastimor: 'timorleste',
+    bosniaherzegovina: 'bosniaandherzegovina', trinidadtobago: 'trinidadandtobago',
+    // The World Bank's own file, which left Russia, Egypt and both Koreas grey.
+    russianfederation: 'russia', egyptarabrep: 'egypt', iranislamicrep: 'iran',
+    congodemrep: 'democraticrepublicofthecongo', congorep: 'congo',
+    korearep: 'southkorea', koreadempeoplesrep: 'northkorea', turkiye: 'turkey',
+    yemenrep: 'yemen', venezuelarb: 'venezuela', syrianarabrepublic: 'syria',
+    somaliafedrep: 'somalia', laopdr: 'laos', kyrgyzrepublic: 'kyrgyzstan',
+    slovakrepublic: 'slovakia', westbankandgaza: 'palestine', gambiathe: 'gambia',
+    bahamasthe: 'bahamas', bruneidarussalam: 'brunei',
   };
   return SAME[k] || k;
 }
