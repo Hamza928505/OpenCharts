@@ -27,6 +27,8 @@ node tools/build-wiki.mjs OpenCharts.wiki
 | `build-favicon.mjs` | `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` | the brand mark in `css/studio.css` changes |
 | `build-wiki.mjs` | the GitHub wiki's four reference pages, in a clone you pass it | any chart is added, renamed, re-blurbed or re-shaped |
 | `build-counts.mjs` | the chart, category and renderer counts quoted in `README.md`, `CLAUDE.md` and `package.json` | any chart or renderer is added or removed — the suite fails until it is run (`--check` says what is stale) |
+| `make-benchmark-fixtures.mjs` | `test/benchmark/data/*.csv`, the sixteen public tables the recommender is scored on, cut to at most 150 rows | you add a table to the benchmark; the suite itself never fetches |
+| `mcp-server.mjs` | nothing (a stdio MCP server: `profile_table`, `recommend_charts`, `build_chart`, over the choose-chart skill) | — |
 
 ## The data charts open with
 

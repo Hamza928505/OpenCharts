@@ -646,6 +646,34 @@ carries `score` and `scoreType: 'relative'` so a program reading it cannot take
 `test/recommend-ranking.mjs` holds all of it, including that every rule has a
 weight and every weight a rule.
 
+### The skill, three ways
+
+`.claude/skills/choose-chart/choose.mjs` is the library's answer to "which chart?"
+for an assistant, and it has three faces that must say the same thing:
+
+- **Prose**, as it always was.
+- **`--json`**: one object - the profile with each column's role, the suggestions
+  with what each holds and its warnings, the views with their recipes, the link,
+  and `verify`. The prose is its `text` field, and a test holds the two to the
+  same words. `verify.rendered` is **null on purpose**: nothing here draws a
+  chart, and a `true` would be a guess. `ok` means the recipe ran and the chart
+  has rows; `clean` means it also raised no warning.
+- **`tools/mcp-server.mjs`**: `profile_table`, `recommend_charts`, `build_chart`.
+  It holds no logic - each call runs `choose.mjs --json` - and what it adds is a
+  recipe as an object instead of a string quoted through two shells, a table as
+  text, and a refusal to read or write outside the folder it was started in. It
+  speaks MCP's stdio transport directly, so it adds no dependency. **This is not
+  the AI-chat bridge removed from the site** (`86e4e8d`): it talks to no page and
+  makes no request. It is registered by hand (`claude mcp add opencharts -- node
+  tools/mcp-server.mjs`), not by a committed config.
+
+`js/studio/recipe.js` is the one meaning of a recipe, shared by the first two and
+the third: `checkRecipe`, `colIndex`, `toStep`, `applyRecipe`. It throws
+`RecipeError` naming the column that was wrong and the ones that exist. The skill's
+longer instructions are split so the main file stays short: `recipes.md` is the
+recipe reference and `reading-the-output.md` is what to do about each warning.
+`test/skill-adapters.mjs` covers all of it offline.
+
 ### Measuring the recommender
 
 `node test/benchmark.mjs` (`npm run benchmark`) scores what the skill would
@@ -2739,6 +2767,8 @@ the values it changed are shown by the series widget next door.
 | `loader.js` | Fetches a third-party library the first time a chart needs it |
 | `profile.js` | What is in a table — types, spread, outliers, what is wrong with it |
 | `recommend.js` | Which chart to draw, and the reason, and the caution |
+| `recommend-weights.js` | The numbers that order the suggestions - relative scores, not probabilities |
+| `recipe.js` | A recipe (steps, columns, roles, facet) applied to a table; what the skill and its MCP tools both run |
 | `share.js` | The spec compressed into a link, and read back out of one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |

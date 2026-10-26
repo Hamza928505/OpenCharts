@@ -6,6 +6,8 @@
  *   node .claude/skills/choose-chart/choose.mjs --chart <id> [file|-]  one chart: what it reads, and a link
  *   node .claude/skills/choose-chart/choose.mjs --list                 every chart, one line each
  *
+ *   --question <words>       what the reader wants to know; reorders the picks, says how it read it
+ *   --json                   answer with one object (table, suggestions, views, verify, link) instead of prose
  *   --columns a,b,c          keep only these columns, in this order, before anything reads them
  *   --header / --no-header   settle the header row instead of guessing it
  *   --skip N                 drop the first N lines, notes above the data, before reading
@@ -41,7 +43,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseTable, transposeTable, applyData, expectedFormat, looksNumeric } from '../../../js/studio/dataio.js';
 import { profileTable } from '../../../js/studio/profile.js';
-import { toNumber, runSteps, describeStep, numericColumns, OPS, TESTS, AGGREGATES } from '../../../js/studio/transform.js';
+import { toNumber, numericColumns } from '../../../js/studio/transform.js';
+import { RecipeError, checkRecipe, colIndex as recipeColIndex, applyRecipe } from '../../../js/studio/recipe.js';
 import { facetByColumn } from '../../../js/studio/facet.js';
 import { generateCode } from '../../../js/studio/engines.js';
 import { rankCharts } from '../../../js/studio/DataMatch.js';
@@ -63,10 +66,21 @@ const option = (name) => {
   const i = args.indexOf(name);
   return i >= 0 ? args.splice(i, 2)[1] || '' : null;
 };
-const out = (line = '') => console.log(line);
-const fail = (message) => { console.error(message); process.exit(1); };
-
-const RECIPE_KEYS = ['chart', 'skip', 'header', 'swap', 'columns', 'steps', 'roles', 'facet'];
+// --json: say nothing as it goes, hold every line, and answer once at the end as
+// one object. The prose is still what is built; the object adds what a program
+// would otherwise have to take out of it again.
+const jsonMode = flag('--json');
+const log = jsonMode ? [] : null;
+const out = (line = '') => (log ? log.push(line) : console.log(line));
+const fail = (message) => {
+  if (jsonMode) console.log(JSON.stringify({ error: message }));
+  else console.error(message);
+  process.exit(1);
+};
+/** A recipe's own errors say which column was wrong; here they end the run. */
+const guard = (f) => (...a) => {
+  try { return f(...a); } catch (e) { if (e instanceof RecipeError) fail(e.message); throw e; }
+};
 
 /** The recipe, from JSON or a file of it; a flag given as well wins. */
 function readRecipe(arg) {
@@ -77,13 +91,7 @@ function readRecipe(arg) {
   } catch (e) {
     fail(`--recipe takes JSON, or a file holding it: ${e.message}`);
   }
-  if (!r || typeof r !== 'object' || Array.isArray(r)) fail('A recipe is one JSON object, such as {"chart": "line-basic"}.');
-  const unknown = Object.keys(r).filter((k) => !RECIPE_KEYS.includes(k));
-  if (unknown.length) fail(`A recipe has no ${unknown.map((k) => `"${k}"`).join(', ')}. It takes: ${RECIPE_KEYS.join(', ')}.`);
-  if (r.columns != null && !Array.isArray(r.columns)) fail('"columns" is a list of names, such as ["Year", "Mean"].');
-  if (r.steps != null && !Array.isArray(r.steps)) fail('"steps" is a list, such as [{"filter": "Source", "is": "GCAG"}].');
-  if (r.roles != null && !(r.roles.group && r.roles.value)) fail('"roles" takes {"group": "<column>", "value": "<column>"}.');
-  return r;
+  return guard(checkRecipe)(r);
 }
 
 const recipe = readRecipe(option('--recipe'));
@@ -93,6 +101,7 @@ const columnList = option('--columns');
 const columns = columnList !== null ? columnList.split(',') : recipe.columns || null;
 const skip = Number(option('--skip') ?? recipe.skip ?? 0);
 const save = option('--save');
+const question = option('--question');
 const html = option('--html');
 const list = flag('--list');
 const swap = flag('--swap') || recipe.swap === true;
@@ -138,100 +147,14 @@ function readTable() {
   let table = swap
     ? transposeTable({ headers: parsed.hadHeader ? parsed.headers : [], rows: parsed.rows })
     : { headers: parsed.headers, rows: parsed.rows };
-  // Each step names its columns as they stand when it runs: a pivot makes
-  // the columns a later sort names.
-  const steps = (recipe.steps || []).map((raw, i) => {
-    const step = toStep(raw, table.headers, i + 1);
-    const run = runSteps(table, [step]);
-    if (run.errors.length) {
-      fail(`Step ${i + 1} (${step.op}) did not run: ${run.errors[0].replace(/^Step 1 \(\w+\) failed: /, '')}.`
-        + ` The columns there are: ${table.headers.join(', ')}`);
-    }
-    const said = `Step ${i + 1}: ${describeStep(step, table.headers)} — ${table.rows.length} rows in,`
-      + ` ${run.table.rows.length} out, columns ${run.table.headers.join(', ')}`;
-    table = run.table;
-    return said;
-  });
-  if (columns !== null) {
-    // The column a facet splits by is part of the table whether named or not.
-    const named = [...columns, ...(recipe.facet == null ? [] : [recipe.facet])];
-    const picked = [...new Set(named.map((name) => colIndex(table.headers, name)))];
-    table = { headers: picked.map((i) => table.headers[i]), rows: table.rows.map((r) => picked.map((i) => r[i])) };
-  }
-  if (recipe.roles) table = byRoles(table);
+  const made = guard(applyRecipe)(table, { steps: recipe.steps, columns, roles: recipe.roles, facet: recipe.facet }, chartId);
+  table = made.table;
+  const steps = made.steps;
   return { ...parsed, table, comments, steps, notes: skip ? null : notesAbove(text, parsed) };
 }
 
 /** A column by its name, as the reader wrote it; fails naming the ones there are. */
-function colIndex(headers, name, where) {
-  const key = (s) => String(s ?? '').trim().toLowerCase();
-  const i = headers.findIndex((h) => key(h) === key(name));
-  if (i < 0) fail(`No column called "${String(name ?? '').trim()}"${where ? ` (${where})` : ''}. The columns are: ${headers.join(', ')}`);
-  return i;
-}
-
-/**
- * A recipe step, by column name, as the `{op, col, …}` transform.js runs:
- * {"filter": "Source", "is": "GCAG"}, {"sort": "Year", "dir": "desc"},
- * {"pivot": "source", "rows": "year", "value": "net_generation"}.
- */
-function toStep(raw, headers, n) {
-  const ops = OPS.map((o) => o.id);
-  const has = raw && typeof raw === 'object' ? ops.filter((op) => op in raw) : [];
-  if (has.length !== 1) fail(`Step ${n} needs exactly one of ${ops.join(', ')}; it has ${has.join(', ') || 'none'}.`);
-  const op = has[0];
-  const col = (name, part = op) => colIndex(headers, name, `step ${n}, ${part}`);
-  const agg = (a, none) => {
-    if (a == null || a === '') return none;
-    if (!AGGREGATES.some((x) => x.id === a)) fail(`Step ${n}: "agg" is one of ${AGGREGATES.map((x) => x.id).join(', ')}.`);
-    return a;
-  };
-  switch (op) {
-    case 'filter': {
-      const tests = TESTS.map((t) => t.id).filter((t) => t in raw);
-      if (tests.length !== 1) fail(`Step ${n} (filter) needs one test of ${TESTS.map((t) => t.id).join(', ')}.`);
-      const test = tests[0];
-      const both = test === 'between' ? raw.between : [raw[test], ''];
-      if (!Array.isArray(both) || both.length !== 2) fail(`Step ${n}: "between" takes two values, such as [1950, 2000].`);
-      return { op, col: col(raw.filter), test, a: String(both[0] ?? ''), b: String(both[1] ?? '') };
-    }
-    case 'group':
-      return { op, col: col(raw.group), agg: agg(raw.agg, 'sum'), vals: raw.values && raw.values.map((v) => col(v, 'values')) };
-    case 'bin': return { op, col: col(raw.bin), bins: raw.bins || 10 };
-    case 'sort': return { op, col: col(raw.sort), dir: raw.dir === 'desc' ? 'desc' : 'asc' };
-    case 'limit':
-      if (!(raw.limit >= 1)) fail(`Step ${n}: "limit" is how many rows to keep, such as {"limit": 10}.`);
-      return { op, n: raw.limit };
-    case 'transpose': return { op };
-    case 'pivot': {
-      const c = col(raw.pivot);
-      const v = col(raw.value, 'value');
-      // Year, Source, Mean: the rows are the one column left.
-      const k = raw.rows == null ? headers.findIndex((_, i) => i !== c && i !== v) : col(raw.rows, 'rows');
-      return { op, col: c, key: k, val: v, agg: agg(raw.agg, '') };
-    }
-    default: return { op };
-  }
-}
-
-/**
- * The column a distribution chart should take its groups from, named. Its
- * reader takes a first column of words for the groups, and reads a table of
- * numbers as one group per column — so a weekday (1–7) or a wine's quality
- * score (3–8) was drawn as one more group beside the measure. Headed `group`,
- * as the data editor writes it, the column is read as the group names.
- */
-function byRoles(table) {
-  const def = chartId && getChart(chartId);
-  if (!def || !def.data || expectedFormat(def).shape !== 'observations') {
-    const takers = CHARTS.filter((d) => d.data && expectedFormat(d).shape === 'observations').map((d) => d.id);
-    fail(`"roles" names the group and the value for a chart drawing one distribution per group (${takers.join(', ')}).`
-      + ' For any other chart, choose and order its columns with "columns".');
-  }
-  const g = colIndex(table.headers, recipe.roles.group, 'roles.group');
-  const v = colIndex(table.headers, recipe.roles.value, 'roles.value');
-  return { headers: ['group', table.headers[v]], rows: table.rows.map((r) => [r[g], r[v]]) };
-}
+const colIndex = (headers, name, where) => guard(recipeColIndex)(headers, name, where);
 
 /**
  * Rows of notes above the data. An ONS download opens with "Title", "CDID",
@@ -577,13 +500,26 @@ async function link(def, spec, title) {
       + (html ? `${html} holds the chart with it.)`
         : 'Rerun with --html <file.html> for the chart and its data as one page, or --save <file.csv>'
           + ' for the columns it reads, to upload in the chart\'s data editor.)'));
-    return;
+    return { url: plain, withData: false, tooLong: true, length: text.length };
   }
   out(spec ? `${title} with this data:` : `${title} (example data):`);
   out(`  ${text}`);
   if (text.length > URL_COMFORTABLE) {
     out(`  (${text.length} characters: some apps cut long links. If it opens on the example, paste the table into the studio's data editor instead.)`);
   }
+  return { url: text, withData: !!spec, tooLong: false, length: text.length };
+}
+
+/** The three recipes that turn a long table, one line each, one panel each, or one of them. */
+function longFixes({ date, by, measures, names }) {
+  const one = chartId || 'line-basic';
+  const value = measures[0];
+  return [
+    { how: 'a line each', recipe: { chart: 'line-multi', steps: [{ pivot: by, rows: date, value }] },
+      extra: names.length > PALETTE.length ? ` (${names.length} lines and ${PALETTE.length} colours)` : '' },
+    { how: 'a panel each', recipe: { chart: one, columns: [date, value], facet: by } },
+    { how: 'one of them', recipe: { chart: one, steps: [{ filter: by, is: names[0] }], columns: [date, value] } },
+  ];
 }
 
 function describeInput(input) {
@@ -624,18 +560,59 @@ function describeInput(input) {
   // Said once, of the table, rather than under every chart that draws it so.
   const long = !recipe.facet && longTable(table);
   if (long) {
-    const { date, by, measures, names } = long;
-    const one = chartId || 'line-basic';
-    const value = measures[0];
+    const { measures, names, date, by } = long;
     out(`Note (bad): a long table. "${date}" repeats once for each "${by}" (${names.length}: `
       + `${names.slice(0, 3).join(', ')}${names.length > 3 ? ', …' : ''}), so a chart reading it as it is draws`
       + ' those series one after another. A recipe turns it:');
-    out(`  a line each:  ${recipeFor({ chart: 'line-multi', steps: [{ pivot: by, rows: date, value }] })}`
-      + (names.length > PALETTE.length ? ` (${names.length} lines and ${PALETTE.length} colours)` : ''));
-    out(`  a panel each: ${recipeFor({ chart: one, columns: [date, value], facet: by })}`);
-    out(`  one of them:  ${recipeFor({ chart: one, steps: [{ filter: by, is: names[0] }], columns: [date, value] })}`);
+    longFixes(long).forEach((f) => out(`  ${`${f.how}:`.padEnd(14)}${recipeFor(f.recipe)}${f.extra || ''}`));
     if (measures.length > 1) out(`  "value" can be any of ${measures.map((m) => `"${m}"`).join(', ')}.`);
   }
+}
+
+/** Run `f`, and hand back what it returned with the lines it printed (none when not in --json). */
+function marked(f) {
+  const at = log ? log.length : 0;
+  return [f(), log ? log.slice(at) : []];
+}
+const holdsOf = (h) => (h ? { headers: h.headers, rows: h.rows.length, first: h.rows[0] || [], split: h.split || '' } : null);
+/** The `!` lines a report printed, without their marker. */
+const warningsOf = (lines) => lines.filter((l) => /^\s*!/.test(l)).map((l) => l.replace(/^\s*!\s*/, ''));
+/** The table as a program wants it: what was read, what each column is, what was said about it. */
+function tableInfo(input, prof) {
+  const long = !recipe.facet && longTable(input.table);
+  return {
+    summary: summarise(prof),
+    rows: prof.rows,
+    columns: prof.columns.map((c) => ({
+      name: c.name,
+      type: c.type,
+      role: c.role,
+      ...(c.roleWhy ? { roleWhy: c.roleWhy } : {}),
+      ...(c.unit ? { unit: c.unit } : {}),
+      ...(c.geo ? { geo: c.geo.kind } : {}),
+      ignored: !!c.idLike,
+    })),
+    header: { had: !!input.hadHeader, guessed: header === undefined, titleRowsSkipped: input.skipped || 0 },
+    commentLines: input.comments || 0,
+    steps: input.steps,
+    quality: prof.quality,
+    longTable: long ? { ...long, fixes: longFixes(long).map(({ how, recipe: r }) => ({ how, recipe: r })) } : null,
+  };
+}
+/**
+ * Whether the recipe did what it was asked, as far as it can be told without
+ * a browser. `rendered` is null on purpose: drawing is checked by the suite and
+ * by opening the link, and a field that said true here would be a guess.
+ */
+function verifyOf(readable, h, warnings) {
+  const ok = !!h && h.rows.length > 0;
+  return {
+    recipeRan: true, readable, applied: !!h, rows: h ? h.rows.length : 0,
+    warnings: warnings.length, ok, clean: ok && warnings.length === 0, rendered: null,
+  };
+}
+function answer(object) {
+  console.log(JSON.stringify({ ...object, text: log.join('\n') }, null, 2));
 }
 
 if (list) {
@@ -643,6 +620,12 @@ if (list) {
     // The columns are the example's, so they illustrate the layout rather
     // than name what the reader's table must call its columns.
     out(`${d.id} | ${d.category} | ${d.title} | ${d.blurb} | ${d.data ? `e.g. ${expectedFormat(d).columns.join(', ')}` : 'no table'}`);
+  }
+  if (jsonMode) {
+    answer({
+      mode: 'list',
+      charts: CHARTS.map((d) => ({ id: d.id, category: d.category, title: d.title, blurb: d.blurb, reads: d.data ? expectedFormat(d).columns : null })),
+    });
   }
 } else if (chartId !== null) {
   const def = getChart(chartId);
@@ -667,9 +650,13 @@ if (list) {
   if (help.watch) out(`Watch: ${help.watch}`);
 
   let h = null;
+  let readable = null;
+  let said = [];
+  let adjusted = [];
+  let notes = [];
   if (input) {
     out();
-    describeInput(input);
+    [, notes] = marked(() => describeInput(input));
     // Split by a column, the chart reads the rest of the table, once a panel.
     const by = recipe.facet == null ? -1 : colIndex(input.table.headers, recipe.facet, 'facet');
     const body = by < 0 ? input.table : without(input.table, by);
@@ -677,16 +664,39 @@ if (list) {
     const fit = rank.fits.find((e) => e.def.id === def.id);
     const part = rank.partial.find((e) => e.def.id === def.id);
     const miss = rank.misses.find((e) => e.def.id === def.id);
+    readable = fit ? 'fits' : part ? 'partial' : 'miss';
     out(fit ? 'Your table: it reads it as is.'
       : part ? `Your table: it reads only ${names(body, part.using)}.`
         : `Your table: it cannot read it — ${(miss && miss.message) || 'the shape does not match'}`);
     const read = (fit || part) && ((fit || part).table || body);
-    if (read) h = report(def, input.table, withSplit(read, input.table, by), null);
-    if (h) fitToData(def, h, read);
+    if (read) [h, said] = marked(() => report(def, input.table, withSplit(read, input.table, by), null));
+    if (h) [, adjusted] = marked(() => fitToData(def, h, read));
     if (save && read) saveTable(withSplit(read, input.table, by));
     if (html) writePage(def, h && h.spec);
   }
-  await link(def, h && h.spec, 'Open it');
+  const where = await link(def, h && h.spec, 'Open it');
+  if (jsonMode) {
+    const warnings = warningsOf(said);
+    answer({
+      mode: 'chart',
+      chart: {
+        id: def.id, title: def.title, category: def.category, blurb: def.blurb,
+        reads: def.data ? { columns: fmt.columns, hint: fmt.hint || '' } : null,
+        howToRead: help.read || '', watch: help.watch || '',
+      },
+      ...(input ? {
+        table: tableInfo(input, profileTable(input.table)),
+        notes: notes.filter((l) => /^Note/.test(l)),
+        readable,
+        holds: holdsOf(h),
+        warnings,
+        adjustments: adjusted,
+        verify: verifyOf(readable, h, warnings),
+      } : {}),
+      link: where,
+      ...(html ? { page: html } : {}),
+    });
+  }
 } else {
   if (recipe.facet != null) fail('"facet" splits one chart into panels, so the recipe needs a "chart" too.');
   const input = readTable();
@@ -695,14 +705,17 @@ if (list) {
   const prof = profileTable(table);
   const rank = rankCharts(table);
   const readable = new Map([...rank.fits, ...rank.partial].map((e) => [e.def.id, e]));
-  const { suggestions } = recommendCharts(prof, new Set(readable.keys()));
+  const picked = recommendCharts(prof, new Set(readable.keys()), 6, { intent: question });
+  const { suggestions } = picked;
 
   out(`Table: ${summarise(prof)}`);
   out(`Columns: ${prof.columns.map((c) => `${c.name} (${c.idLike ? 'id, ignored' : c.type})`).join(', ')}`);
-  describeInput(input);
+  const [, inputLines] = marked(() => describeInput(input));
   prof.quality.forEach((q) => out(`Note (${q.level}): ${q.text}`));
+  if (picked.intent) out(`Question: read as "${picked.intent}".${picked.intentNote ? ` ${picked.intentNote}` : ''}`);
 
   const holds = new Map();
+  const said = new Map();
   if (suggestions.length) {
     suggestions.forEach((s, i) => {
       const e = readable.get(s.id);
@@ -711,7 +724,9 @@ if (list) {
       out(`   why: ${s.why}`);
       if (s.caution) out(`   watch: ${s.caution}`);
       if (e.using) out(`   from: ${names(table, e.using)}`);
-      holds.set(s.id, report(s.def, table, e.table || table, s.why));
+      const [h, lines] = marked(() => report(s.def, table, e.table || table, s.why));
+      holds.set(s.id, h);
+      said.set(s.id, lines);
     });
   } else {
     out();
@@ -738,14 +753,45 @@ if (list) {
   out();
   out(`${rank.fits.length} charts read this table as is; ${rank.partial.length} more read some of its columns.`);
   const top = suggestions.length ? readable.get(suggestions[0].id) : rank.fits[0] || rank.partial[0];
+  let where = null;
+  let adjusted = [];
   if (top) {
     const h = holds.get(top.def.id) || held(top.def, top.table || table);
-    if (h) fitToData(top.def, h, top.table || table);
+    if (h) [, adjusted] = marked(() => fitToData(top.def, h, top.table || table));
     if (save) saveTable(top.table || table);
     if (html) writePage(top.def, h && h.spec);
-    await link(top.def, h && h.spec, `Open ${top.def.id}`);
+    where = await link(top.def, h && h.spec, `Open ${top.def.id}`);
     out('Another chart, other columns or rows: --chart <id> [--columns a,b,c], or --recipe, and the same input.');
   } else {
     out('No chart reads this table. Try --swap, or --header / --no-header.');
+  }
+  if (jsonMode) {
+    answer({
+      mode: 'rank',
+      table: tableInfo(input, prof),
+      notes: inputLines.filter((l) => /^Note/.test(l)),
+      intent: picked.intent,
+      intentNote: picked.intentNote,
+      suggestions: suggestions.map((s) => {
+        const e = readable.get(s.id);
+        const warnings = warningsOf(said.get(s.id) || []);
+        return {
+          rank: s.rank, id: s.id, title: s.def.title, category: s.def.category, goal: s.goal,
+          why: s.why, caution: s.caution || null,
+          score: s.score, scoreType: s.scoreType,
+          using: e.using ? e.using.map((c) => table.headers[c]) : null,
+          holds: holdsOf(holds.get(s.id)),
+          warnings,
+          verify: verifyOf(e.using ? 'partial' : 'fits', holds.get(s.id), warnings),
+        };
+      }),
+      views: views.map(({ p, recipe: r }) => ({
+        id: p.id, chart: r.chart, title: p.title, goal: p.goal, why: p.why, caution: p.caution || null, recipe: r,
+      })),
+      counts: { fits: rank.fits.length, partial: rank.partial.length },
+      adjustments: adjusted,
+      link: where,
+      ...(html ? { page: html } : {}),
+    });
   }
 }
