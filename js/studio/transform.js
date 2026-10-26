@@ -59,6 +59,7 @@ export const OPS = [
   { id: 'limit', label: 'Keep only the first…' },
   { id: 'transpose', label: 'Swap rows and columns' },
   { id: 'pivot', label: 'One column per value of…' },
+  { id: 'split', label: 'One row per value in a cell…' },
 ];
 
 /**
@@ -330,12 +331,43 @@ function opPivot(table, step) {
   };
 }
 
+/**
+ * One row per value in a cell that lists several: `red; green` becomes two rows,
+ * everything else in the row repeated. A row with nothing to split keeps its
+ * place, so a blank cell stays one blank row rather than vanishing.
+ *
+ * It changes what a row *is*, and so what a total means: the other columns are
+ * copied onto each new row, and a sum of one of them counts it once per value.
+ * The step's description says so, and `layout.js` is where a table that needs
+ * it is noticed. `sep` has no default here; a caller states it.
+ */
+function opSplit(table, step) {
+  const c = step.col | 0;
+  const sep = typeof step.sep === 'string' && step.sep !== '' ? step.sep : ';';
+  const rows = [];
+  for (const r of table.rows) {
+    const parts = String(r[c] ?? '').split(sep).map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) { rows.push([...r]); continue; }
+    for (const part of parts) { const copy = [...r]; copy[c] = part; rows.push(copy); }
+  }
+  return { headers: [...table.headers], rows };
+}
+
+/** What can sit between the values in a cell, as the editor offers them. */
+export const SEPARATORS = [
+  { id: ';', label: 'a semicolon ;' },
+  { id: '|', label: 'a bar |' },
+  { id: ',', label: 'a comma ,' },
+  { id: '/', label: 'a slash /' },
+];
+
 const RUNNERS = {
   filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin, transpose: opTranspose, pivot: opPivot,
+  split: opSplit,
 };
 
 /** The steps Arquero has no equivalent for; a pipeline holding one runs natively. */
-const NATIVE_ONLY = new Set(['bin', 'transpose', 'pivot']);
+const NATIVE_ONLY = new Set(['bin', 'transpose', 'pivot', 'split']);
 
 /**
  * Run every step in order.
@@ -537,6 +569,8 @@ export function describeStep(step, headers) {
       return `One column per ${name(step.col)}, one row per ${name(step.key)}, holding `
         + `${a ? `the ${a.label.toLowerCase()} of ` : ''}${name(step.val)}`;
     }
+    case 'split':
+      return `One row for each value in ${name(step.col)}, split at "${step.sep || ';'}" — a total of another column then counts a row once per value`;
     default: return 'Unknown step';
   }
 }
@@ -562,6 +596,10 @@ export function defaultStep(op, table) {
       const key = col === 0 ? 1 : 0;
       const val = [...nums].reverse().find((c) => c !== key && c !== col) ?? table.headers.length - 1;
       return { op, col, key, val, agg: '' };
+    }
+    case 'split': {
+      const col = firstText < 0 ? 0 : firstText;
+      return { op, col, sep: ';' };
     }
     default: return { op };
   }

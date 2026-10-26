@@ -81,6 +81,9 @@ export function toStep(raw, headers, n) {
       const k = raw.rows == null ? headers.findIndex((_, i) => i !== c && i !== v) : col(raw.rows, 'rows');
       return { op, col: c, key: k, val: v, agg: agg(raw.agg, '') };
     }
+    case 'split':
+      if (typeof raw.sep !== 'string' || raw.sep === '') bad(`Step ${n}: "sep" is what sits between the values in a cell, such as ";" or "|".`);
+      return { op, col: col(raw.split), sep: raw.sep };
     default: return { op };
   }
 }

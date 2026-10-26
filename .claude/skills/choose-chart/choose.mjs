@@ -746,6 +746,7 @@ if (list) {
       out(`  ${p.id} — ${p.title} [${p.goal}]`);
       out(`    why: ${p.why}`);
       if (p.caution) out(`    watch: ${p.caution}`);
+      if (p.warning) out(`    ! ${p.warning}`);
       out(`    ${recipeFor(r)}`);
     });
   }
@@ -786,7 +787,7 @@ if (list) {
         };
       }),
       views: views.map(({ p, recipe: r }) => ({
-        id: p.id, chart: r.chart, title: p.title, goal: p.goal, why: p.why, caution: p.caution || null, recipe: r,
+        id: p.id, chart: r.chart, title: p.title, goal: p.goal, why: p.why, caution: p.caution || null, warning: p.warning || null, recipe: r,
       })),
       counts: { fits: rank.fits.length, partial: rank.partial.length },
       adjustments: adjusted,

@@ -674,6 +674,32 @@ longer instructions are split so the main file stays short: `recipes.md` is the
 recipe reference and `reading-the-output.md` is what to do about each warning.
 `test/skill-adapters.mjs` covers all of it offline.
 
+### Layout, not content
+
+`layout.js` notices three ways a table that is fine as a spreadsheet is wrong as
+chart input, and `profile.js` reports each as a quality note with the step that
+fixes it, in the reader's column names:
+
+- **Periods across** (`Country, 1960, 1961, …`): the columns are years, quarters
+  or months. With a thing down the side it suggests swapping rows and columns, and
+  says forty lines cannot be read; with a `Year` down the side it is a grid and
+  says so. `transpose` already did the work, so nothing new was built for it.
+- **Several values in one cell** (`Action; Comedy`): offered `split`, the one new
+  Shape-tab step, which writes one row per value. It looks for `;`, `|` and `,`,
+  and a comma has to be most of the column with short, recurring pieces, or
+  `Surname, Given` and a constant `Population, total` would be lists.
+- **A repeated grain**: a measure that never moves within the rows sharing some
+  other column (an order's shipping on each of its lines). Summed it is counted
+  once per row; averaged, each group is weighted by its size. The warning rides on
+  the analysis panel's total and average views (`plan.warning`, shown in the panel,
+  printed as `!` and `warning` by the skill), never on a median, min or max.
+
+All of it **detects and suggests**; nothing rewrites a table, which is the rule
+`transform.js` keeps. A split changes what a row *is*, so its description says that
+a total of another column then counts a row once per value. `test/layout.mjs` runs
+in CI and checks the sixteen benchmark tables find only what is there (the World
+Bank file's years, NASA's months) and no list or repeat.
+
 ### Measuring the recommender
 
 `node test/benchmark.mjs` (`npm run benchmark`) scores what the skill would
@@ -2769,6 +2795,7 @@ the values it changed are shown by the series widget next door.
 | `recommend.js` | Which chart to draw, and the reason, and the caution |
 | `recommend-weights.js` | The numbers that order the suggestions - relative scores, not probabilities |
 | `recipe.js` | A recipe (steps, columns, roles, facet) applied to a table; what the skill and its MCP tools both run |
+| `layout.js` | How a table is arranged: periods across, several values in a cell, a measure repeated down its rows — detected, and the step that fixes each suggested |
 | `share.js` | The spec compressed into a link, and read back out of one |
 | `chartjs-base.js` | Shared Chart.js option builders |
 | `cdn.js` | **Single source of truth for every third-party library** |

@@ -1,4 +1,5 @@
 import { profileTable, groupSummary, correlate } from './profile.js';
+import { repeatedWarning } from './layout.js';
 import { toNumber } from './transform.js';
 import { getChart, newSpec } from './registry.js';
 import { applyData } from './dataio.js';
@@ -26,6 +27,8 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
     && c.numericShare >= 0.5 && c.min !== c.max);
   const groups = columns.filter((c) => c.type !== 'date' && c.distinct >= 2 && c.distinct < c.filled);
   const buckets = Array.from({ length: 9 }, () => []);
+  // A measure that is one reading per some other column, repeated down its rows.
+  const repeated = new Map((profile.layout?.repeated || []).map((r) => [r.measureIndex, r]));
   const add = (bucket, plan) => buckets[bucket].push({ ...plan,
     goal: GOAL_OF_KIND[plan.kind], caution: cautionOf(plan.id),
     key: [plan.kind, plan.agg || '', ...plan.columns].join(':') });
@@ -35,7 +38,9 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
     for (const measure of measures) {
       if (group.index === measure.index) continue;
       for (const [agg, label] of [['mean', 'Average'], ['median', 'Median'], ['sum', 'Total']]) {
+        const warning = repeatedWarning(repeated.get(measure.index), agg, group.index);
         add(1, { id: 'bar-vertical', kind: 'group', agg, group: group.index, measure: measure.index,
+          ...(warning && { warning }),
           columns: [group.index, measure.index], title: `${label} ${measure.name} by ${group.name}`,
           why: `${label} of valid ${measure.name} values in each ${group.name} group.${agg === 'sum' ? ' Totals depend on group size and are useful when values are additive.' : ' Groups may contain different numbers of observations.'}` });
       }
@@ -236,5 +241,5 @@ export function buildAnalysisChart(source, plan) {
   const excludedRows = sourceRows - usedRows;
   const note = `All ${sourceRows} source rows analyzed · ${usedRows} used · ${excludedRows} excluded${excludedRows ? ' (missing or invalid values)' : ''}. ${detail}`;
   spec.caption = { title: plan.title, subtitle: note };
-  return { def, spec, table, note, sourceRows, usedRows, excludedRows };
+  return { def, spec, table, note, warning: plan.warning || null, sourceRows, usedRows, excludedRows };
 }

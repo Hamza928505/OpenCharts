@@ -43,6 +43,7 @@ jobs:
           node test/recommend-ranking.mjs
           node test/benchmark.mjs
           node test/skill-adapters.mjs
+          node test/layout.mjs
           node test/analysis-charts.mjs
           node test/data-analysis.mjs
 
