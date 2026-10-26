@@ -10,7 +10,9 @@
  *   --header / --no-header   settle the header row instead of guessing it
  *   --skip N                 drop the first N lines, notes above the data, before reading
  *   --swap                   turn the table rows-for-columns first
+ *   --recipe <json|file>     all of the above as one object, plus steps, roles and a split
  *   --save <file>            write the table the chart reads as CSV, for a studio upload
+ *   --html <file>            write the chart and its data as one page, which no link limit stops
  *   --base <url>             point links at another copy of the site
  *
  * Nothing here holds an opinion of its own. `profile.js` describes the table,
@@ -23,12 +25,25 @@
  * editor would open on — because "can read it" and "draws what the reason
  * says" came apart on real files: a bar per row of a 150-row table, a line of
  * the `year` column where the reason was about passengers.
+ *
+ * And a way to say what the table should become. Seven of twelve public files
+ * needed a row filter written by hand into a scratch file, or a group column
+ * the reader took for one more group of numbers: an assistant could see what
+ * was wrong and had no way to ask for it. A recipe asks, and the steps are
+ * `transform.js`'s own — the Shape tab's — so every number on the chart was
+ * worked out by code that says what it did, never typed by the assistant:
+ *
+ *   {"chart": "line-multi", "steps": [{"pivot": "source", "rows": "year", "value": "net_generation"}]}
+ *   {"chart": "box-plot", "roles": {"group": "day_of_week", "value": "births"}}
+ *   {"chart": "line-basic", "columns": ["Year", "Deaths"], "facet": "Entity"}
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseTable, transposeTable, applyData, expectedFormat, looksNumeric } from '../../../js/studio/dataio.js';
 import { profileTable } from '../../../js/studio/profile.js';
-import { toNumber } from '../../../js/studio/transform.js';
+import { toNumber, runSteps, describeStep, numericColumns, OPS, TESTS, AGGREGATES } from '../../../js/studio/transform.js';
+import { facetByColumn } from '../../../js/studio/facet.js';
+import { generateCode } from '../../../js/studio/engines.js';
 import { rankCharts } from '../../../js/studio/DataMatch.js';
 import { recommendCharts, summarise } from '../../../js/studio/recommend.js';
 import { CHARTS, getChart, newSpec, searchCharts } from '../../../js/studio/registry.js';
@@ -50,20 +65,44 @@ const option = (name) => {
 const out = (line = '') => console.log(line);
 const fail = (message) => { console.error(message); process.exit(1); };
 
+const RECIPE_KEYS = ['chart', 'skip', 'header', 'swap', 'columns', 'steps', 'roles', 'facet'];
+
+/** The recipe, from JSON or a file of it; a flag given as well wins. */
+function readRecipe(arg) {
+  if (arg === null) return {};
+  let r;
+  try {
+    r = JSON.parse(/^\s*[{[]/.test(arg) ? arg : readFileSync(arg, 'utf8'));
+  } catch (e) {
+    fail(`--recipe takes JSON, or a file holding it: ${e.message}`);
+  }
+  if (!r || typeof r !== 'object' || Array.isArray(r)) fail('A recipe is one JSON object, such as {"chart": "line-basic"}.');
+  const unknown = Object.keys(r).filter((k) => !RECIPE_KEYS.includes(k));
+  if (unknown.length) fail(`A recipe has no ${unknown.map((k) => `"${k}"`).join(', ')}. It takes: ${RECIPE_KEYS.join(', ')}.`);
+  if (r.columns != null && !Array.isArray(r.columns)) fail('"columns" is a list of names, such as ["Year", "Mean"].');
+  if (r.steps != null && !Array.isArray(r.steps)) fail('"steps" is a list, such as [{"filter": "Source", "is": "GCAG"}].');
+  if (r.roles != null && !(r.roles.group && r.roles.value)) fail('"roles" takes {"group": "<column>", "value": "<column>"}.');
+  return r;
+}
+
+const recipe = readRecipe(option('--recipe'));
 const base = (option('--base') || 'https://hamza928505.github.io/OpenCharts/').replace(/\/?$/, '/');
-const chartId = option('--chart');
-const columns = option('--columns');
-const skip = Number(option('--skip') || 0);
+const chartId = option('--chart') ?? recipe.chart ?? null;
+const columnList = option('--columns');
+const columns = columnList !== null ? columnList.split(',') : recipe.columns || null;
+const skip = Number(option('--skip') ?? recipe.skip ?? 0);
 const save = option('--save');
+const html = option('--html');
 const list = flag('--list');
-const swap = flag('--swap');
+const swap = flag('--swap') || recipe.swap === true;
 const yes = flag('--header');
 const no = flag('--no-header');
-const header = yes ? true : no ? false : undefined;
+const header = yes ? true : no ? false : typeof recipe.header === 'boolean' ? recipe.header : undefined;
 const source = args[0];
 const names = (table, using) => using.map((c) => table.headers[c]).join(', ');
 const cells = (row) => row.slice(0, 8).map((c) => String(c).slice(0, 30)).join(', ') + (row.length > 8 ? ', …' : '');
 const approx = (v) => Number(v.toPrecision(3)).toLocaleString('en-US');
+const recipeFor = (o) => `--recipe '${JSON.stringify(o)}'`;
 if (!Number.isInteger(skip) || skip < 0) fail('--skip takes a number of lines, such as --skip 8.');
 
 /** Shapes that draw one mark per row, labelled by the first column. */
@@ -81,8 +120,10 @@ function readTable() {
     fail('That is a spreadsheet file, not text. Save it as CSV, or upload it in the studio, which reads .xlsx.');
   }
   // Scientific files open with a block of `#` comments (NOAA's do), which the
-  // parser would otherwise read as rows of prose above the header.
-  const lines = bytes.toString('utf8').split(/\r?\n/);
+  // parser would otherwise read as rows of prose above the header. A World
+  // Bank file opens with a byte-order mark, which would be part of its first
+  // column's name.
+  const lines = bytes.toString('utf8').replace(/^﻿/, '').split(/\r?\n/);
   let lead = 0;
   while (lead < lines.length && /^\s*(#|$)/.test(lines[lead])) lead++;
   const comments = lines.slice(0, lead).filter((l) => l.trim()).length;
@@ -96,16 +137,99 @@ function readTable() {
   let table = swap
     ? transposeTable({ headers: parsed.hadHeader ? parsed.headers : [], rows: parsed.rows })
     : { headers: parsed.headers, rows: parsed.rows };
+  // Each step names its columns as they stand when it runs: a pivot makes
+  // the columns a later sort names.
+  const steps = (recipe.steps || []).map((raw, i) => {
+    const step = toStep(raw, table.headers, i + 1);
+    const run = runSteps(table, [step]);
+    if (run.errors.length) {
+      fail(`Step ${i + 1} (${step.op}) did not run: ${run.errors[0].replace(/^Step 1 \(\w+\) failed: /, '')}.`
+        + ` The columns there are: ${table.headers.join(', ')}`);
+    }
+    const said = `Step ${i + 1}: ${describeStep(step, table.headers)} — ${table.rows.length} rows in,`
+      + ` ${run.table.rows.length} out, columns ${run.table.headers.join(', ')}`;
+    table = run.table;
+    return said;
+  });
   if (columns !== null) {
-    const key = (s) => String(s).trim().toLowerCase();
-    const picked = columns.split(',').map((name) => {
-      const i = table.headers.findIndex((h) => key(h) === key(name));
-      if (i < 0) fail(`No column called "${name.trim()}". The columns are: ${table.headers.join(', ')}`);
-      return i;
-    });
+    // The column a facet splits by is part of the table whether named or not.
+    const named = [...columns, ...(recipe.facet == null ? [] : [recipe.facet])];
+    const picked = [...new Set(named.map((name) => colIndex(table.headers, name)))];
     table = { headers: picked.map((i) => table.headers[i]), rows: table.rows.map((r) => picked.map((i) => r[i])) };
   }
-  return { ...parsed, table, comments, notes: skip ? null : notesAbove(text, parsed) };
+  if (recipe.roles) table = byRoles(table);
+  return { ...parsed, table, comments, steps, notes: skip ? null : notesAbove(text, parsed) };
+}
+
+/** A column by its name, as the reader wrote it; fails naming the ones there are. */
+function colIndex(headers, name, where) {
+  const key = (s) => String(s ?? '').trim().toLowerCase();
+  const i = headers.findIndex((h) => key(h) === key(name));
+  if (i < 0) fail(`No column called "${String(name ?? '').trim()}"${where ? ` (${where})` : ''}. The columns are: ${headers.join(', ')}`);
+  return i;
+}
+
+/**
+ * A recipe step, by column name, as the `{op, col, …}` transform.js runs:
+ * {"filter": "Source", "is": "GCAG"}, {"sort": "Year", "dir": "desc"},
+ * {"pivot": "source", "rows": "year", "value": "net_generation"}.
+ */
+function toStep(raw, headers, n) {
+  const ops = OPS.map((o) => o.id);
+  const has = raw && typeof raw === 'object' ? ops.filter((op) => op in raw) : [];
+  if (has.length !== 1) fail(`Step ${n} needs exactly one of ${ops.join(', ')}; it has ${has.join(', ') || 'none'}.`);
+  const op = has[0];
+  const col = (name, part = op) => colIndex(headers, name, `step ${n}, ${part}`);
+  const agg = (a, none) => {
+    if (a == null || a === '') return none;
+    if (!AGGREGATES.some((x) => x.id === a)) fail(`Step ${n}: "agg" is one of ${AGGREGATES.map((x) => x.id).join(', ')}.`);
+    return a;
+  };
+  switch (op) {
+    case 'filter': {
+      const tests = TESTS.map((t) => t.id).filter((t) => t in raw);
+      if (tests.length !== 1) fail(`Step ${n} (filter) needs one test of ${TESTS.map((t) => t.id).join(', ')}.`);
+      const test = tests[0];
+      const both = test === 'between' ? raw.between : [raw[test], ''];
+      if (!Array.isArray(both) || both.length !== 2) fail(`Step ${n}: "between" takes two values, such as [1950, 2000].`);
+      return { op, col: col(raw.filter), test, a: String(both[0] ?? ''), b: String(both[1] ?? '') };
+    }
+    case 'group':
+      return { op, col: col(raw.group), agg: agg(raw.agg, 'sum'), vals: raw.values && raw.values.map((v) => col(v, 'values')) };
+    case 'bin': return { op, col: col(raw.bin), bins: raw.bins || 10 };
+    case 'sort': return { op, col: col(raw.sort), dir: raw.dir === 'desc' ? 'desc' : 'asc' };
+    case 'limit':
+      if (!(raw.limit >= 1)) fail(`Step ${n}: "limit" is how many rows to keep, such as {"limit": 10}.`);
+      return { op, n: raw.limit };
+    case 'transpose': return { op };
+    case 'pivot': {
+      const c = col(raw.pivot);
+      const v = col(raw.value, 'value');
+      // Year, Source, Mean: the rows are the one column left.
+      const k = raw.rows == null ? headers.findIndex((_, i) => i !== c && i !== v) : col(raw.rows, 'rows');
+      return { op, col: c, key: k, val: v, agg: agg(raw.agg, '') };
+    }
+    default: return { op };
+  }
+}
+
+/**
+ * The column a distribution chart should take its groups from, named. Its
+ * reader takes a first column of words for the groups, and reads a table of
+ * numbers as one group per column — so a weekday (1–7) or a wine's quality
+ * score (3–8) was drawn as one more group beside the measure. Headed `group`,
+ * as the data editor writes it, the column is read as the group names.
+ */
+function byRoles(table) {
+  const def = chartId && getChart(chartId);
+  if (!def || !def.data || expectedFormat(def).shape !== 'observations') {
+    const takers = CHARTS.filter((d) => d.data && expectedFormat(d).shape === 'observations').map((d) => d.id);
+    fail(`"roles" names the group and the value for a chart drawing one distribution per group (${takers.join(', ')}).`
+      + ' For any other chart, choose and order its columns with "columns".');
+  }
+  const g = colIndex(table.headers, recipe.roles.group, 'roles.group');
+  const v = colIndex(table.headers, recipe.roles.value, 'roles.value');
+  return { headers: ['group', table.headers[v]], rows: table.rows.map((r) => [r[g], r[v]]) };
 }
 
 /**
@@ -127,11 +251,47 @@ function notesAbove(text, parsed) {
     : null;
 }
 
-/** The chart after reading the table: its spec, and the table it now holds. */
+/**
+ * The chart after reading the table: its spec, and the table it now holds.
+ * A recipe's facet splits it into one panel per value of that column, read
+ * by the chart's own reader, as the studio's small multiples are.
+ */
 function held(def, table) {
   const spec = newSpec(def);
-  if (!applyData(def, spec, table).ok || typeof def.toText !== 'function') return null;
-  return { spec, ...parseTable(def.toText(spec), true) };
+  const by = recipe.facet == null ? -1 : colIndex(table.headers, recipe.facet, 'facet');
+  const res = by < 0 ? applyData(def, spec, table) : facetByColumn(def, spec, table, by);
+  if (!res.ok || typeof def.toText !== 'function') return null;
+  return { spec, split: by < 0 ? '' : res.message, ...parseTable(def.toText(spec), true) };
+}
+
+/** The table without one column: what a chart split by that column reads. */
+const without = (t, c) => ({ headers: t.headers.filter((_, i) => i !== c), rows: t.rows.map((r) => r.filter((_, i) => i !== c)) });
+
+/** Put the split-by column back on the front of what a chart reads from the rest. */
+const withSplit = (read, whole, c) => (c < 0 ? read : {
+  headers: [whole.headers[c], ...read.headers],
+  rows: read.rows.map((r, i) => [whole.rows[i][c], ...r]),
+});
+
+/**
+ * A long table: dates down one column, repeating once for each value of a
+ * column of words. Year, Source, Mean holds GCAG's years and then GISTEMP's,
+ * and Year with Source is one row each. A chart reads a series from a column,
+ * so drawn as it is the series come one after another — whichever column the
+ * chart happens to take its labels from. Null when the table is not one.
+ */
+function longTable(t) {
+  const nums = numericColumns(t);
+  const col = (c) => t.rows.map((r) => String(r[c] ?? '').trim());
+  for (let d = 0; d < t.headers.length; d++) {
+    const dates = col(d);
+    if (new Set(dates).size === dates.length || !isDateLabels(dates)) continue;
+    const by = t.headers.findIndex((_, c) => c !== d && !nums.includes(c)
+      && new Set(col(c).map((v, i) => `${dates[i]}\u0000${v}`)).size === t.rows.length);
+    const measures = nums.filter((c) => c !== d && c !== by).map((c) => t.headers[c]);
+    if (by >= 0 && measures.length) return { date: t.headers[d], by: t.headers[by], measures, names: [...new Set(col(by))] };
+  }
+  return null;
 }
 
 /**
@@ -173,26 +333,58 @@ function report(def, whole, table, why) {
   const labels = new Set(h.rows.map((r) => r[0])).size;
   const named = h.rows.filter((r) => Number.isFinite(toNumber(r[0]))).length * 2 < h.rows.length;
   const shape = expectedFormat(def).shape;
+  const long = !recipe.facet && longTable(whole);
+  if (h.split) out(`   split: ${h.split}`);
+  const groups = shape === 'observations' ? [...new Set(h.rows.map((r) => r[0]))] : [];
   // The reverse, on a distribution: a column of dates or names read as the
   // groups gives every row a group of its own, one value each.
   if (shape === 'observations' && h.rows.length > 1 && labels === h.rows.length) {
     out(`   ! every row is its own group (${labels} groups of one value). Keep only the measure,`
       + ' or a column of a few groups beside it, with --columns.');
-  } else if (shape === 'observations' && h.rows.length > 1 && !named) {
+  } else if (shape === 'observations' && h.rows.length > 1 && !named && !recipe.roles) {
     // dataio's reader takes a column with one blank cell for group names.
-    out('   ! the groups are numbers, so a measure was read as group names. A blank cell in the'
-      + ' measure does this; this chart cannot take the table as it is.');
+    out('   ! the groups are numbers, so a measure was read as group names. A blank cell in the measure'
+      + ' does this: drop those rows with a step, {"filter": "<measure>", "filled": true}. If the numbers'
+      + ' do name the groups, say so with "roles".');
+  } else if (groups.length > 1 && groups.every((g) => table.headers.includes(g))) {
+    // Read one group per column, a weekday or a score beside the measure is
+    // drawn as a group of its own numbers. Few whole numbers, each in many
+    // rows, is what a column naming groups looks like.
+    const spread = table.headers.map((name, c) => {
+      const vals = table.rows.map((r) => r[c]).filter((v) => String(v ?? '').trim() !== '');
+      const n = new Set(vals.map((v) => toNumber(v))).size;
+      const few = vals.length && n >= 2 && n <= 24 && n * 2 <= vals.length && vals.every((v) => Number.isInteger(toNumber(v)));
+      return { name, n, few };
+    });
+    // The fewest values first, and the measure that varies most: births by
+    // weekday, not by year or by day of the month.
+    const few = spread.filter((s) => s.few).sort((a, b) => a.n - b.n);
+    const value = (spread.filter((s) => !s.few).sort((a, b) => b.n - a.n)[0] || {}).name;
+    if (few.length && value) {
+      out(`   ! ${few.slice(0, 3).map((f) => `"${f.name}" holds ${f.n} different whole numbers`).join(', ')}`
+        + `, drawn as ${few.length === 1 ? 'a group' : 'groups'} of ${few.length === 1 ? 'its' : 'their'} own values.`
+        + ` If one names the groups: ${recipeFor({ chart: def.id, roles: { group: few[0].name, value } })}`);
+    }
   }
-  const time = h.headers[0] === 'label' ? timeRuns(h.rows.map((r) => r[0])) : '';
+  if (recipe.roles && groups.length > 1) {
+    const n = groups.map(toNumber);
+    if (n.every(Number.isFinite) && n.some((v, i) => i && v < n[i - 1])) {
+      out(`   ! the groups are in the order first seen (${groups.slice(0, 4).join(', ')}, …). Put`
+        + ` {"sort": "${recipe.roles.group}"} first in the steps to draw them in order.`);
+    }
+  }
+  const time = h.headers[0] === 'label' && !h.split ? timeRuns(h.rows.map((r) => r[0])) : '';
   if (time) {
     out(`   ! ${time}: the rows hold more than one series, or more than one kind of period, so the chart`
-      + ' draws the same dates more than once. Keep one (the studio\'s Shape tab can filter rows); a line per'
-      + ' series needs a column per series, which the studio cannot make from these rows.');
+      + ' draws the same dates more than once. ' + (long ? 'The long-table note above has the recipes that turn it.'
+        : 'Keep one with a step in a recipe, {"steps": [{"filter": "<column>", "is": "<value>"}]};'
+          + ' the studio\'s Shape tab has the same steps.'));
   }
-  if (PER_ROW.has(shape) && named && labels < h.rows.length && !time) {
+  if (PER_ROW.has(shape) && named && labels < h.rows.length && !time && !h.split) {
     out(`   ! labels repeat: one mark per row, ${h.rows.length} rows, ${labels} different label${labels === 1 ? '' : 's'}.`
-      + ' Fine for steps in time; for observations of a few groups, group them first (the studio\'s'
-      + ' Shape tab) or choose a chart made for raw rows.');
+      + (long ? ' It is the long table in the note above: a recipe there turns it.'
+        : ' Fine for steps in time; for observations of a few groups, group them first (a "group" step,'
+          + ' or the studio\'s Shape tab) or choose a chart made for raw rows.'));
   }
   if (shape === 'xyGroups' && labels > PALETTE.length) {
     out(`   ! ${labels} groups and ${PALETTE.length} colours${labels === h.rows.length ? ' (every row is its own group)' : ''}:`
@@ -215,15 +407,20 @@ function report(def, whole, table, why) {
   }
   // dataio reads a blank cell as 0: a month nobody measured draws as zero
   // unemployment, and a penguin with no measurements sits at the origin.
+  // A cell that is not a number at all is said once, of the table.
   const zeros = (rows) => rows.reduce((n, r) => n + r.filter((c) => toNumber(c) === 0).length, 0);
-  const holes = table.headers.map((_, c) => c).filter((c) =>
-    table.rows.some((r) => r[c] === '') && table.rows.some((r) => Number.isFinite(toNumber(r[c]))));
-  const blank = table.rows.reduce((n, r) => n + holes.filter((c) => r[c] === '').length, 0);
-  const drawn = Math.min(blank, zeros(h.rows) - zeros(table.rows));
+  // Where the chart names its series after the columns, only those it kept:
+  // a line chart takes eight of NASA's eighteen.
+  const kept = numericColumns(table).filter((c) => !h.headers.some((n) => table.headers.includes(n))
+    || h.headers.includes(table.headers[c]));
+  const holes = kept.map((c) => [c, table.rows.filter((r) => String(r[c] ?? '').trim() === '').length])
+    .filter(([, n]) => n);
+  const drawn = Math.min(holes.reduce((n, [, k]) => n + k, 0), zeros(h.rows) - zeros(table.rows));
   if (drawn > 0) {
-    out(`   ! ${drawn} blank cell${drawn === 1 ? '' : 's'} in ${holes.map((c) => `"${table.headers[c]}"`).join(', ')}`
-      + ` ${drawn === 1 ? 'is' : 'are'} drawn as 0, a value nobody measured. Say so; if those rows should not be`
-      + ' drawn, the studio\'s Shape tab can filter them out.');
+    const one = drawn === 1;
+    out(`   ! ${drawn} blank cell${one ? '' : 's'} in ${holes.map(([k]) => `"${table.headers[k]}"`).join(', ')} ${one ? 'is' : 'are'}`
+      + ' drawn as 0, a value nobody measured. Say so; to leave those rows out, a recipe step:'
+      + ` ${JSON.stringify({ filter: table.headers[holes[0][0]], filled: true })}${holes.length > 1 ? ', one per column' : ''}.`);
   }
   const first = h.rows[0] || [];
   const same = (a, b) => String(a).trim() === String(b).trim() || toNumber(a) === toNumber(b);
@@ -349,6 +546,18 @@ function saveTable(t) {
 }
 
 /**
+ * The chart and its data as one page: the studio's Standalone export, built
+ * by the same `generateCode`. A link carries the spec in its address and a
+ * server refuses an address past 8 KB; a file has no such limit, and opened
+ * from disk it draws the chart, fetching its libraries from their CDNs.
+ */
+function writePage(def, spec) {
+  if (!spec) { out(`Wrote nothing to ${html}: the table did not apply.`); return; }
+  writeFileSync(html, generateCode(def, spec).standalone);
+  out(`Wrote ${def.id} holding this data to ${html}: one page, which opens in a browser.`);
+}
+
+/**
  * Print the studio link: this chart, holding the table when a spec is given.
  * A server refuses a link past 8 KB before the page can read it, so that one
  * opens on the example and says how the table gets in instead.
@@ -363,8 +572,10 @@ async function link(def, spec, title) {
     out(`${title} on its example, since no link can hold this table:`);
     out(`  ${plain}`);
     out(`  (With the table the link is ${text.length} characters, and web servers refuse links past ${SERVER_LIMIT}:`
-      + ' GitHub Pages answers "414 URI Too Long". Paste or upload the table in the chart\'s data editor; '
-      + (save ? `${save} holds the columns it reads.)` : 'rerun with --save <file.csv> for a file of the columns it reads.)'));
+      + ' GitHub Pages answers "414 URI Too Long". '
+      + (html ? `${html} holds the chart with it.)`
+        : 'Rerun with --html <file.html> for the chart and its data as one page, or --save <file.csv>'
+          + ' for the columns it reads, to upload in the chart\'s data editor.)'));
     return;
   }
   out(spec ? `${title} with this data:` : `${title} (example data):`);
@@ -378,19 +589,51 @@ function describeInput(input) {
   const { table } = input;
   if (input.comments) out(`Skipped ${input.comments} comment line(s) at the top.`);
   if (skip) out(`Skipped the first ${skip} line(s), as asked.`);
-  if (columns !== null) out(`Kept columns: ${table.headers.join(', ')}`);
   out(`Header row: ${input.hadHeader ? 'yes' : 'no'}`
     + (header === undefined ? ' (guessed; rerun with --header or --no-header if that is wrong)' : '')
     + (input.skipped ? `; ${input.skipped} title row(s) above it skipped` : ''));
+  input.steps.forEach((s) => out(s));
+  if (columns !== null) out(`Kept columns: ${table.headers.join(', ')}`);
+  if (recipe.roles) out(`Groups from "${recipe.roles.group}", values from "${recipe.roles.value}".`);
   if (input.notes) {
     const n = input.notes.length;
     out(`Note (bad): the first ${n} rows hold no numbers and the rows below do: `
       + `${input.notes.slice(0, 4).map((c) => JSON.stringify(c)).join(', ')}${n > 4 ? ', …' : ''}. Notes above the data?`
-      + ` Rerun with --skip ${n}, or --skip ${n - 1} if the last of them is the header row.`);
+      + ` Rerun with --skip ${n}, or --skip ${n - 1} if the last of them is the header row; add --header`
+      + ' if the columns then come out as Label, Series 1, … (a header of years looks like data).');
   }
   if (table.rows.length <= 1) {
     out(`Note (bad): only ${table.rows.length} row. If this is JSON, the rows may sit inside another object`
       + ' or array (the World Bank API answers [metadata, rows]): save just the list of rows and run again.');
+  }
+  // NASA's "***" for a year not over yet: the reader fails a column of
+  // numbers on one such cell, so Year with J-D drew nothing at all.
+  const strays = table.headers.map((name, c) => {
+    const vals = table.rows.map((r) => String(r[c] ?? '').trim()).filter(Boolean);
+    const bad = vals.filter((v) => !(looksNumeric(v) && Number.isFinite(toNumber(v))));
+    return { name, bad: [...new Set(bad)], share: vals.length ? 1 - bad.length / vals.length : 0 };
+  }).filter((s) => s.bad.length && s.share >= 0.5);
+  if (strays.length) {
+    const [s] = strays;
+    out(`Note (bad): ${strays.slice(0, 3).map((o) => `"${o.name}"`).join(', ')}${strays.length > 3 ? ', …' : ''}`
+      + ` ${strays.length === 1 ? 'holds' : 'hold'} cells that are not numbers (${s.bad.slice(0, 3).map((v) => `"${v}"`).join(', ')}),`
+      + ' which a chart reads as 0 or will not read at all. To drop those rows, a recipe step per column charted:'
+      + ` ${JSON.stringify({ filter: s.name, not: s.bad[0] })}`);
+  }
+  // Said once, of the table, rather than under every chart that draws it so.
+  const long = !recipe.facet && longTable(table);
+  if (long) {
+    const { date, by, measures, names } = long;
+    const one = chartId || 'line-basic';
+    const value = measures[0];
+    out(`Note (bad): a long table. "${date}" repeats once for each "${by}" (${names.length}: `
+      + `${names.slice(0, 3).join(', ')}${names.length > 3 ? ', …' : ''}), so a chart reading it as it is draws`
+      + ' those series one after another. A recipe turns it:');
+    out(`  a line each:  ${recipeFor({ chart: 'line-multi', steps: [{ pivot: by, rows: date, value }] })}`
+      + (names.length > PALETTE.length ? ` (${names.length} lines and ${PALETTE.length} colours)` : ''));
+    out(`  a panel each: ${recipeFor({ chart: one, columns: [date, value], facet: by })}`);
+    out(`  one of them:  ${recipeFor({ chart: one, steps: [{ filter: by, is: names[0] }], columns: [date, value] })}`);
+    if (measures.length > 1) out(`  "value" can be any of ${measures.map((m) => `"${m}"`).join(', ')}.`);
   }
 }
 
@@ -426,19 +669,25 @@ if (list) {
   if (input) {
     out();
     describeInput(input);
-    const rank = rankCharts(input.table);
+    // Split by a column, the chart reads the rest of the table, once a panel.
+    const by = recipe.facet == null ? -1 : colIndex(input.table.headers, recipe.facet, 'facet');
+    const body = by < 0 ? input.table : without(input.table, by);
+    const rank = rankCharts(body);
     const fit = rank.fits.find((e) => e.def.id === def.id);
     const part = rank.partial.find((e) => e.def.id === def.id);
     const miss = rank.misses.find((e) => e.def.id === def.id);
     out(fit ? 'Your table: it reads it as is.'
-      : part ? `Your table: it reads only ${names(input.table, part.using)}.`
+      : part ? `Your table: it reads only ${names(body, part.using)}.`
         : `Your table: it cannot read it — ${(miss && miss.message) || 'the shape does not match'}`);
-    if (fit || part) h = report(def, input.table, (fit || part).table || input.table, null);
-    if (h) fitToData(def, h, (fit || part).table || input.table);
-    if (save && (fit || part)) saveTable((fit || part).table || input.table);
+    const read = (fit || part) && ((fit || part).table || body);
+    if (read) h = report(def, input.table, withSplit(read, input.table, by), null);
+    if (h) fitToData(def, h, read);
+    if (save && read) saveTable(withSplit(read, input.table, by));
+    if (html) writePage(def, h && h.spec);
   }
   await link(def, h && h.spec, 'Open it');
 } else {
+  if (recipe.facet != null) fail('"facet" splits one chart into panels, so the recipe needs a "chart" too.');
   const input = readTable();
   if (!input) fail('Give a file, "-" for stdin, --chart <id> or --list.');
   const { table } = input;
@@ -476,8 +725,9 @@ if (list) {
     const h = holds.get(top.def.id) || held(top.def, top.table || table);
     if (h) fitToData(top.def, h, top.table || table);
     if (save) saveTable(top.table || table);
+    if (html) writePage(top.def, h && h.spec);
     await link(top.def, h && h.spec, `Open ${top.def.id}`);
-    out('Another chart, or other columns: --chart <id> [--columns a,b,c] and the same input.');
+    out('Another chart, other columns or rows: --chart <id> [--columns a,b,c], or --recipe, and the same input.');
   } else {
     out('No chart reads this table. Try --swap, or --header / --no-header.');
   }

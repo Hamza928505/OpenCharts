@@ -459,7 +459,8 @@ export function openDataDialog(def, spec, onApply, seed) {
 
     wrap.appendChild(el('p', 'dlg-note',
       'Group, filter, sort or bucket the rows before they reach the chart — or swap '
-      + 'rows and columns, when the series run down the file instead of across it. '
+      + 'rows and columns, or give each value of a column its own column, when the series '
+      + 'run down the file instead of across it. '
       + 'Useful when the file is five hundred transactions and the chart is seven bars.'));
 
     const stepList = el('div', 'shape-steps');
@@ -601,6 +602,16 @@ export function openDataDialog(def, spec, onApply, seed) {
         // Nothing to choose: the whole table turns. The sentence is the
         // control, so a reader can see what the step will do to it.
         body.appendChild(el('span', 'shape-word', describeStep(step, headers)));
+      } else if (step.op === 'pivot') {
+        body.appendChild(el('span', 'shape-word', 'One column per'));
+        body.appendChild(colSelect(headers, step.col, (v) => { step.col = v; change(); }, 'Column whose values become columns'));
+        body.appendChild(el('span', 'shape-word', 'one row per'));
+        body.appendChild(colSelect(headers, step.key, (v) => { step.key = v; change(); }, 'Column whose values become rows'));
+        body.appendChild(el('span', 'shape-word', 'holding'));
+        body.appendChild(pickSelect(
+          [{ id: '', label: 'the value of' }, ...AGGREGATES.map((a) => ({ id: a.id, label: `the ${a.label.toLowerCase()} of` }))],
+          step.agg || '', (v) => { step.agg = v; change(); }, 'Where a row and a column meet more than once'));
+        body.appendChild(colSelect(headers, step.val, (v) => { step.val = v; change(); }, 'Column that fills the cells'));
       }
 
       row.appendChild(body);

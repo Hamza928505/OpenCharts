@@ -15,13 +15,16 @@ memory**: a chart id that is not in its output does not exist here.
 ```bash
 node .claude/skills/choose-chart/choose.mjs <file|->                     # rank charts for a table
 node .claude/skills/choose-chart/choose.mjs --chart <id> [--columns a,b] <file|->  # one chart, chosen columns
+node .claude/skills/choose-chart/choose.mjs --recipe '<json>' <file|->            # the table reshaped, then a chart
 node .claude/skills/choose-chart/choose.mjs --list                        # every chart, one line each
 ```
 
 Flags: `--columns a,b,c` keeps only those columns, in that order.
 `--header` / `--no-header` settle the header row. `--skip N` drops the first
 N lines, for notes above the data. `--swap` turns the table rows-for-columns.
-`--save <file>.csv` writes the table the chart reads, for the user to upload.
+`--recipe` reshapes the table first (below). `--html <file>.html` writes the
+chart and its data as one page that opens in a browser. `--save <file>.csv`
+writes the table the chart reads, for the user to upload.
 `--base http://localhost:8000/` points links at a local server (needed for a
 chart that has not been deployed yet).
 
@@ -34,6 +37,42 @@ drawn as one line that doubled back in time, a file whose first eight rows
 were notes, blank cells drawn as zero, and links too long for the server to
 accept. So the script prints what each chart actually holds, and it is your
 job to read that before handing anything over.
+
+## Recipes: what the table should become
+
+Seven of those twelve files needed a reshape: rows dropped, a column per
+series, a column of numbers named as the groups. **Never write a reshaped
+copy of the user's data yourself.** Write a recipe. The script does the
+arithmetic with the studio's own Shape-tab steps (`transform.js`) and prints a
+`Step` line for each, saying what it did and how many rows went in and out:
+
+```bash
+choose.mjs --recipe '{"chart":"line-multi","steps":[{"pivot":"source","rows":"year","value":"mean"}]}' data.csv
+```
+
+A recipe is one JSON object, or a file holding one. Every key is optional:
+
+- `chart`: the chart to draw, as `--chart`.
+- `skip`, `header`, `swap`: as the flags.
+- `steps`: run in order, each naming the columns as they stand at that point.
+  - `{"filter": "Source", "is": "GCAG"}`, or `not`, `contains`, `gt`, `lt`,
+    `"between": [1950, 2000]`, `"filled": true` (not blank).
+  - `{"group": "region", "agg": "sum"}`: one row per region. `agg` is `sum`,
+    `mean`, `median`, `min`, `max` or `count`; `"values": [...]` names the
+    columns to fold.
+  - `{"bin": "age", "bins": 10}`, `{"sort": "year", "dir": "desc"}`,
+    `{"limit": 10}`, `{"transpose": true}`.
+  - `{"pivot": "source", "rows": "year", "value": "mean"}`: one column per
+    source, one row per year. Where a year and a source meet in two rows it
+    fails. Add `"agg"` only if the user wants them combined, and say so.
+- `columns`: keep these, in this order, after the steps.
+- `roles`: `{"group": "day_of_week", "value": "births"}` names the groups for
+  a distribution chart (box plot, violin, …) whose groups are numbers.
+- `facet`: one panel per value of this column (small multiples).
+
+The `Note` and `!` lines print a recipe to run, or a step to add to a
+recipe's `steps`. Run it as printed, then read the new `holds:` line. A recipe that names a missing column fails, naming
+the columns there are.
 
 ## When the user has data
 
@@ -64,25 +103,32 @@ job to read that before handing anything over.
    - `labels repeat`: one mark per row. That is right for steps in time, such
      as months in order. For many observations of a few groups (150 flowers,
      3 species), choose a chart made for raw rows instead: a grouped scatter,
-     a box plot or a violin. Or tell the user to group the rows in the
-     studio's Shape tab. Do not compute totals or averages yourself.
+     a box plot or a violin. Or total them with a `group` step, and say what
+     it folded. Do not compute totals or averages yourself.
    - `every row is its own group` or `the groups are numbers`: a distribution
-     chart misread the table. Use `--columns` to keep the measure, plus at
-     most one column of a few groups. If the warning stays, say that chart
-     cannot take this table.
-   - `the dates run backwards` or `dates repeat`: the rows hold several
-     series one after another (a long table of symbol, date, price), or
-     several kinds of period (years, then quarters, then months). Put the rows
-     of one series in a new file and say which you kept, or tell the user to
-     filter them in the Shape tab. A line per series needs a column per
-     series, which neither the script nor the studio makes. Say so rather than
-     reshaping the table yourself.
+     chart misread the table. Where a column of whole numbers names the
+     groups (a weekday 1–7, a score 3–8), the line prints a `roles` recipe.
+     Otherwise use `--columns` to keep the measure, plus at most one column
+     of a few groups. If the warning stays, say that chart cannot take this
+     table.
+   - `the dates run backwards` or `dates repeat`, and the `a long table`
+     note: the rows hold several series one after another (a long table of
+     symbol, date, price). The note prints three recipes: a line each (a
+     pivot), a panel each (a facet) and one series (a filter). Choose by the
+     user's question. A pivot leaves a cell blank where a series has no value
+     for a date, so read the `!` lines it brings. Several kinds of period
+     (years, then quarters, then months) need a filter that keeps one kind.
    - `too small to see`: measures far apart share one axis, such as a price
      and its trading volume. Keep one side with `--columns`, or use
      `mixed-bar-line`, which gives the second measure an axis of its own.
    - `blank cells … drawn as 0`: tell the user, since the chart shows a value
-     nobody measured. If those rows should not be drawn, leave them out of a
-     new file and say how many went. Never fill them in.
+     nobody measured. If those rows should not be drawn, add the `filled`
+     step the line prints and say how many rows went (the `Step` line says).
+     Never fill them in.
+   - `cells that are not numbers` (a `Note`): NASA's `***` for a year not over
+     yet, an `N/A`. A chart reads them as 0, or will not read the column at
+     all. Add the `not` step the note prints, one per value, for each column
+     you chart.
    - `groups and 8 colours`: there are more groups than colours, so they
      cannot be told apart. Keep a column of a few groups, or none.
 5. **A word column marked `id, ignored` may be the label you need.** The
@@ -114,9 +160,11 @@ job to read that before handing anything over.
      called "Product". Say which of it does not fit, so the user can rename
      it in the studio. Past about 2,000 characters, say some apps may cut
      the link. Past 8,192 the server refuses it, so the script prints a link
-     to the chart's example instead. Rerun with `--save <file>.csv`, give the
-     user that file to upload in the chart's data editor, and list the
-     `Reset from the example:` settings for them to make by hand.
+     to the chart's example instead. Rerun with `--html <file>.html` and give
+     the user that page, which holds the chart and its data. Or rerun with
+     `--save <file>.csv`, give them that file to upload in the chart's data
+     editor, and list the `Reset from the example:` settings for them to make
+     by hand.
 
 **The user's question beats the rule order.** The rules only see the table.
 If the user said what they want to show, such as a share of a total, a ranking,
@@ -149,6 +197,8 @@ recommendation. Offer the charts it lists as able to read the table.
 - Never invent values, and never fill gaps in the user's data to make a chart
   work. Name the gap instead. Choosing rows or columns is fine, as long as
   you say which; changing numbers is not.
+- Never type the user's numbers into a file or a command. A reshape is a
+  recipe, so the script works it out and says what it did.
 - For code rather than a link, the package entry is
   `render(host, { chart: '<id>', data: csvText })` from `js/opencharts.js`. The
   studio's Standalone tab gives a single file with no dependencies.

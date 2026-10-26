@@ -623,8 +623,12 @@ export const SHAPES = {
     const { headers, rows } = table;
     if (!rows.length) return null;
     // Two layouts are both common: one column per group (wide), or a
-    // group/value pair per row (long). Detect which.
-    const wide = rows.every((r) => allNumeric(r.filter((c) => c !== '')));
+    // group/value pair per row (long). Detect which — unless the first column
+    // is headed `group`, which is what the editor writes, so a weekday or a
+    // wine's quality score (1–7, 3–8) reads back as the groups and not as
+    // one more group of numbers.
+    const named = table.hadHeader && /^group$/i.test(String(headers[0] || '').trim());
+    const wide = !named && rows.every((r) => allNumeric(r.filter((c) => c !== '')));
     const key = opts.key || 'groups';
     const prev = spec[key] || [];
 

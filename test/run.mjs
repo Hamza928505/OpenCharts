@@ -231,6 +231,45 @@ check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
     && small.yMin === 0 && small.xPrefix === '',
     'and its axes start near data far from zero, without the example\'s minimum or units',
     JSON.stringify({ flippers, small }));
+
+  /* A third round: a recipe says what the table should become, in the Shape
+   * tab's own steps, so no number on the chart was typed by the assistant.
+   * Each recipe here is one the skill printed itself, run as printed. */
+  const long = 'year,source,mean\n2000,A,1.5\n2001,A,2.5\n2002,A,3.1\n2000,B,4.2\n2001,B,5.3\n2002,B,6.4\n';
+  const noted = skill(['-'], long).stdout;
+  const offered = (name) => (noted.match(new RegExp(`${name}: +--recipe '([^']+)'`)) || [])[1] || '{}';
+  const lineEach = skill(['--recipe', offered('a line each'), '-'], long);
+  const lines = JSON.parse(await linked(lineEach.stdout) || '{}').series || [];
+  check(/a long table\. "year" repeats once for each "source"/.test(noted)
+    && lines.map((s) => `${s.label}:${s.data}`).join(' ') === 'A:1.5,2.5,3.1 B:4.2,5.3,6.4',
+    'and it names a long table, with a recipe that turns it into a line per series', lineEach.stdout.slice(-300));
+  const panelEach = skill(['--recipe', offered('a panel each'), '-'], long);
+  check(/split: Split into 2 panels by source/.test(panelEach.stdout) && /"facet"/.test(await linked(panelEach.stdout)),
+    'and one that splits it into a panel per series', panelEach.stdout.slice(-300));
+  const births = `day,births\n${[10, 11, 12, 13, 14, 15, 16, 17, 18].map((b, i) => `${(i % 3) + 1},${b}`).join('\n')}\n`;
+  const roles = (skill(['--chart', 'box-plot', '-'], births).stdout.match(/If one names the groups: --recipe '([^']+)'/) || [])[1];
+  const pageFile = join(tmpdir(), `oc-choose-${process.pid}.html`);
+  const grouped = skill(['--recipe', roles || '{}', '--html', pageFile, '-'], births);
+  const html = await readFile(pageFile, 'utf8').catch(() => '');
+  await rm(pageFile, { force: true });
+  const groups = (JSON.parse(await linked(grouped.stdout) || '{}').groups || []).map((g) => `${g.label}:${g.values}`);
+  check(groups.join(' ') === '1:10,13,16 2:11,14,17 3:12,15,18',
+    'and a weekday numbered 1–7 read as the groups, by the recipe it offers', grouped.stdout.slice(-300));
+  check(html.startsWith('<!DOCTYPE html>') && html.includes('10, 13, 16'),
+    'and --html writes that chart and its data as one page', html.slice(0, 80));
+  const nasa = `year,temp\n${['1.1', '1.4', '0.9', '1.2', '1.6', '1.3', '1.8', '***'].map((t, i) => `${2000 + i},${t}`).join('\n')}\n`;
+  const stray = (skill(['--chart', 'line-basic', '-'], nasa).stdout.match(/per column charted: (\{.*\})$/m) || [])[1];
+  const dropped = skill(['--recipe', JSON.stringify({ chart: 'line-basic', steps: [JSON.parse(stray || '{}')] }), '-'], nasa);
+  check(/holds: label, temp — 7 rows/.test(dropped.stdout),
+    'and NASA\'s "***" for a year not over yet, with the step that drops its row', dropped.stdout.slice(-300));
+  const typo = skill(['--recipe', '{"chart":"line-multi","steps":[{"pivot":"sourse","value":"mean"}]}', '-'], long);
+  const twice = skill(['--recipe', offered('a line each'), '-'], `${long}2000,A,9\n`);
+  check(typo.status === 1 && /No column called "sourse" \(step 1, pivot\)\. The columns are: year, source, mean/.test(typo.stderr)
+    && twice.status === 1 && /meet in 2 rows; choose how to combine them/.test(twice.stderr),
+    'and a recipe that names no column, or would have to guess a total, fails saying which',
+    `${typo.stderr} ${twice.stderr}`.slice(0, 300));
+  check(/Kept columns: country, v/.test(skill(['--columns', 'country,v', '-'], '﻿country,v\nFrance,1\nSpain,2\n').stdout),
+    'and a World Bank file\'s byte-order mark is not part of its first column\'s name');
 }
 
 /* The README answers two readers, and says what this is not.
@@ -4903,7 +4942,30 @@ const shape = await page.evaluate(async () => {
 
   const broken = t.runSteps(src, [{ op: 'nonsense' }, { op: 'limit', n: 2 }]);
 
+  // The long table an API hands over, turned to a column per source. Two
+  // readings of one year are folded only when asked how.
+  const long = { headers: ['year', 'source', 'mean'], rows: [['2000', 'A', '1'], ['2000', 'B', '2'], ['2001', 'A', '3'], ['2002', 'B', '4']] };
+  const pivot = { op: 'pivot', col: 1, key: 0, val: 2, agg: '' };
+  const twice = { headers: long.headers, rows: [...long.rows, ['2000', 'A', '5']] };
+  const flat = (x) => `${x.headers.join(',')}|${x.rows.map((r) => r.join(',')).join('|')}`;
+  const clash = t.runSteps(twice, [pivot]);
+
+  // The editor writes a distribution as group,value; read back, a weekday
+  // numbered 1–7 stays its groups rather than two groups called group and value.
+  const reg = await import('/js/studio/registry.js');
+  const d = await import('/js/studio/dataio.js');
+  const box = reg.getChart('box-plot');
+  const written = reg.newSpec(box);
+  d.applyData(box, written, 'group,value\n1,5\n2,6\n1,7\n2,8');
+  const reread = reg.newSpec(box);
+  d.applyData(box, reread, box.toText(written));
+
   return {
+    pivoted: flat(t.runSteps(long, [pivot]).table),
+    clash: clash.errors.join(' '),
+    folded: flat(t.runSteps(twice, [{ ...pivot, agg: 'mean' }]).table),
+    pivotSaid: t.describeStep({ ...pivot, agg: 'mean' }, long.headers),
+    numericGroups: reread.groups.map((g) => `${g.label}:${g.values}`).join(' '),
     sourceTotal: sumCol(src, 3),
     grouped: { headers: grouped.headers, rows: grouped.rows.length, total: sumCol(grouped, 1) },
     idExcluded: !grouped.headers.includes('id'),
@@ -4946,6 +5008,15 @@ check(shape.brokenSurvived === 2 && shape.brokenReported === 1,
   'a broken step is reported and the rest still run', JSON.stringify(shape));
 check(/average of revenue/i.test(shape.described),
   'a step says in words what it does', shape.described);
+check(shape.pivoted === 'year,A,B|2000,1,2|2001,3,|2002,,4',
+  'a pivot gives each source a column and each year a row, blank where none was measured', shape.pivoted);
+check(/year 2000 and source A meet in 2 rows; choose how to combine them/.test(shape.clash)
+  && shape.folded === 'year,A,B|2000,3,2|2001,3,|2002,,4'
+  && shape.pivotSaid === 'One column per source, one row per year, holding the average of mean',
+  'and two readings of one cell are refused, or folded the way it is told and says so',
+  `${shape.clash} / ${shape.folded} / ${shape.pivotSaid}`);
+check(shape.numericGroups === '1:5,7 2:6,8',
+  'a distribution whose groups are numbers reads back as those groups', shape.numericGroups);
 
 /* And it reaches the grid. Reshaping is an edit, so it has to be undoable and
  * it has to land as literal values — not as a layer the chart re-derives. */
@@ -5133,10 +5204,20 @@ const turnedGrid = await page.evaluate(async () => {
   const undone = state();
   const opts = [...document.querySelectorAll('.shape-add .shape-select option')].map((o) => o.value);
   const note = document.querySelector('.dlg-gridwrap .dlg-note').textContent;
+  // The pivot beside it has a form of its own: which column becomes the
+  // columns, which the rows, and what fills the cells.
+  [...document.querySelectorAll('.dlg-tab')].find((t) => /Shape/.test(t.textContent)).click();
+  await sleep(300);
+  const add = document.querySelector('.shape-add .shape-select');
+  add.value = 'pivot';
+  add.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(350);
   return {
     offered: true, before, after, undone,
     shapeStep: opts.includes('transpose'),
     noteSays: /Swap rows/.test(note),
+    pivotForm: [...document.querySelectorAll('.shape-step select')].map((s) => s.getAttribute('aria-label')).join('|'),
+    pivotHead: [...document.querySelectorAll('.shape-preview thead th')].map((th) => th.textContent).join(','),
   };
 });
 check(turnedGrid.offered, 'the grid offers a swap button');
@@ -5145,6 +5226,10 @@ check(turnedGrid.before === 'label,2024,2023|4' && turnedGrid.after === 'label,Q
 check(turnedGrid.undone === turnedGrid.before, 'and Undo puts it back', turnedGrid.undone);
 check(turnedGrid.shapeStep && turnedGrid.noteSays,
   'the Shape tab lists the step and the grid note names the button');
+check(turnedGrid.pivotForm === 'Column whose values become columns|Column whose values become rows'
+  + '|Where a row and a column meet more than once|Column that fills the cells'
+  && turnedGrid.pivotHead === '2024,Q1,Q2,Q3,Q4',
+  'and a pivot, whose form names each column it turns', `${turnedGrid.pivotForm} / ${turnedGrid.pivotHead}`);
 
 await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1800);
