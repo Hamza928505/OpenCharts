@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { recommendAnalysisCharts, buildAnalysisChart } from '../js/studio/analysis-charts.js';
+import { recommendAnalysisCharts, buildAnalysisChart, GOAL_OF_KIND } from '../js/studio/analysis-charts.js';
+import { recommendCharts, LIMITS, GOALS } from '../js/studio/recommend.js';
+import { profileTable } from '../js/studio/profile.js';
 
 const table = { headers: ['Batch', 'Baseline', 'Error', 'Copy of error', 'Constant', 'Record ID'], rows: [
   ['A', '2', '0', '0', '7', 'r1'], ['A', '2', '-4', '-4', '7', 'r2'],
@@ -80,4 +82,17 @@ const box = buildAnalysisChart(rich, richPlans.find((p) => p.kind === 'spread' &
 assert.equal(box.table.rows.length, 23, 'box plot keeps every valid value, drops the blank');
 const multi = buildAnalysisChart(rich, richPlans.find((p) => p.kind === 'trendMulti'));
 assert.ok(multi.table.rows.every((r) => r.slice(1).every((v) => v !== '' && Number.isFinite(Number(v)))), 'no blank or zero-filled cells');
+
+// One threshold, two surfaces: at the edge of "few categories" the analysis panel and the report agree.
+const withGroups = (n) => ({ headers: ['Group', 'Score'], rows: Array.from({ length: n * 3 }, (_, i) => [`G${i % n}`, String(i * 2 + (i % 7))]) });
+const readable = new Set(['bar-vertical', 'bar-horizontal', 'box-plot', 'treemap', 'bar-lollipop']);
+for (const [n, few] of [[LIMITS.fewCategories, true], [LIMITS.fewCategories + 1, false]]) {
+  const t = withGroups(n);
+  assert.equal(recommendAnalysisCharts(t).some((p) => p.id === 'box-plot'), few, `${n} groups: box plot ${few ? 'offered' : 'not offered'}`);
+  const { suggestions } = recommendCharts(profileTable(t), readable);
+  assert.equal(suggestions[0].id === 'bar-vertical', few, `${n} groups: report leads with ${few ? 'vertical' : 'horizontal'} bars`);
+}
+assert.ok(richPlans.every((p) => GOALS.includes(p.goal) && p.goal === GOAL_OF_KIND[p.kind]), 'every plan names a known goal');
+assert.ok(richPlans.every((p) => typeof p.caution === 'string' && p.caution.length), 'every plan carries a caution');
+assert.ok(recommendCharts(profileTable(rich), new Set(['line-basic', 'bar-vertical'])).suggestions.every((s) => GOALS.includes(s.goal)), 'report suggestions name a goal');
 console.log(`Analysis recommendations: ${many.length} views, full 403 rows/45 columns, counts, grouped arithmetic, exclusions, dates, bounds and immutable data passed.`);

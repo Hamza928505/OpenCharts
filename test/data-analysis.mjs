@@ -189,6 +189,7 @@ try {
   const recommendations = panel.locator('[data-recommendations]');
   assert.ok(Number((await recommendations.locator('[data-charts-count]').innerText()).split(' ')[0]) > 115);
   assert.equal(await recommendations.locator('.analysis-suggestion').count(), 4, 'only the visible page is built');
+  assert.equal(await recommendations.locator('[data-chart-caution]').count(), 4, 'each card says how its chart misleads');
   assert.ok((await recommendations.locator('[data-chart-source]').allTextContents()).every((note) => /All 103 source rows analyzed/.test(note)));
   const firstKey = await recommendations.locator('.analysis-suggestion').first().getAttribute('data-plan');
   await recommendations.locator('[data-charts-next]').click();

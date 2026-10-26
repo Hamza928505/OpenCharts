@@ -62,7 +62,7 @@ function mountRecommendations(host, table, profile) {
       const card = document.createElement('article');
       card.className = 'analysis-suggestion';
       card.dataset.plan = plan.key;
-      card.innerHTML = `<h5>${esc(plan.title)}</h5><p class="dlg-note">${esc(plan.why)}</p>
+      card.innerHTML = `<h5>${esc(plan.title)}</h5><p class="dlg-note">${esc(plan.why)}</p>${plan.caution ? `<p class="dlg-note" data-chart-caution>Watch: ${esc(plan.caution)}</p>` : ''}
         <div class="analysis-preview"></div><p class="dlg-note" data-chart-source></p>
         <div class="analysis-chart-actions"><a class="btn btn-sm" data-open-chart href="studio.html?chart=${encodeURIComponent(plan.id)}">Open in studio</a>
           <button class="btn btn-sm btn-ghost" type="button" data-chart-download>Download chart data</button></div>

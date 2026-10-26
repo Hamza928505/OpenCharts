@@ -33,6 +33,28 @@ import { CHARTS } from './registry.js';
 import { CHART_HELP, helpFor } from './chart-help.js';
 
 /**
+ * What each suggestion is *for*, so a surface can say which question it answers.
+ * `analysis-charts.js` uses the same words for its plan kinds.
+ */
+export const GOALS = ['comparison', 'distribution', 'relationship', 'trend',
+  'composition', 'frequency', 'multivariate'];
+
+/**
+ * The cut-offs the rules and `analysis-charts.js` both read. They were typed
+ * twice, and two copies of a threshold drift: one surface would call 13 groups
+ * "few enough for bars" while the other called them too many.
+ */
+export const LIMITS = {
+  fewCategories: 12, // most a vertical bar or box plot labels legibly
+  manyCategories: 60, // past this a bar per value stops being readable
+  pieMax: 5, // most slices a pie stays readable at
+  gridSide: 20, // most rows or columns a heatmap axis carries
+  gridCells: 400, // most cells in a two-way grid
+  distributionRows: 30, // fewest rows worth drawing a shape from
+  manyMeasures: 4, // measures per row before parallel axes make sense
+};
+
+/**
  * The rules.
  *
  * Each looks at the profile and either returns nothing or names charts with a
@@ -46,6 +68,7 @@ import { CHART_HELP, helpFor } from './chart-help.js';
 const RULES = [
   {
     id: 'time-series',
+    goal: 'trend',
     when: (p) => p.dates.length >= 1 && p.numbers.length >= 1,
     charts: (p) => (p.numbers.length > 1
       ? ['line-multi', 'area-stacked', 'line-basic']
@@ -61,8 +84,9 @@ const RULES = [
   },
   {
     id: 'few-categories',
+    goal: 'comparison',
     when: (p) => p.categories.length >= 1 && p.numbers.length >= 1
-      && p.categories[0].distinct <= 12,
+      && p.categories[0].distinct <= LIMITS.fewCategories,
     charts: (p) => (p.numbers.length > 1
       ? ['bar-vertical', 'bar-stacked', 'radar-multi']
       : ['bar-vertical', 'bar-horizontal', 'bar-lollipop']),
@@ -73,8 +97,10 @@ const RULES = [
   },
   {
     id: 'many-categories',
+    goal: 'comparison',
     when: (p) => p.categories.length >= 1 && p.numbers.length >= 1
-      && p.categories[0].distinct > 12 && p.categories[0].distinct <= 60,
+      && p.categories[0].distinct > LIMITS.fewCategories
+      && p.categories[0].distinct <= LIMITS.manyCategories,
     charts: () => ['bar-horizontal', 'treemap', 'bar-lollipop'],
     weight: 80,
     why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" is too many `
@@ -83,6 +109,7 @@ const RULES = [
   },
   {
     id: 'correlation',
+    goal: 'relationship',
     when: (p) => p.correlations.length > 0,
     charts: () => ['scatter-basic', 'bubble', 'scatter-clusters'],
     weight: 85,
@@ -95,6 +122,7 @@ const RULES = [
   },
   {
     id: 'separation',
+    goal: 'distribution',
     when: (p) => p.separators.length > 0 && p.numbers.length >= 1,
     charts: () => ['box-plot', 'violin', 'bar-vertical'],
     weight: 75,
@@ -107,7 +135,8 @@ const RULES = [
   },
   {
     id: 'distribution',
-    when: (p) => p.numbers.length >= 1 && p.rows >= 30 && !p.categories.length,
+    goal: 'distribution',
+    when: (p) => p.numbers.length >= 1 && p.rows >= LIMITS.distributionRows && !p.categories.length,
     charts: () => ['histogram', 'box-plot', 'density-plot'],
     weight: 70,
     why: (p) => `${p.rows} rows and no column naming them, so the interesting question `
@@ -116,8 +145,9 @@ const RULES = [
   },
   {
     id: 'part-to-whole',
+    goal: 'composition',
     when: (p) => p.categories.length >= 1 && p.numbers.length === 1
-      && p.categories[0].distinct >= 2 && p.categories[0].distinct <= 5,
+      && p.categories[0].distinct >= 2 && p.categories[0].distinct <= LIMITS.pieMax,
     charts: () => ['pie', 'doughnut', 'bar-vertical'],
     weight: 60,
     why: (p) => `Only ${p.categories[0].distinct} values in "${p.categories[0].name}"`,
@@ -125,6 +155,7 @@ const RULES = [
   },
   {
     id: 'flow',
+    goal: 'relationship',
     when: (p) => p.categories.length >= 2 && p.numbers.length >= 1,
     charts: () => ['sankey', 'chord', 'parallel-sets'],
     weight: 65,
@@ -134,8 +165,9 @@ const RULES = [
   },
   {
     id: 'two-way-table',
+    goal: 'frequency',
     when: (p) => p.categories.length >= 2 && p.numbers.length >= 1
-      && p.categories[0].distinct * p.categories[1].distinct <= 400,
+      && p.categories[0].distinct * p.categories[1].distinct <= LIMITS.gridCells,
     charts: () => ['heatmap', 'echarts-heatmap'],
     weight: 55,
     why: (p) => `${p.categories[0].distinct} × ${p.categories[1].distinct} combinations of `
@@ -144,7 +176,8 @@ const RULES = [
   },
   {
     id: 'many-measures',
-    when: (p) => p.numbers.length >= 4,
+    goal: 'multivariate',
+    when: (p) => p.numbers.length >= LIMITS.manyMeasures,
     charts: () => ['parallel-coords', 'radar-multi', 'heatmap'],
     weight: 50,
     why: (p) => `${p.numbers.length} measures per row, starting with "${p.numbers[0].name}"`,
@@ -217,7 +250,7 @@ export function recommendCharts(profile, readable, limit = 6) {
       const score = rule.weight - i * 4;
       const held = picked.get(id);
       if (!held || held.score < score) {
-        picked.set(id, { id, score, evidence, encodes, rule: rule.id, lead: i === 0 });
+        picked.set(id, { id, score, evidence, encodes, rule: rule.id, goal: rule.goal, lead: i === 0 });
       }
     });
   }
@@ -243,6 +276,7 @@ export function recommendCharts(profile, readable, limit = 6) {
       return {
         def,
         id: s.id,
+        goal: s.goal,
         why: encoding ? `${s.evidence} — ${encoding}` : s.evidence,
         // What is wrong with this suggestion, from the table that already
         // names how each chart type misleads.
