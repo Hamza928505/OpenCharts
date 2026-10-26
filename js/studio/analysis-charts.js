@@ -109,6 +109,34 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
   return plans;
 }
 
+/**
+ * The recipe (the JSON `choose.mjs --recipe` takes) that draws this plan from
+ * the file as it came, or null where no recipe can say it. A recipe names
+ * columns, so it needs the headings. `crosstab` has none: `pivot` refuses to
+ * guess how two groups combine, which is right.
+ */
+export function recipeOf(plan, headers) {
+  const [a, b] = plan.columns.map((i) => headers[i]);
+  // The panel never draws a blank or a word as a number, so the recipe keeps
+  // only the rows whose measure is one. `between` passes numbers and nothing else.
+  const numeric = (col) => ({ filter: col, between: [-1e15, 1e15] });
+  switch (plan.kind) {
+    case 'count': case 'composition':
+      return { chart: plan.id, steps: [{ group: a, agg: 'count' }] };
+    case 'group':
+      return { chart: plan.id, steps: [{ group: a, agg: plan.agg, values: [b] }] };
+    case 'spread':
+      return { chart: plan.id, steps: [numeric(b)], columns: [a, b], roles: { group: a, value: b } };
+    case 'distribution':
+      return { chart: plan.id, steps: [numeric(a)], columns: [a] };
+    case 'relationship':
+      return { chart: plan.id, steps: [numeric(a), numeric(b)], columns: [a, b] };
+    case 'trend': case 'trendMulti':
+      return { chart: plan.id, steps: [{ group: a, agg: 'mean', values: plan.columns.slice(1).map((i) => headers[i]) }, { sort: a }] };
+    default: return null;
+  }
+}
+
 /** Build one view from all rows. Missing numbers are excluded, never zero-filled. */
 export function buildAnalysisChart(source, plan) {
   if (!Array.isArray(plan.columns) || !plan.columns.length || plan.columns.some((i) => !Number.isInteger(i) || i < 0 || i >= source.headers.length)) {

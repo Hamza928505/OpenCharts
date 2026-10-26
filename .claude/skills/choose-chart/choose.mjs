@@ -46,6 +46,7 @@ import { facetByColumn } from '../../../js/studio/facet.js';
 import { generateCode } from '../../../js/studio/engines.js';
 import { rankCharts } from '../../../js/studio/DataMatch.js';
 import { recommendCharts, summarise } from '../../../js/studio/recommend.js';
+import { recommendAnalysisCharts, recipeOf } from '../../../js/studio/analysis-charts.js';
 import { CHARTS, getChart, newSpec, searchCharts } from '../../../js/studio/registry.js';
 import { helpFor } from '../../../js/studio/chart-help.js';
 import { encodeSpec, URL_COMFORTABLE } from '../../../js/studio/share.js';
@@ -716,6 +717,22 @@ if (list) {
     out();
     out('No rule fits this table, so there is no recommendation. Charts that can read it:');
     [...rank.fits, ...rank.partial].slice(0, 8).forEach((e) => out(`  ${e.def.id} — ${e.def.title}`));
+  }
+
+  // The analysis panel's views: charts of the table *aggregated*, which is
+  // what a long file usually needs and the whole-table list above cannot say.
+  // Each prints the recipe that draws it, from the same plans the panel shows.
+  const views = recommendAnalysisCharts(table, prof).map((p) => ({ p, recipe: recipeOf(p, table.headers) }))
+    .filter((v) => v.recipe).slice(0, 5);
+  if (views.length) {
+    out();
+    out('Views of this table, aggregated (run one to see what the chart holds):');
+    views.forEach(({ p, recipe: r }) => {
+      out(`  ${p.id} — ${p.title} [${p.goal}]`);
+      out(`    why: ${p.why}`);
+      if (p.caution) out(`    watch: ${p.caution}`);
+      out(`    ${recipeFor(r)}`);
+    });
   }
 
   out();
