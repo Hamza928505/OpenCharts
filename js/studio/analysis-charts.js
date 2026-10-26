@@ -3,6 +3,19 @@ import { toNumber } from './transform.js';
 import { getChart, newSpec } from './registry.js';
 import { applyData } from './dataio.js';
 import { parseDateLabel, dateOrder, dateOrderIsGuess } from './timeaxis.js';
+import { LIMITS } from './recommend.js';
+import { helpFor } from './chart-help.js';
+
+/** The question each plan kind answers, in the words `recommend.js` uses. */
+export const GOAL_OF_KIND = { count: 'frequency', group: 'comparison', distribution: 'distribution',
+  relationship: 'relationship', trend: 'trend', trendMulti: 'trend', spread: 'distribution',
+  composition: 'composition', crosstab: 'frequency' };
+const cautions = new Map();
+/** How this chart type misleads, from the same table `recommend.js` reads. */
+function cautionOf(id) {
+  if (!cautions.has(id)) { const def = getChart(id); cautions.set(id, (def && helpFor(def)?.watch) || null); }
+  return cautions.get(id);
+}
 
 /** Lightweight descriptions, not a copy of the dataset per recommendation. */
 export function recommendAnalysisCharts(table, profile = profileTable(table)) {
@@ -14,6 +27,7 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
   const groups = columns.filter((c) => c.type !== 'date' && c.distinct >= 2 && c.distinct < c.filled);
   const buckets = Array.from({ length: 9 }, () => []);
   const add = (bucket, plan) => buckets[bucket].push({ ...plan,
+    goal: GOAL_OF_KIND[plan.kind], caution: cautionOf(plan.id),
     key: [plan.kind, plan.agg || '', ...plan.columns].join(':') });
   for (const group of groups) {
     add(0, { id: 'bar-horizontal', kind: 'count', group: group.index, columns: [group.index],
@@ -28,7 +42,7 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
     }
   }
   // Variety: each rule below mirrors one in recommend.js (separation, part-to-whole, two-way-table).
-  for (const group of groups.filter((c) => c.distinct <= 12)) {
+  for (const group of groups.filter((c) => c.distinct <= LIMITS.fewCategories)) {
     for (const measure of measures) {
       if (group.index === measure.index) continue;
       add(5, { id: 'box-plot', kind: 'spread', group: group.index, measure: measure.index,
@@ -36,15 +50,15 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
         why: `Compare the middle and spread of every valid ${measure.name} value across ${group.distinct} ${group.name} groups, not just the average.` });
     }
   }
-  for (const group of groups.filter((c) => c.distinct <= 5)) {
+  for (const group of groups.filter((c) => c.distinct <= LIMITS.pieMax)) {
     add(6, { id: 'pie', kind: 'composition', group: group.index, columns: [group.index],
       title: `Share of rows by ${group.name}`, why: `Only ${group.distinct} values, few enough for a pie. Shares are of row counts.` });
   }
-  const gridGroups = groups.filter((c) => c.distinct <= 20);
+  const gridGroups = groups.filter((c) => c.distinct <= LIMITS.gridSide);
   for (let i = 0; i < gridGroups.length; i++) {
     for (let j = i + 1; j < gridGroups.length; j++) {
       const [a, b] = [gridGroups[i], gridGroups[j]];
-      if (a.distinct * b.distinct > 400) continue;
+      if (a.distinct * b.distinct > LIMITS.gridCells) continue;
       add(7, { id: 'heatmap', kind: 'crosstab', group: a.index, columns: [a.index, b.index], other: b.index,
         title: `Rows by ${a.name} and ${b.name}`, why: `${a.distinct} × ${b.distinct} combinations; the grid shows how many rows fall in each.` });
     }
