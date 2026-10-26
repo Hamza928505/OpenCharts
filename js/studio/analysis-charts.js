@@ -12,7 +12,7 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
   const measures = columns.filter((c) => c.type !== 'date' && c.numericCount >= 2
     && c.numericShare >= 0.5 && c.min !== c.max);
   const groups = columns.filter((c) => c.type !== 'date' && c.distinct >= 2 && c.distinct < c.filled);
-  const buckets = [[], [], [], [], []];
+  const buckets = Array.from({ length: 9 }, () => []);
   const add = (bucket, plan) => buckets[bucket].push({ ...plan,
     key: [plan.kind, plan.agg || '', ...plan.columns].join(':') });
   for (const group of groups) {
@@ -25,6 +25,28 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
           columns: [group.index, measure.index], title: `${label} ${measure.name} by ${group.name}`,
           why: `${label} of valid ${measure.name} values in each ${group.name} group.${agg === 'sum' ? ' Totals depend on group size and are useful when values are additive.' : ' Groups may contain different numbers of observations.'}` });
       }
+    }
+  }
+  // Variety: each rule below mirrors one in recommend.js (separation, part-to-whole, two-way-table).
+  for (const group of groups.filter((c) => c.distinct <= 12)) {
+    for (const measure of measures) {
+      if (group.index === measure.index) continue;
+      add(5, { id: 'box-plot', kind: 'spread', group: group.index, measure: measure.index,
+        columns: [group.index, measure.index], title: `Spread of ${measure.name} by ${group.name}`,
+        why: `Compare the middle and spread of every valid ${measure.name} value across ${group.distinct} ${group.name} groups, not just the average.` });
+    }
+  }
+  for (const group of groups.filter((c) => c.distinct <= 5)) {
+    add(6, { id: 'pie', kind: 'composition', group: group.index, columns: [group.index],
+      title: `Share of rows by ${group.name}`, why: `Only ${group.distinct} values, few enough for a pie. Shares are of row counts.` });
+  }
+  const gridGroups = groups.filter((c) => c.distinct <= 20);
+  for (let i = 0; i < gridGroups.length; i++) {
+    for (let j = i + 1; j < gridGroups.length; j++) {
+      const [a, b] = [gridGroups[i], gridGroups[j]];
+      if (a.distinct * b.distinct > 400) continue;
+      add(7, { id: 'heatmap', kind: 'crosstab', group: a.index, columns: [a.index, b.index], other: b.index,
+        title: `Rows by ${a.name} and ${b.name}`, why: `${a.distinct} × ${b.distinct} combinations; the grid shows how many rows fall in each.` });
     }
   }
   for (const measure of measures) {
@@ -58,6 +80,13 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
         columns: [date.index, measure.index], title: `Average ${measure.name} over ${date.name}`,
         why: 'Order observations by date; repeated dates show the average of their valid measurements.' });
     }
+    if (measures.length >= 2) {
+      const picked = measures.slice(0, 4);
+      add(8, { id: 'line-multi', kind: 'trendMulti', group: date.index, measures: picked.map((m) => m.index),
+        columns: [date.index, ...picked.map((m) => m.index)],
+        title: `Average ${picked.map((m) => m.name).join(', ')} over ${date.name}`,
+        why: 'Several measures on one time axis. Only dates where every measure has a valid value are drawn.' });
+    }
   }
   // Interleave analyses so the first page is useful before any filtering.
   const plans = [];
@@ -74,8 +103,8 @@ export function buildAnalysisChart(source, plan) {
   let table;
   let usedRows = 0;
   let detail = '';
-  if (plan.kind === 'count' || plan.kind === 'group') {
-    const count = plan.kind === 'count';
+  if (plan.kind === 'count' || plan.kind === 'composition' || plan.kind === 'group') {
+    const count = plan.kind !== 'group';
     const summary = groupSummary(source, plan.group, plan.measure, count ? 'count' : plan.agg);
     usedRows = summary.reduce((sum, group) => sum + (count ? group.count : group.valid), 0);
     const valid = summary.filter((group) => Number.isFinite(group.value));
@@ -95,6 +124,39 @@ export function buildAnalysisChart(source, plan) {
     table = { headers: [source.headers[plan.x], source.headers[plan.y]], rows: pairs.map((pair) => pair.map(String)) };
     const corr = correlate(pairs.map((pair) => pair[0]), pairs.map((pair) => pair[1]));
     detail = corr.r === null ? 'Not enough paired variation for Pearson correlation.' : `Pearson r = ${corr.r}; association is not causation.`;
+  } else if (plan.kind === 'spread') {
+    const pairs = source.rows.map((row) => [String(row[plan.group] ?? '').trim() || '(blank)', toNumber(row[plan.measure])])
+      .filter((pair) => Number.isFinite(pair[1]));
+    usedRows = pairs.length;
+    table = { headers: [source.headers[plan.group], source.headers[plan.measure]], rows: pairs.map(([k, v]) => [k, String(v)]) };
+    detail = 'Every valid value is in its group; none are averaged away.';
+  } else if (plan.kind === 'crosstab') {
+    const key = (row, i) => String(row[i] ?? '').trim() || '(blank)';
+    const order = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+    const cells = new Map(); const rowKeys = new Set(); const colKeys = new Set();
+    for (const row of source.rows) {
+      const [r, c] = [key(row, plan.group), key(row, plan.other)];
+      rowKeys.add(r); colKeys.add(c); cells.set(`${r}\u0000${c}`, (cells.get(`${r}\u0000${c}`) || 0) + 1);
+    }
+    const cols = [...colKeys].sort(order);
+    usedRows = source.rows.length;
+    table = { headers: [source.headers[plan.group], ...cols],
+      rows: [...rowKeys].sort(order).map((r) => [r, ...cols.map((c) => String(cells.get(`${r}\u0000${c}`) || 0))]) };
+    detail = `${rowKeys.size} × ${colKeys.size} grid; 0 means no rows, not a missing value.`;
+  } else if (plan.kind === 'trendMulti') {
+    const labels = source.rows.map((row) => row[plan.group]);
+    const { dayFirst } = dateOrder(labels);
+    const moments = labels.map((v) => parseDateLabel(v, dayFirst));
+    const per = plan.measures.map((m) => new Map(groupSummary({ headers: ['Date', 'Value'],
+      rows: source.rows.map((row, i) => [moments[i], toNumber(row[m])]).filter((r) => r.every(Number.isFinite)) }, 0, 1, 'mean')
+      .map((g) => [Number(g.key), g.value])));
+    const kept = [...per[0].keys()].filter((d) => per.every((m) => m.has(d))).sort((a, b) => a - b);
+    const keptSet = new Set(kept);
+    usedRows = source.rows.filter((row, i) => keptSet.has(moments[i]) && plan.measures.some((m) => Number.isFinite(toNumber(row[m])))).length;
+    table = { headers: [source.headers[plan.group], ...plan.measures.map((m) => `Average ${source.headers[m]}`)],
+      rows: kept.map((d) => [new Date(d).toISOString(), ...per.map((m) => String(m.get(d)))]) };
+    detail = `${kept.length} dates where every measure has a value.`
+      + (dateOrderIsGuess(labels) ? ' Ambiguous dates are read month first.' : '');
   } else if (plan.kind === 'trend') {
     const labels = source.rows.map((row) => row[plan.group]);
     const { dayFirst } = dateOrder(labels);
@@ -126,7 +188,7 @@ export function buildAnalysisChart(source, plan) {
       spec.opts[`${axis}Min`] = lo - pad; spec.opts[`${axis}Max`] = hi + pad;
     }
   }
-  if (plan.kind === 'trend') { spec.opts.curve = 'straight'; spec.opts.tension = 0; }
+  if (plan.kind === 'trend' || plan.kind === 'trendMulti') { spec.opts.curve = 'straight'; spec.opts.tension = 0; }
   if (typeof def.onChange === 'function') def.onChange(spec);
   const sourceRows = source.rows.length;
   const excludedRows = sourceRows - usedRows;

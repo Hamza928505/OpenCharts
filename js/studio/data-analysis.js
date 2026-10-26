@@ -19,13 +19,15 @@ function downloadTable(table, filename) {
 /** Plans are cheap; only the current page gets full data tables and renderers. */
 function mountRecommendations(host, table, profile) {
   const plans = recommendAnalysisCharts(table, profile);
-  const kinds = { count: 'Counts', group: 'Grouped calculations', distribution: 'Distributions', relationship: 'Relationships', trend: 'Time trends' };
+  const family = (k) => (k === 'trendMulti' ? 'trend' : k);
+  const kinds = { count: 'Counts', group: 'Grouped calculations', distribution: 'Distributions', relationship: 'Relationships', trend: 'Time trends', spread: 'Spread by group', composition: 'Shares', crosstab: 'Two-way grids' };
   const usedColumns = new Set(plans.flatMap((plan) => plan.columns));
   host.innerHTML = `<h4>Recommended charts for your data</h4>
     <p class="dlg-note">${CHARTS.length} chart types can produce many more views of your data. Explore different columns and calculations, using all eligible rows with missing values explained.</p>
     <p data-charts-count class="analysis-chart-count" role="status"></p>
     <div class="analysis-controls analysis-chart-controls">
-      <label>Analysis type<select data-chart-kind><option value="all">All analyses</option>${[...new Set(plans.map((plan) => plan.kind))].map((kind) => `<option value="${esc(kind)}">${esc(kinds[kind] || kind)}</option>`).join('')}</select></label>
+      <label>Analysis type<select data-chart-kind><option value="all">All analyses</option>${[...new Set(plans.map((plan) => family(plan.kind)))].map((kind) => `<option value="${esc(kind)}">${esc(kinds[kind] || kind)}</option>`).join('')}</select></label>
+      <label>Chart type<select data-chart-type><option value="all">All chart types</option>${[...new Set(plans.map((plan) => plan.id))].map((id) => `<option value="${esc(id)}">${esc(getChart(id)?.title || id)}</option>`).join('')}</select></label>
       <label>Include column<select data-chart-column><option value="all">All columns</option>${profile.columns.filter((c) => usedColumns.has(c.index)).map((c) => `<option value="${c.index}">${esc(c.name)}</option>`).join('')}</select></label>
     </div>
     <div class="analysis-suggestions"></div>
@@ -34,6 +36,7 @@ function mountRecommendations(host, table, profile) {
   const find = (selector) => host.querySelector(selector);
   const kind = find('[data-chart-kind]');
   const column = find('[data-chart-column]');
+  const type = find('[data-chart-type]');
   const grid = find('.analysis-suggestions');
   const instances = [];
   const pageSize = 4;
@@ -43,7 +46,8 @@ function mountRecommendations(host, table, profile) {
   const render = () => {
     if (disposed) return;
     destroyCharts();
-    const matches = plans.filter((plan) => (kind.value === 'all' || plan.kind === kind.value)
+    const matches = plans.filter((plan) => (kind.value === 'all' || family(plan.kind) === kind.value)
+      && (type.value === 'all' || plan.id === type.value)
       && (column.value === 'all' || plan.columns.includes(Number(column.value))));
     const pages = Math.max(1, Math.ceil(matches.length / pageSize));
     page = Math.min(page, pages - 1);
@@ -91,7 +95,7 @@ function mountRecommendations(host, table, profile) {
       grid.append(empty);
     }
   };
-  [kind, column].forEach((control) => control.addEventListener('change', () => { page = 0; render(); }));
+  [kind, type, column].forEach((control) => control.addEventListener('change', () => { page = 0; render(); }));
   find('[data-charts-prev]').addEventListener('click', () => { page--; render(); });
   find('[data-charts-next]').addEventListener('click', () => { page++; render(); });
   const unsubscribe = onThemeChange(render);
