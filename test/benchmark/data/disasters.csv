@@ -1,0 +1,135 @@
+Entity,Year,Deaths
+All natural disasters,1900,1267360
+All natural disasters,1907,1325641
+All natural disasters,1913,882
+All natural disasters,1919,5500
+All natural disasters,1925,5832
+All natural disasters,1931,3706227
+All natural disasters,1937,12025
+All natural disasters,1943,1910322
+All natural disasters,1949,120370
+All natural disasters,1955,6026
+All natural disasters,1961,17341
+All natural disasters,1967,10103
+All natural disasters,1973,110555
+All natural disasters,1979,7341
+All natural disasters,1985,60232
+All natural disasters,1991,189707
+All natural disasters,1997,30124
+All natural disasters,2003,113558
+All natural disasters,2009,16037
+All natural disasters,2015,23893
+Drought,1921,1200000
+Drought,1964,50
+Drought,1978,63
+Drought,1986,84
+Drought,1998,20
+Drought,2004,80
+Earthquake,1901,18
+Earthquake,1908,75000
+Earthquake,1915,29986
+Earthquake,1924,767
+Earthquake,1930,5081
+Earthquake,1936,26
+Earthquake,1943,4332
+Earthquake,1949,6486
+Earthquake,1955,959
+Earthquake,1961,60
+Earthquake,1967,1013
+Earthquake,1973,552
+Earthquake,1979,2100
+Earthquake,1985,9853
+Earthquake,1991,2454
+Earthquake,1997,3159
+Earthquake,2003,29617
+Earthquake,2009,1893
+Earthquake,2015,9550
+Epidemic,1909,1500040
+Epidemic,1924,300000
+Epidemic,1953,481
+Epidemic,1968,177
+Epidemic,1976,396
+Epidemic,1982,2912
+Epidemic,1988,15216
+Epidemic,1994,2505
+Epidemic,2000,6980
+Epidemic,2006,6402
+Epidemic,2012,1887
+Extreme temperature,1936,1693
+Extreme temperature,1962,50
+Extreme temperature,1972,110
+Extreme temperature,1981,300
+Extreme temperature,1987,1220
+Extreme temperature,1993,106
+Extreme temperature,1999,771
+Extreme temperature,2005,1550
+Extreme temperature,2011,435
+Extreme temperature,2017,130
+Extreme weather,1909,713
+Extreme weather,1916,300
+Extreme weather,1923,3139
+Extreme weather,1930,4082
+Extreme weather,1936,3309
+Extreme weather,1942,101000
+Extreme weather,1948,2971
+Extreme weather,1954,2969
+Extreme weather,1960,9164
+Extreme weather,1966,2327
+Extreme weather,1972,1427
+Extreme weather,1978,3676
+Extreme weather,1984,5468
+Extreme weather,1990,4604
+Extreme weather,1996,4581
+Extreme weather,2002,1382
+Extreme weather,2008,140985
+Extreme weather,2014,1424
+Flood,1906,6
+Flood,1928,36
+Flood,1938,954
+Flood,1949,97000
+Flood,1955,584
+Flood,1961,3863
+Flood,1967,2446
+Flood,1973,1835
+Flood,1979,1038
+Flood,1985,4376
+Flood,1991,5852
+Flood,1997,7685
+Flood,2003,3910
+Flood,2009,3627
+Flood,2015,3495
+Landslide,1926,128
+Landslide,1938,200
+Landslide,1952,28
+Landslide,1960,52
+Landslide,1966,604
+Landslide,1972,755
+Landslide,1978,86
+Landslide,1984,228
+Landslide,1990,98
+Landslide,1996,1155
+Landslide,2002,1100
+Landslide,2008,504
+Landslide,2014,943
+Mass movement (dry),1908,33
+Mass movement (dry),1963,150
+Mass movement (dry),1983,466
+Mass movement (dry),1991,86
+Mass movement (dry),2006,11
+Volcanic activity,1900,30
+Volcanic activity,1914,140
+Volcanic activity,1937,506
+Volcanic activity,1952,29
+Volcanic activity,1966,1088
+Volcanic activity,1980,90
+Volcanic activity,1988,7
+Volcanic activity,1996,4
+Volcanic activity,2007,11
+Wildfire,1918,1000
+Wildfire,1956,11
+Wildfire,1981,8
+Wildfire,1987,191
+Wildfire,1995,29
+Wildfire,2001,33
+Wildfire,2007,148
+Wildfire,2013,35

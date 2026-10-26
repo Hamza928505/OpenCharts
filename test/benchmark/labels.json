@@ -1,0 +1,88 @@
+{
+  "status": "PROPOSED by the assistant. NOT reviewed by the project owner. Until it is, every number the benchmark prints is a measure against one reader's opinion, not a validation.",
+  "grades": "3 = the chart I would draw from this file; 2 = a good alternative I would defend; 1 = defensible, not first choice. A chart not listed is not relevant. A chart that needs the table aggregated first is still graded: the benchmark scores what is offered, and the aggregated views are one of the places it can be offered.",
+  "protocol": "split 'dev' files were seen while the recommender was being built and may be used to tune it. Split 'heldout' files were fetched and labelled BEFORE the recommender was run on them, and must not be tuned against: a result there that disagrees with dev is the finding. Neither split is independent of whoever wrote the labels.",
+  "reviewed": false,
+  "datasets": [
+    {
+      "id": "drinks", "split": "dev", "read": {},
+      "about": "Per-country alcohol servings and litres of pure alcohol.",
+      "relevant": { "choropleth": 3, "histogram": 2, "bar-horizontal": 2, "scatter-basic": 1, "treemap": 1 }
+    },
+    {
+      "id": "births", "split": "dev", "read": {},
+      "about": "Daily US births, with year, month, date of month and weekday as small whole numbers.",
+      "relevant": { "box-plot": 3, "violin": 2, "bar-vertical": 2, "line-basic": 2, "histogram": 1 }
+    },
+    {
+      "id": "sealevel", "split": "dev", "read": {},
+      "about": "Sea level by year from two measurement series, with an error band on the first.",
+      "relevant": { "line-basic": 3, "line-multi": 2, "area-band": 2, "area-basic": 1 }
+    },
+    {
+      "id": "globtemp", "split": "dev", "read": {},
+      "about": "Annual temperature anomaly from two sources, one row per source and year.",
+      "relevant": { "line-multi": 3, "line-basic": 2 }
+    },
+    {
+      "id": "gold", "split": "dev", "read": {},
+      "about": "Monthly gold price over nearly two centuries.",
+      "relevant": { "line-basic": 3, "area-basic": 2 }
+    },
+    {
+      "id": "wine", "split": "dev", "read": {},
+      "about": "Eleven chemical measurements and a quality score for red wines.",
+      "relevant": { "box-plot": 3, "violin": 2, "scatter-basic": 2, "histogram": 2, "heatmap": 2, "scatter-clusters": 1, "parallel-coords": 1 }
+    },
+    {
+      "id": "iowa", "split": "dev", "read": {},
+      "about": "Iowa net electricity generation by source and year.",
+      "relevant": { "line-multi": 3, "area-stacked": 2, "bar-stacked": 2 }
+    },
+    {
+      "id": "disasters", "split": "dev", "read": {},
+      "about": "Deaths from natural disasters by type and year, one of the types being the total of the rest.",
+      "relevant": { "line-basic": 3, "line-multi": 2, "area-stacked": 1, "bar-vertical": 1 }
+    },
+    {
+      "id": "healthexp", "split": "dev", "read": {},
+      "about": "Health spending and life expectancy for several countries over the years.",
+      "relevant": { "scatter-clusters": 3, "scatter-basic": 2, "bubble": 2, "line-multi": 2 }
+    },
+    {
+      "id": "planets", "split": "dev", "read": {},
+      "about": "Discovered exoplanets: discovery method, orbit, mass, distance and year.",
+      "relevant": { "histogram": 3, "bar-vertical": 2, "scatter-basic": 2, "box-plot": 1, "violin": 1 }
+    },
+    {
+      "id": "wbpop", "split": "dev", "read": { "skip": 2, "header": true },
+      "about": "Population by country, one column per year from 1960, under two lines of notes. Its aggregate rows (World, income groups) are in the same column as the countries.",
+      "relevant": { "choropleth": 3, "bar-horizontal": 2, "treemap": 2 }
+    },
+    {
+      "id": "gistemp", "split": "dev", "read": {},
+      "about": "NASA global temperature anomaly by year and month, under a title line, with *** where a value is missing.",
+      "relevant": { "line-basic": 3, "area-basic": 2, "bar-vertical": 2 }
+    },
+    {
+      "id": "stocks", "split": "heldout", "read": {},
+      "about": "Monthly prices of five stocks, one row per stock and month, dates written 'Jan 1 2000'.",
+      "relevant": { "line-multi": 3, "line-basic": 2 }
+    },
+    {
+      "id": "weather", "split": "heldout", "read": {},
+      "about": "Daily Seattle weather: rainfall, high and low temperature, wind and a weather type.",
+      "relevant": { "line-multi": 3, "histogram": 2, "bar-vertical": 2, "box-plot": 2, "scatter-basic": 2 }
+    },
+    {
+      "id": "penguins", "split": "heldout", "read": {},
+      "about": "Penguin measurements by species, island and sex, with some measurements missing.",
+      "relevant": { "scatter-clusters": 3, "box-plot": 3, "scatter-basic": 2, "violin": 2, "bar-vertical": 2, "histogram": 1 }
+    },
+    {
+      "id": "flights", "split": "heldout", "read": {},
+      "about": "Monthly airline passengers over twelve years, with the month as a name and the year as a number.",
+      "relevant": { "heatmap": 3, "line-multi": 3, "line-basic": 2 }
+    }
+  ]
+}
