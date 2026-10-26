@@ -24,6 +24,7 @@
 import { looksNumeric } from './dataio.js';
 import { toNumber, ID_NAME, fold, groupRows, AGGREGATES } from './transform.js';
 import { looksDateLike } from './timeaxis.js';
+import { layoutOf } from './layout.js';
 
 /**
  * Is this an identifier?
@@ -369,8 +370,8 @@ function separation(rows, byCol, measureCol) {
  * Ordered by how badly it would mislead: a cell that silently reads as zero
  * beats a duplicated row, which beats a column nobody will be able to read.
  */
-function qualityNotes(cols, duplicates) {
-  const out = [];
+function qualityNotes(cols, duplicates, layoutNotes = []) {
+  const out = [...layoutNotes];
 
   for (const c of cols) {
     if (c.type === 'empty') {
@@ -471,6 +472,8 @@ export function profileTable(table) {
   const groups = columns.filter((c) => !c.idLike && c.distinct >= 2
     && c.distinct <= CATEGORY_CEILING && c.distinct < c.filled);
   const duplicates = duplicateGroups({ headers, rows });
+  // How the table is arranged, as against what is in it: see layout.js.
+  const layout = layoutOf(headers, rows, columns);
 
   // Every numeric pair, strongest first, and only the ones worth a sentence.
   const correlations = [];
@@ -514,7 +517,8 @@ export function profileTable(table) {
     groups,
     duplicates,
     relationshipsLimited: variable.length > scanned.length || groups.length > 40,
-    quality: qualityNotes(columns, duplicates),
+    quality: qualityNotes(columns, duplicates, layout.notes),
+    layout: { periods: layout.periods, multiValue: layout.multiValue, repeated: layout.repeated },
     correlations: correlations.slice(0, 5),
     separators: separators.slice(0, 3),
   };

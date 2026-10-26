@@ -25,6 +25,9 @@ A recipe is one JSON object, or a file holding one. Every key is optional except
   - `{"group": "region", "agg": "sum"}`: one row per region. `agg` is `sum`,
     `mean`, `median`, `min`, `max` or `count`; `"values": [...]` names the
     columns to fold.
+  - `{"split": "genres", "sep": ";"}`: one row per value in a cell that lists
+    several. The other columns are copied, so a total of one counts a row once
+    per value; `sep` is required.
   - `{"bin": "age", "bins": 10}`, `{"sort": "year", "dir": "desc"}`,
     `{"limit": 10}`, `{"transpose": true}`.
   - `{"pivot": "source", "rows": "year", "value": "mean"}`: one column per

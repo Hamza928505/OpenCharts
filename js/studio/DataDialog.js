@@ -26,7 +26,7 @@ import { ask } from './confirm.js';
 import { readDataFile, readDataUrl, ACCEPTED } from './fileimport.js';
 import { loadLibrary } from './loader.js';
 import {
-  OPS, TESTS, AGGREGATES, runSteps, defaultStep, defaultValueCols, numericColumns, describeStep,
+  OPS, TESTS, AGGREGATES, SEPARATORS, runSteps, defaultStep, defaultValueCols, numericColumns, describeStep,
 } from './transform.js';
 import { toast } from './toast.js';
 import { facetableColumns, facetByColumn, facetSource, isFaceted } from './facet.js';
@@ -612,6 +612,11 @@ export function openDataDialog(def, spec, onApply, seed) {
           [{ id: '', label: 'the value of' }, ...AGGREGATES.map((a) => ({ id: a.id, label: `the ${a.label.toLowerCase()} of` }))],
           step.agg || '', (v) => { step.agg = v; change(); }, 'Where a row and a column meet more than once'));
         body.appendChild(colSelect(headers, step.val, (v) => { step.val = v; change(); }, 'Column that fills the cells'));
+      } else if (step.op === 'split') {
+        body.appendChild(el('span', 'shape-word', 'One row for each value in'));
+        body.appendChild(colSelect(headers, step.col, (v) => { step.col = v; change(); }, 'Column holding several values'));
+        body.appendChild(el('span', 'shape-word', 'separated by'));
+        body.appendChild(pickSelect(SEPARATORS, step.sep || ';', (v) => { step.sep = v; change(); }, 'What sits between the values'));
       }
 
       row.appendChild(body);

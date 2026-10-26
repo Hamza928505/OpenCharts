@@ -14,6 +14,16 @@ before choosing.**
   years (`label,2023,2024`): rerun with `--header`.
 - The user's rows are the things and the columns are periods, and they want a
   line per thing: rerun with `--swap`.
+- A `Note` says years, quarters or months run across and each row is a thing:
+  that is the line above, so `--swap` (or `{"transpose": true}` in a recipe),
+  after keeping only the rows to compare if there are more than a dozen.
+- A `Note (warn)` says a column holds several values in one cell (`Action; Comedy`):
+  add the `{"split": "<column>", "sep": ";"}` step it prints before grouping or
+  counting it. A total of any other column then counts a row once per value.
+- A `Note (warn)` says a measure is the same on every row sharing another column,
+  and a view carries a `!` or a `warning` saying its total or average repeats it:
+  group by that column and take the average first, then total. Do not report the
+  repeated total as the answer.
 - Only one row and the input is JSON: the rows sit inside another object (the
   World Bank API answers `[metadata, rows]`). Save just the array of rows and run
   again.

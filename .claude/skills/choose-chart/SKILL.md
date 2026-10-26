@@ -64,7 +64,9 @@ that before handing anything over ([reading-the-output.md](reading-the-output.md
 3. **Check the `Header row` and `Columns` lines, and act on every
    `Note (bad)` before choosing.** Headers, notes above the data and a
    rows-for-columns table are fixed with flags: see the table section of
-   [reading-the-output.md](reading-the-output.md).
+   [reading-the-output.md](reading-the-output.md). So are a `Note (warn)` about
+   several values in a cell (a `split` step) and about a measure repeated down
+   the rows (total it once per group, not per row).
 4. **Verify before you show anything.** Read each chart's `holds:` line and every
    `!` line under it (with `--json`: `holds`, `warnings`, `verify`). `verify.ok`
    says the recipe ran and the chart has rows; `verify.clean` says it also raised
