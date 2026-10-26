@@ -32,13 +32,34 @@
 import { CHARTS } from './registry.js';
 import { CHART_HELP, helpFor } from './chart-help.js';
 import { LIMITS } from './profile.js';
+import { RULE_WEIGHTS, SCORING } from './recommend-weights.js';
 
 /**
  * What each suggestion is *for*, so a surface can say which question it answers.
  * `analysis-charts.js` uses the same words for its plan kinds.
  */
 export const GOALS = ['comparison', 'distribution', 'relationship', 'trend',
-  'composition', 'frequency', 'multivariate', 'geographic'];
+  'composition', 'frequency', 'multivariate', 'geographic', 'ranking', 'anomaly'];
+
+/**
+ * Which goal a question is about, from its words, or null. First match wins, so
+ * the narrower questions (an outlier, a map) are asked before the broad ones.
+ * A reader who names a goal outright skips this.
+ */
+const QUESTION_WORDS = [
+  ['anomaly', /outlier|anomal|unusual|suspicious|extreme|odd one/i],
+  ['geographic', /\bmap\b|countr|geograph|by (country|city|state)/i],
+  ['ranking', /\brank|\btop \d*|highest|lowest|biggest|largest|smallest|best|worst|leaderboard/i],
+  ['trend', /trend|over time|grow(th|n|ing)|declin|history|timeline|per (day|week|month|quarter|year)/i],
+  ['relationship', /correlat|relationship|related|associat|depend|affect|\bvs\b|versus/i],
+  ['distribution', /distribut|spread|histogram|skew|variab|how (much|widely)/i],
+  ['composition', /\bshare\b|proportion|percent(age)? of|part of|composition|make[s]? up|breakdown/i],
+  ['comparison', /compar|differ|between|\bby\b/i],
+];
+export function intentFromQuestion(text) {
+  const hit = QUESTION_WORDS.find(([, re]) => re.test(String(text || '')));
+  return hit ? hit[0] : null;
+}
 
 /**
  * The cut-offs the rules and `analysis-charts.js` both read, defined beside the
@@ -65,7 +86,6 @@ const RULES = [
     goal: 'geographic',
     when: (p) => (p.geo || []).some((c) => c.geo.kind === 'country') && p.numbers.length >= 1,
     charts: () => ['choropleth', 'bar-horizontal', 'treemap'],
-    weight: 95,
     why: (p) => `"${p.geo.find((c) => c.geo.kind === 'country').name}" names countries and `
       + (p.numbers.length === 1 ? `"${p.numbers[0].name}" measures something`
         : `${p.numbers.length} columns measure something`),
@@ -78,7 +98,6 @@ const RULES = [
     charts: (p) => (p.numbers.length > 1
       ? ['line-multi', 'area-stacked', 'line-basic']
       : ['line-basic', 'area-basic', 'bar-vertical']),
-    weight: 100,
     why: (p) => `"${p.dates[0].name}" orders the rows in time and `
       + (p.numbers.length > 1
         ? `${p.numbers.length} columns measure something`
@@ -90,12 +109,12 @@ const RULES = [
   {
     id: 'few-categories',
     goal: 'comparison',
+    also: ['ranking'],
     when: (p) => p.categories.length >= 1 && p.numbers.length >= 1
       && p.categories[0].distinct <= LIMITS.fewCategories,
     charts: (p) => (p.numbers.length > 1
       ? ['bar-vertical', 'bar-stacked', 'radar-multi']
       : ['bar-vertical', 'bar-horizontal', 'bar-lollipop']),
-    weight: 90,
     why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" and `
       + `${p.numbers.length === 1 ? 'one measure' : `${p.numbers.length} measures`}`,
     encodes: () => 'bars put them on a common baseline, which is what makes lengths comparable.',
@@ -103,11 +122,11 @@ const RULES = [
   {
     id: 'many-categories',
     goal: 'comparison',
+    also: ['ranking'],
     when: (p) => p.categories.length >= 1 && p.numbers.length >= 1
       && p.categories[0].distinct > LIMITS.fewCategories
       && p.categories[0].distinct <= LIMITS.manyCategories,
     charts: () => ['bar-horizontal', 'treemap', 'bar-lollipop'],
-    weight: 80,
     why: (p) => `${p.categories[0].distinct} values in "${p.categories[0].name}" is too many `
       + 'for vertical bars to label',
     encodes: () => 'horizontal bars give each one a readable row.',
@@ -117,7 +136,6 @@ const RULES = [
     goal: 'relationship',
     when: (p) => p.correlations.length > 0,
     charts: () => ['scatter-basic', 'bubble', 'scatter-clusters'],
-    weight: 85,
     why: (p) => {
       const c = p.correlations[0];
       const strength = Math.abs(c.r) >= 0.8 ? 'strongly' : 'noticeably';
@@ -130,7 +148,6 @@ const RULES = [
     goal: 'distribution',
     when: (p) => p.separators.length > 0 && p.numbers.length >= 1,
     charts: () => ['box-plot', 'violin', 'bar-vertical'],
-    weight: 75,
     why: (p) => {
       const s = p.separators[0];
       return `"${s.by}" splits "${s.measure}" into ${s.groups} groups whose averages `
@@ -139,11 +156,22 @@ const RULES = [
     encodes: () => 'a box plot shows whether the spreads differ too, or only the middles.',
   },
   {
+    id: 'outliers',
+    goal: 'anomaly',
+    when: (p) => p.rows >= 10 && p.numbers.some((c) => c.outliers && c.outliers.length),
+    charts: () => ['box-plot', 'beeswarm', 'histogram'],
+    why: (p) => {
+      const c = p.numbers.find((x) => x.outliers && x.outliers.length);
+      return `"${c.name}" has ${c.outliers.length === 5 ? '5+' : c.outliers.length} value`
+        + `${c.outliers.length === 1 ? '' : 's'} more than three deviations out (${c.outliers.join(', ')})`;
+    },
+    encodes: () => 'a box plot marks each one, so it can be investigated rather than averaged away.',
+  },
+  {
     id: 'distribution',
     goal: 'distribution',
     when: (p) => p.numbers.length >= 1 && p.rows >= LIMITS.distributionRows && !p.categories.length,
     charts: () => ['histogram', 'box-plot', 'density-plot'],
-    weight: 70,
     why: (p) => `${p.rows} rows and no column naming them, so the interesting question `
       + `about "${p.numbers[0].name}" is its shape`,
     encodes: () => 'a histogram shows that shape rather than any single value.',
@@ -154,7 +182,6 @@ const RULES = [
     when: (p) => p.categories.length >= 1 && p.numbers.length === 1
       && p.categories[0].distinct >= 2 && p.categories[0].distinct <= LIMITS.pieMax,
     charts: () => ['pie', 'doughnut', 'bar-vertical'],
-    weight: 60,
     why: (p) => `Only ${p.categories[0].distinct} values in "${p.categories[0].name}"`,
     encodes: () => 'few enough that a pie stays readable, if these really are parts of one whole.',
   },
@@ -163,7 +190,6 @@ const RULES = [
     goal: 'relationship',
     when: (p) => p.categories.length >= 2 && p.numbers.length >= 1,
     charts: () => ['sankey', 'chord', 'parallel-sets'],
-    weight: 65,
     why: (p) => `"${p.categories[0].name}" and "${p.categories[1].name}" both name things, `
       + 'with a measure beside them',
     encodes: () => 'that is a flow from one to the other.',
@@ -174,7 +200,6 @@ const RULES = [
     when: (p) => p.categories.length >= 2 && p.numbers.length >= 1
       && p.categories[0].distinct * p.categories[1].distinct <= LIMITS.gridCells,
     charts: () => ['heatmap', 'echarts-heatmap'],
-    weight: 55,
     why: (p) => `${p.categories[0].distinct} × ${p.categories[1].distinct} combinations of `
       + `"${p.categories[0].name}" and "${p.categories[1].name}"`,
     encodes: () => 'a grid shows the whole cross-section at once.',
@@ -184,7 +209,6 @@ const RULES = [
     goal: 'multivariate',
     when: (p) => p.numbers.length >= LIMITS.manyMeasures,
     charts: () => ['parallel-coords', 'radar-multi', 'heatmap'],
-    weight: 50,
     why: (p) => `${p.numbers.length} measures per row, starting with "${p.numbers[0].name}"`,
     encodes: () => 'parallel axes compare their shapes without pretending they share a scale.',
   },
@@ -199,6 +223,8 @@ const RULES = [
  * only visible symptom was a suggestion list quietly one shorter than it
  * should have been. The suite checks this list against the registry.
  */
+export const RULE_IDS = RULES.map((r) => r.id);
+
 export function namedCharts() {
   const out = new Set();
   const measures = [{ name: 'n', distinct: 9 }, { name: 'n2', distinct: 9 }];
@@ -228,7 +254,8 @@ export function namedCharts() {
  * @param {number} [limit]
  * @returns {{ suggestions: Array, reasons: string[] }}
  */
-export function recommendCharts(profile, readable, limit = 6) {
+export function recommendCharts(profile, readable, limit = 6, opts = {}) {
+  const intent = GOALS.includes(opts.intent) ? opts.intent : intentFromQuestion(opts.intent);
   const canRead = readable instanceof Set ? readable : new Set(readable || []);
   const byId = new Map(CHARTS.map((d) => [d.id, d]));
 
@@ -253,18 +280,17 @@ export function recommendCharts(profile, readable, limit = 6) {
       // well the rule fits. `rankCharts` remains the authority on possible.
       if (!canRead.has(id) || !byId.has(id)) return;
       // Later charts in a rule are the alternatives, not the pick.
-      const score = rule.weight - i * 4;
+      const answers = !!intent && (rule.goal === intent || (rule.also || []).includes(intent));
+      const score = RULE_WEIGHTS[rule.id] - i * SCORING.alternativeStep + (answers ? SCORING.intentBoost : 0);
       const held = picked.get(id);
       if (!held || held.score < score) {
-        picked.set(id, { id, score, evidence, encodes, rule: rule.id, goal: rule.goal, lead: i === 0 });
+        picked.set(id, { id, score, evidence, encodes, rule: rule.id, goal: rule.goal, lead: i === 0, answers });
       }
     });
   }
 
-  const suggestions = [...picked.values()]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((s) => {
+  const suggestions = choose([...picked.values()], limit, byId, opts.diversity !== false)
+    .map((s, rank) => {
       const def = byId.get(s.id);
       const help = typeof helpFor === 'function' ? helpFor(def) : (CHART_HELP[s.id] || {});
       // **The evidence is the rule's; the encoding is the chart's.**
@@ -283,6 +309,11 @@ export function recommendCharts(profile, readable, limit = 6) {
         def,
         id: s.id,
         goal: s.goal,
+        rank: rank + 1,
+        // A relative ordering score, not a probability. The interface shows
+        // the reason and never this; it is here for tests and the JSON modes.
+        score: s.score,
+        scoreType: 'relative',
         why: encoding ? `${s.evidence} — ${encoding}` : s.evidence,
         // What is wrong with this suggestion, from the table that already
         // names how each chart type misleads.
@@ -290,7 +321,38 @@ export function recommendCharts(profile, readable, limit = 6) {
       };
     });
 
-  return { suggestions, reasons };
+  const intentNote = intent && !suggestions.some((x) => picked.get(x.id)?.answers)
+    ? `No rule answers "${intent}" for this table, so the order is the general one.` : null;
+  return { suggestions, reasons, intent: intent || null, intentNote };
+}
+
+/** How alike two candidate charts are: same family 1, same rule 0.5, else 0. */
+function similarity(a, b, byId) {
+  if (byId.get(a.id)?.category === byId.get(b.id)?.category) return SCORING.sameCategory;
+  return a.rule === b.rule ? SCORING.sameRule : 0;
+}
+
+/**
+ * Pick `limit` candidates, best first, without offering the same chart five
+ * times. Greedy maximal marginal relevance: each pick is the candidate with the
+ * highest score minus a penalty for resembling one already chosen. Ties fall to
+ * the chart id, so equal inputs always give the same order.
+ */
+function choose(candidates, limit, byId, diverse) {
+  const pool = candidates.slice().sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1));
+  if (!diverse) return pool.slice(0, limit);
+  const chosen = [];
+  while (chosen.length < limit && pool.length) {
+    let best = null;
+    for (const c of pool) {
+      const sim = chosen.reduce((m, x) => Math.max(m, similarity(c, x, byId)), 0);
+      const adjusted = c.score - SCORING.redundancyPenalty * sim;
+      if (!best || adjusted > best.adjusted) best = { c, adjusted };
+    }
+    chosen.push(best.c);
+    pool.splice(pool.indexOf(best.c), 1);
+  }
+  return chosen;
 }
 
 /**
