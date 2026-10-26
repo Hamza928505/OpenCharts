@@ -1,0 +1,102 @@
+{
+  "labelsReviewed": false,
+  "all": {
+    "datasets": 16,
+    "suggestions": {
+      "p1": 0.625,
+      "p3": 0.375,
+      "ndcg5": 0.437,
+      "top1Gold": 0.188,
+      "reachGold": 0.5,
+      "reachGood": 0.875,
+      "invalidRate": 0
+    },
+    "views": {
+      "p1": 0.125,
+      "p3": 0.271,
+      "ndcg5": 0.356,
+      "top1Gold": 0,
+      "reachGold": 0.438,
+      "reachGood": 0.938,
+      "invalidRate": 0
+    },
+    "offered": {
+      "p1": 0.625,
+      "p3": 0.375,
+      "ndcg5": 0.437,
+      "top1Gold": 0.188,
+      "reachGold": 0.563,
+      "reachGood": 0.938,
+      "invalidRate": 0
+    },
+    "distinctTop1": 0.25,
+    "distinctOffered": 19,
+    "diversity": 1
+  },
+  "dev": {
+    "datasets": 12,
+    "suggestions": {
+      "p1": 0.5,
+      "p3": 0.278,
+      "ndcg5": 0.389,
+      "top1Gold": 0.167,
+      "reachGold": 0.5,
+      "reachGood": 0.833,
+      "invalidRate": 0
+    },
+    "views": {
+      "p1": 0.167,
+      "p3": 0.25,
+      "ndcg5": 0.364,
+      "top1Gold": 0,
+      "reachGold": 0.5,
+      "reachGood": 0.917,
+      "invalidRate": 0
+    },
+    "offered": {
+      "p1": 0.5,
+      "p3": 0.278,
+      "ndcg5": 0.389,
+      "top1Gold": 0.167,
+      "reachGold": 0.583,
+      "reachGood": 0.917,
+      "invalidRate": 0
+    },
+    "distinctTop1": 0.333,
+    "distinctOffered": 18,
+    "diversity": 1
+  },
+  "heldout": {
+    "datasets": 4,
+    "suggestions": {
+      "p1": 1,
+      "p3": 0.667,
+      "ndcg5": 0.582,
+      "top1Gold": 0.25,
+      "reachGold": 0.5,
+      "reachGood": 1,
+      "invalidRate": 0
+    },
+    "views": {
+      "p1": 0,
+      "p3": 0.333,
+      "ndcg5": 0.332,
+      "top1Gold": 0,
+      "reachGold": 0.25,
+      "reachGood": 1,
+      "invalidRate": 0
+    },
+    "offered": {
+      "p1": 1,
+      "p3": 0.667,
+      "ndcg5": 0.582,
+      "top1Gold": 0.25,
+      "reachGold": 0.5,
+      "reachGood": 1,
+      "invalidRate": 0
+    },
+    "distinctTop1": 0.75,
+    "distinctOffered": 14,
+    "diversity": 1
+  }
+}

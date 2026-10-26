@@ -41,6 +41,7 @@ jobs:
         run: |
           node test/profile-roles.mjs
           node test/recommend-ranking.mjs
+          node test/benchmark.mjs
           node test/analysis-charts.mjs
           node test/data-analysis.mjs
 

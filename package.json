@@ -43,6 +43,7 @@
     "serve": "python -m http.server 8000",
     "test": "node test/run.mjs",
     "test:headed": "node test/run.mjs --headed",
+    "benchmark": "node test/benchmark.mjs",
     "check": "node --check js/studio/registry.js && node --check js/studio/engines.js && node --check js/studio/dataio.js"
   },
   "files": [
