@@ -23,6 +23,8 @@ assert.ok(namedCharts().every((id) => getChart(id)), 'every chart a rule names e
 const asked = {
   'any outliers in this?': 'anomaly',
   'show it on a map': 'geographic',
+  'which country drinks the most': 'ranking',
+  'average by country': 'geographic',
   'which region is highest': 'ranking',
   'how has revenue grown over time': 'trend',
   'is price related to rating': 'relationship',

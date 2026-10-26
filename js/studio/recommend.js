@@ -48,8 +48,8 @@ export const GOALS = ['comparison', 'distribution', 'relationship', 'trend',
  */
 const QUESTION_WORDS = [
   ['anomaly', /outlier|anomal|unusual|suspicious|extreme|odd one/i],
-  ['geographic', /\bmap\b|countr|geograph|by (country|city|state)/i],
-  ['ranking', /\brank|\btop \d*|highest|lowest|biggest|largest|smallest|best|worst|leaderboard/i],
+  ['geographic', /\bmap\b|geograph|choropleth|by (country|city|state)/i],
+  ['ranking', /\brank|\btop \d*|highest|lowest|biggest|largest|smallest|\bbest\b|\bworst\b|leaderboard|\bmost\b|\bleast\b/i],
   ['trend', /trend|over time|grow(th|n|ing)|declin|history|timeline|per (day|week|month|quarter|year)/i],
   ['relationship', /correlat|relationship|related|associat|depend|affect|\bvs\b|versus/i],
   ['distribution', /distribut|spread|histogram|skew|variab|how (much|widely)/i],
