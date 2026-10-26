@@ -62,4 +62,22 @@ assert.deepEqual(recommendAnalysisCharts({ headers: ['Empty'], rows: [[''], ['']
 assert.ok(!recommendAnalysisCharts({ headers: ['A', 'B'], rows: [['5', ''], ['7', ''], ['', '9'], ['', '12']] }).some((p) => p.kind === 'relationship'), 'nonoverlapping numeric columns cannot form a scatter');
 assert.throws(() => buildAnalysisChart(table, { ...plans[0], columns: [99] }), /columns/);
 assert.throws(() => buildAnalysisChart({ headers: ['A'], rows: [['N/A']] }, { id: 'histogram', kind: 'distribution', measure: 0, columns: [0] }), /No valid observations/);
+
+// Variety: a table with two groups, two measures and a date offers more than the original five chart types.
+const rich = { headers: ['Day', 'Region', 'Tier', 'Sales', 'Cost'], rows: Array.from({ length: 24 }, (_, i) => [
+  `2026-01-${String(i % 6 + 1).padStart(2, '0')}`, ['N', 'S', 'E'][i % 3], ['gold', 'basic'][i % 2], String(10 + i * 3), String(5 + i)]) };
+rich.rows[5][4] = '';
+const richPlans = recommendAnalysisCharts(rich);
+const ids = new Set(richPlans.map((p) => p.id));
+for (const id of ['box-plot', 'pie', 'heatmap', 'line-multi', 'line-basic', 'bar-vertical']) assert.ok(ids.has(id), `offers ${id}`);
+for (const plan of richPlans) {
+  const built = buildAnalysisChart(rich, plan);
+  assert.equal(built.usedRows + built.excludedRows, rich.rows.length, `${plan.key} accounts for every row`);
+}
+const grid = buildAnalysisChart(rich, richPlans.find((p) => p.kind === 'crosstab'));
+assert.equal(grid.table.rows.flatMap((r) => r.slice(1)).reduce((n, v) => n + Number(v), 0), 24, 'crosstab counts every row once');
+const box = buildAnalysisChart(rich, richPlans.find((p) => p.kind === 'spread' && p.measure === 4));
+assert.equal(box.table.rows.length, 23, 'box plot keeps every valid value, drops the blank');
+const multi = buildAnalysisChart(rich, richPlans.find((p) => p.kind === 'trendMulti'));
+assert.ok(multi.table.rows.every((r) => r.slice(1).every((v) => v !== '' && Number.isFinite(Number(v)))), 'no blank or zero-filled cells');
 console.log(`Analysis recommendations: ${many.length} views, full 403 rows/45 columns, counts, grouped arithmetic, exclusions, dates, bounds and immutable data passed.`);
