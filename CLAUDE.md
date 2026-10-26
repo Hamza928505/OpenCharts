@@ -616,6 +616,36 @@ and `idLike` mean what they always did, so nothing that read them changed.
 `profile.js`, because the profiler needs one of them and must not import the
 layers above it; `recommend.js` re-exports it.
 
+### Asking, and not getting five of the same
+
+`recommendCharts(profile, readable, limit, opts)` takes two more things, both
+optional and both inspection rather than a verdict.
+
+- **A question is a goal.** `opts.intent` is a goal name or free text;
+  `intentFromQuestion` maps words to a goal by an ordered list of patterns
+  (outliers and maps are asked before the broad "compare"). A rule that answers
+  the goal - its own `goal`, or one it lists under `also`, as the two category
+  rules do for `ranking` - gets `SCORING.intentBoost`. A question nothing
+  answers leaves the general order and says so in `intentNote`, instead of
+  pretending it was heard. `anomaly` has a rule of its own, `outliers`, which
+  names the values the profile found.
+- **Variety is a selection step, not a score.** `choose()` is greedy maximal
+  marginal relevance: the best candidate leads, then each pick loses
+  `redundancyPenalty` per unit of similarity to what is already chosen (same
+  chart family 1, same rule 0.5). Without it a category plus a measure returned
+  bar, horizontal bar and lollipop. The penalty is below the intent boost, so a
+  reader who asks for a ranking still gets bars. `opts.diversity: false` gives
+  the plain score order; ties fall to the chart id, so equal inputs always give
+  equal output.
+
+The numbers live in `recommend-weights.js`, away from the rules, so tuning the
+order is not an edit to what a rule means. **They are relative ordering scores,
+not probabilities, and nothing has been fitted to data.** Each suggestion
+carries `score` and `scoreType: 'relative'` so a program reading it cannot take
+90 for "90% likely"; the interface shows the reason and never the number.
+`test/recommend-ranking.mjs` holds all of it, including that every rule has a
+weight and every weight a rule.
+
 ### Which chart fits a table
 
 `DataMatch.js` asks `checkTableShape` for every chart at once and hands the
