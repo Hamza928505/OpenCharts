@@ -58,6 +58,7 @@ export const OPS = [
   { id: 'sort', label: 'Sort by…' },
   { id: 'limit', label: 'Keep only the first…' },
   { id: 'transpose', label: 'Swap rows and columns' },
+  { id: 'pivot', label: 'One column per value of…' },
 ];
 
 /**
@@ -289,10 +290,52 @@ function opTranspose(table) {
   return transposeTable(table);
 }
 
-const RUNNERS = { filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin, transpose: opTranspose };
+/**
+ * One column per value of `col`, one row per value of `key`, each cell `val`.
+ *
+ * A database or an API hands over the long table — year, source, amount —
+ * and a reader wants a line per source. Every `labelSeries` chart reads a
+ * series from a column, so that table drew one line doubling back through
+ * every source in turn. This is the turn between the two.
+ *
+ * Where a row and a column meet in more than one row, `agg` folds them; with
+ * no `agg` that is refused rather than guessed, because a total of two
+ * readings of the same year is a number nobody measured. Cells otherwise keep
+ * their text exactly as it was. Rows and columns come in the order first seen.
+ */
+function opPivot(table, step) {
+  const [k, c, v] = [step.key | 0, step.col | 0, step.val | 0];
+  const cells = new Map();
+  const cols = new Set();
+  for (const r of table.rows) {
+    const row = String(r[k] ?? '').trim();
+    const col = String(r[c] ?? '').trim();
+    if (!cells.has(row)) cells.set(row, new Map());
+    cols.add(col);
+    const cell = cells.get(row);
+    if (!cell.has(col)) cell.set(col, []);
+    cell.get(col).push(r[v] ?? '');
+  }
+  return {
+    headers: [table.headers[k] || 'Label', ...cols],
+    rows: [...cells].map(([row, cell]) => [row, ...[...cols].map((col) => {
+      const got = cell.get(col) || [];
+      if (got.length < 2) return got.length ? got[0] : '';
+      if (!step.agg) {
+        throw new Error(`${table.headers[k]} ${row} and ${table.headers[c]} ${col} meet in ${got.length} rows;`
+          + ' choose how to combine them');
+      }
+      return tidyNumber(fold(got.map(toNumber), step.agg));
+    })]),
+  };
+}
+
+const RUNNERS = {
+  filter: opFilter, group: opGroup, sort: opSort, limit: opLimit, bin: opBin, transpose: opTranspose, pivot: opPivot,
+};
 
 /** The steps Arquero has no equivalent for; a pipeline holding one runs natively. */
-const NATIVE_ONLY = new Set(['bin', 'transpose']);
+const NATIVE_ONLY = new Set(['bin', 'transpose', 'pivot']);
 
 /**
  * Run every step in order.
@@ -322,9 +365,11 @@ export function runSteps(table, steps) {
   // transpose, which is not a relational operation at all — because aborting
   // mid-pipeline leaves stages and current in an inconsistent state.
   const nativeOnly = steps && steps.some((s) => s && NATIVE_ONLY.has(s.op));
-  if (typeof window.aq !== 'undefined' && steps && steps.length > 0 && !nativeOnly) {
+  // `globalThis`, not `window`: the choose-chart skill runs these steps under
+  // Node, where there is no window to ask.
+  if (typeof globalThis.aq !== 'undefined' && steps && steps.length > 0 && !nativeOnly) {
     try {
-      const aq = window.aq;
+      const aq = globalThis.aq;
       // Convert to Arquero table
       const data = {};
       const colNames = table.headers.map((h, i) => h || `Column ${i + 1}`);
@@ -487,6 +532,11 @@ export function describeStep(step, headers) {
     case 'sort': return `Sort by ${name(step.col)}, ${step.dir === 'desc' ? 'largest first' : 'smallest first'}`;
     case 'limit': return `Keep the first ${step.n || 10} rows`;
     case 'transpose': return 'Swap rows and columns — each row becomes a column, headed by its first cell';
+    case 'pivot': {
+      const a = AGGREGATES.find((x) => x.id === step.agg);
+      return `One column per ${name(step.col)}, one row per ${name(step.key)}, holding `
+        + `${a ? `the ${a.label.toLowerCase()} of ` : ''}${name(step.val)}`;
+    }
     default: return 'Unknown step';
   }
 }
@@ -505,6 +555,14 @@ export function defaultStep(op, table) {
     case 'sort': return { op, col: nums[0] ?? 0, dir: 'desc' };
     case 'limit': return { op, n: 10 };
     case 'transpose': return { op };
+    case 'pivot': {
+      // year, source, amount: the words become the columns, the column before
+      // or after them the rows, and the last number fills the cells.
+      const col = firstText < 0 ? 0 : firstText;
+      const key = col === 0 ? 1 : 0;
+      const val = [...nums].reverse().find((c) => c !== key && c !== col) ?? table.headers.length - 1;
+      return { op, col, key, val, agg: '' };
+    }
     default: return { op };
   }
 }

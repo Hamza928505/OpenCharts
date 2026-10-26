@@ -293,6 +293,14 @@ reads each *row* as one — which is what sparklines, horizon bands, Likert
 scales and parallel coordinates actually want. Choosing the wrong one silently
 transposes the chart.
 
+**A distribution names its groups by heading.** `observations` reads a table
+of nothing but numbers as one group per column, which is right for
+`control, treated` and wrong for a weekday numbered 1–7 beside its measure:
+births by day of the week became two groups, one of them the weekdays. The
+editor writes long form headed `group, value`, so a first column headed
+`group` is read as the group names whatever it holds — or a box plot of
+weekdays would reopen in the editor as two groups called `group` and `value`.
+
 **A table is not always one label column and some numbers.** Three shapes read
 every column but the last as words, and how many there are is whatever the
 reader typed:
@@ -418,11 +426,11 @@ amount of column-picking gets from one to the other. The answer used to be
 "aggregate it in a spreadsheet first", which is the step this tool exists to
 remove.
 
-`transform.js` adds six operations — **filter, group, bin, sort, limit,
-transpose** — and the Shape tab in the data editor puts them in a pipeline.
-Each step reads as a sentence and sees the table the previous one made. (The
-last is the odd one out: it changes no number, only which of them a chart
-reads as a series — see "A table the other way up" below.)
+`transform.js` adds seven operations — **filter, group, bin, sort, limit,
+transpose, pivot** — and the Shape tab in the data editor puts them in a
+pipeline. Each step reads as a sentence and sees the table the previous one
+made. (The last two are the odd ones out: neither totals anything, they change
+which numbers a chart reads as a series — see "A table the other way up" below.)
 
 **Transforms are an edit, not a layer, and that is the whole design.** They run
 once, in the editor, and what comes out is written into the grid as literal
@@ -434,8 +442,17 @@ reproduce numbers it could simply have been given. It is also the honest way
 round: the reader sees what the aggregation produced before accepting it, so
 the numbers on the chart are numbers they looked at.
 
-Four things it gets right, each checked:
+Five things it gets right, each checked:
 
+- **A pivot refuses to guess a total.** `year, source, mean` is the long table
+  an API or a database hands over, and a line per source needs a column per
+  source: `pivot` makes one column per value of one column and one row per
+  value of another. Where a row and a column meet in two rows it fails, naming
+  both, rather than adding them, because a total of two readings of one year
+  is a number nobody measured; `agg` is how a reader says otherwise. A cell no
+  row filled stays blank in the table. The chart's reader still draws a blank
+  as 0, which is the next thing to fix and which the choose-chart skill says
+  out loud meanwhile.
 - **An id column is not totalled.** Summing `id` produces 124,750 and means
   nothing. The default fold skips columns *named* like identifiers rather than
   ones that look like them, because every value-based rule breaks in one
@@ -2181,6 +2198,102 @@ Three things it has to get right, each checked:
   either way: it illustrates the shape, and replacing it with the reader's own
   rows would leave the brief with no statement of the format at all.
 
+### The choose-chart skill
+
+`.claude/skills/choose-chart/` is a Claude Code skill: an assistant working in
+this repository answers "which chart?" by running `choose.mjs`, which calls
+`profileTable`, `rankCharts` and `recommendCharts` under Node and prints each
+pick with its reason, its `watch` line and a share link holding the table. It
+adds no rule of its own, so an assistant and the gallery's matcher cannot
+disagree; improving `recommend.js` improves both. It is repository tooling,
+not part of the site. The suite holds its list to the registry and decodes its
+link to check the table reached it.
+
+**What it adds is a look at the result.** Run on twelve public datasets, the
+top pick drew the wrong thing on ten: a bar per row of 150 iris flowers, a
+line of the `year` column where the reason was about passengers, a histogram
+with a group per date. So each suggestion prints what the chart *holds* once
+it has read the table — `def.toText(spec)`, the table the data editor would
+open on — and flags what is wrong with it with a `!`: labels that repeat on a
+one-mark-per-row chart, a distribution whose groups are one per row or are
+numbers, and a column the reason names whose first value the chart does not
+hold. `--columns` lets the assistant choose the columns instead. The SKILL.md
+tells it to resolve every `!` before handing over a link.
+
+**A second round, on twelve files it had never seen, added four more.** Each
+is a way a chart held the right columns and still drew the wrong thing:
+
+- **Dates that run backwards or repeat.** A long table (one row per stock per
+  date) drew five stocks as one line doubling back in time, and an ONS series
+  holds its years, then its quarters, then its months. The labels are read by
+  `timeaxis.js`, the parser the axis itself uses. A column that runs newest
+  first is an order, so only one that goes both ways is flagged.
+- **Measures fiftyfold apart on one axis**, such as CO₂'s uncertainty flat
+  along the bottom of its mean. A chart with a right axis is exempt, being
+  the answer.
+- **Blank cells**, which `dataio` reads as 0. They are counted by comparing
+  zeros in the reader's table with zeros in the held one, so a real 0 is not
+  blamed.
+- **More groups than `PALETTE` has colours**, where the colours repeat and
+  the groups cannot be told apart.
+
+There is a note for **rows of notes above the data** too. An ONS download
+opens with eight two-cell rows ("Title", "CDID", "Unit" …) shaped like the
+data under them, so neither the parser's title rule nor its header guess can
+drop them, and every chart read a column of words and numbers. They hold no
+number where nearly every row below does, which is what `notesAbove` checks;
+`--skip N` drops them.
+
+**A third round turned the warnings into recipes.** The second could say
+what was wrong with seven of the twelve files and offer nothing but a scratch
+file written by hand. `--recipe` takes one JSON object: the flags, plus
+`steps` — `transform.js`'s own, named by column, so the Shape tab and the
+skill run one arithmetic and each step prints what it did and how many rows
+went in and out — `roles`, the group and value columns of a distribution
+(written as `group, value`; see "A distribution names its groups by
+heading"), and `facet`, which is `facetByColumn`, the studio's small
+multiples. The notes print the recipe that answers them. A long table, which
+`longTable` finds as a column of dates repeating once per value of a column
+of words, gets three: a line each (a pivot), a panel each, and one series. A
+column of whole numbers drawn as a group of its own gets its `roles`, and
+NASA's `***` or a blank cell gets the `filter` step that drops its row. All
+twelve files now draw from their original downloads with nothing written by
+hand. `transform.js` asks `globalThis.aq` rather than `window.aq` because
+there is no window under Node.
+
+**And the link takes off the example's dress.** `applyData` replaces the
+numbers and keeps the presentation, so a link put 3,260 commits on an axis
+reading `$3500K`, and 150 iris flowers under "Avg order value ($)" on a 0–100
+axis that squashed them into a corner. `fitToData` clears prefixes, suffixes
+and unit names and gives the x and y titles the reader's own column names.
+Each column is traced by its values, because a chart may put the first column
+on x. It also sizes each bound slider to the data, measuring error bars to the
+end of the whisker, because those axes are hard scales. Controls are found by
+label, the rule `facet.js` learned: `opts.max` is an axis on one chart and a
+circle on another. On the scatters a minimum and its units have no control of
+their own, so they are found from the maximum they sit beside (`opts.xMax`,
+`opts.xMin`, `opts.xPrefix`): the example's `yMin` of 2 hid every point below
+it. An axis that reads position (an x or y slider, or a chart whose minimum is
+a slider at all) does not have to hold zero, so data far from it gets an axis
+of its own: flippers of 172–231mm run 160–240 rather than 0–250. It prints
+what it changed. Other wording the reader did not rewrite, such as a series
+called "Product" or a pie's "of traffic", is listed rather than cleared, since
+whether it still fits is a judgement. The reader's own units are theirs to
+add.
+
+**A link can be too long to open.** The share link carries the table in its
+query string, and GitHub Pages answers a request target past 8,192 characters
+with `414 URI Too Long`. That limit was measured rather than assumed: 8,221
+characters of URL open and 8,222 do not. Seven final links across the two
+rounds were past it. Six had rendered on a local `http.server`, whose limit
+is 64 KB, so nothing looked wrong until the seventh, at 92,683 characters,
+failed there too. Past the limit the script
+prints the chart's plain link and says why. `--html` writes the Standalone
+export holding the data, built by the same `generateCode`, a page no address
+limit reaches; `--save` writes the table the chart reads as CSV for the
+studio's upload. The fix in the site itself would be to carry the table in
+the fragment, which is never sent to a server.
+
 ### The data dialog
 
 `DataDialog.js` has three ways in and **one source of truth**: the grid holds
@@ -2577,7 +2690,7 @@ the three plugins that are not (matrix, treemap, boxplot).
 Chromium, which is not negotiable here: most of the library draws to canvas or
 measures layout, and jsdom would pass while rendering nothing.
 
-The suite is **904 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
+The suite is **929 checks**. Thirty-three suites cover the registry, every chart (render + non-blank canvas +
 legend + data round-trip + codegen), the gallery, search, the studio, live
 editing, the data grid, the paste tab, multi-stage flows, matching a table to
 the charts that read it, reading a wide real-world export with a title above

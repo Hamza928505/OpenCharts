@@ -21,7 +21,8 @@
 
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -140,6 +141,136 @@ check(counts.status === 0, 'README, CLAUDE.md and package.json quote the registr
   (counts.stderr || counts.stdout || '').trim().split('\n').slice(0, 4).join(' | '));
 check(new RegExp(`\\b${meta.total} charts\\b`).test(counts.stdout),
   'and the checker itself counts what the page counts', counts.stdout.trim());
+
+/* The choose-chart skill answers from the library, not from memory.
+ *
+ * `.claude/skills/choose-chart/choose.mjs` runs profile, rankCharts and
+ * recommend under Node, so a change to any of their shapes would hand an
+ * assistant an empty or stale answer with nothing failing. Held here: it
+ * lists every chart, its pick is one of them, and the link it hands out
+ * carries the table — a link that opens on the example is "the data must
+ * reach the chart" failing somewhere new. Scoped: the suite is one module. */
+{
+  const skill = (args, input) => spawnSync(process.execPath,
+    [join(ROOT, '.claude/skills/choose-chart/choose.mjs'), ...args], { cwd: ROOT, input, encoding: 'utf8' });
+  const listed = skill(['--list']).stdout.trim().split('\n').map((l) => l.split(' | ')[0]);
+  check(listed.join() === meta.ids.join(), 'the choose-chart skill lists every chart in the registry',
+    `${listed.length} listed, ${meta.total} registered`);
+  const linked = async (stdout) => {
+    const token = (stdout.match(/[?&]s=([\w-]+)/) || [])[1];
+    return token ? page.evaluate(async (t) =>
+      JSON.stringify(await (await import('/js/studio/share.js')).decodeSpec(t)), token) : '';
+  };
+  const chosen = skill(['-'], 'region,sales\nNorth,520\nSouth,410\nEast,613\n');
+  const pick = (chosen.stdout.match(/^1\. (\S+)/m) || [])[1];
+  check(chosen.status === 0 && meta.ids.includes(pick), 'and picks a chart that exists',
+    (chosen.stderr || chosen.stdout).slice(0, 200));
+  const carried = await linked(chosen.stdout);
+  check(/North/.test(carried) && /613/.test(carried),
+    'and its link opens that chart holding the table, not the example', String(carried).slice(0, 200));
+
+  /* What it checks on top of the library, each from a public file it got
+   * wrong: NOAA's `#` header block, a column the reader did not ask for,
+   * a bar per row of raw observations, and a reason about one column over a
+   * chart that holds another. */
+  const kept = skill(['--columns', 'region,profit', '-'],
+    '# note\n# more\nregion,sales,profit\nNorth,520,80\nSouth,410,60\nEast,613,95\n');
+  const keptSpec = await linked(kept.stdout);
+  check(/Skipped 2 comment/.test(kept.stdout) && /95/.test(keptSpec) && !/613/.test(keptSpec),
+    'and it skips a comment block and keeps only the columns it is told to', kept.stdout.slice(0, 200));
+  check(/labels repeat/.test(skill(['--chart', 'bar-vertical', '-'], 'species,len\na,1\na,2\nb,3\nb,4\n').stdout),
+    'and it says when a bar chart would draw one bar per row of raw observations');
+  const pairs = [[5, 1], [1, 2], [4, 3], [2, 4], [6, 5], [3, 6], [5, 7], [1, 8], [4, 9], [2, 10], [6, 11], [3, 12]];
+  const offTopic = skill(['-'], 'name,noise,x,y\n'
+    + pairs.map(([n, x], i) => `${'pqr'[i % 3]},${n},${x},${x * 2}`).join('\n') + '\n');
+  check(/! the reason is about "/.test(offTopic.stdout),
+    'and when a chart holds other columns than the ones its reason names', offTopic.stdout.slice(0, 200));
+  // The example's dress comes off too: its axis titles, and a 0–100 axis that
+  // squashed 150 iris flowers into one corner of the plate.
+  const fitted = (JSON.parse(await linked(skill(['--chart', 'scatter-clusters', '-'],
+    'kind,weight,mpg\nusa,3504,18\nusa,3693,15\neurope,1835,26\njapan,2372,24\njapan,2130,27\n').stdout) || '{}').opts) || {};
+  check(fitted.xTitle === 'weight' && fitted.yTitle === 'mpg' && fitted.xMax === 4000 && fitted.yMax === 30,
+    'and its link drops the example\'s axis titles and an axis sized for the example', JSON.stringify(fitted));
+
+  /* A second round, on twelve files the first had not seen: five stocks in
+   * one long table, CO₂'s uncertainty beside its mean, blank cells, an ONS
+   * download whose first eight rows are notes, and links past the 8 KB that
+   * GitHub Pages answers with a 414. */
+  check(/the dates run backwards/.test(skill(['--chart', 'line-basic', '-'],
+    'date,price\n2000-01,10\n2000-02,11\n2000-01,20\n2000-02,21\n').stdout),
+    'and it says when one line would hold several series, one after another');
+  check(/too small to see/.test(skill(['--chart', 'line-multi', '-'],
+    'year,mean,unc\n2000,370,0.1\n2001,372,0.12\n2002,374,0.11\n').stdout),
+    'and when a measure is too small to see beside another on one axis');
+  check(/1 blank cell in "rate" is drawn as 0/.test(skill(['--chart', 'line-basic', '-'],
+    'month,rate\nJan,4\nFeb,\nMar,5\n').stdout),
+    'and when a blank cell would be drawn as a zero nobody measured');
+  check(/\b10 groups and \d+ colours/.test(skill(['--chart', 'scatter-clusters', '-'], 'kind,x,y\n'
+    + Array.from({ length: 10 }, (_, i) => `g${i},${i},${i * 2}\ng${i},${i + 1},${i * 3}`).join('\n') + '\n').stdout),
+    'and when there are more groups than colours to tell them apart');
+  const notes = 'Title,Inflation\nUnit,%\nSource,ONS\n1989,5.7\n1990,8.0\n1991,7.5\n1992,4.6\n';
+  const skipped = skill(['--skip', '3', '-'], notes);
+  check(/--skip 3\b/.test(skill(['-'], notes).stdout) && /^1\. line-basic/m.test(skipped.stdout)
+    && /5\.7/.test(await linked(skipped.stdout)),
+    'and it spots notes above the data, and reads the table once they are skipped', skipped.stdout.slice(0, 200));
+  const saved = join(tmpdir(), `oc-choose-${process.pid}.csv`);
+  const dead = skill(['--chart', 'scatter-basic', '--save', saved, '-'],
+    'x,y\n' + Array.from({ length: 2000 }, (_, i) => `${i},${(i * 7919) % 9973}`).join('\n') + '\n');
+  const file = await readFile(saved, 'utf8').catch(() => '');
+  await rm(saved, { force: true });
+  check(/no link can hold this table/.test(dead.stdout) && !/[?&]s=/.test(dead.stdout)
+    && file.split('\n').length === 2002 && file.startsWith('x,y\n0,0\n'),
+    'and a table too big for any link goes to a file, not into a link the server refuses', dead.stdout.slice(-300));
+  // An axis far from zero starts near its data; the example's own minimum
+  // and units, which sit beside its maximum with no control, come off too.
+  const flippers = (JSON.parse(await linked(skill(['--chart', 'scatter-clusters', '-'],
+    'kind,flipper,mass\na,172,3000\nb,231,6000\na,190,4000\n').stdout) || '{}').opts) || {};
+  const small = (JSON.parse(await linked(skill(['--chart', 'scatter-basic', '-'],
+    'x,y\n1,0.5\n2,1.5\n3,1\n').stdout) || '{}').opts) || {};
+  check(flippers.xMin === 160 && flippers.xMax === 240 && flippers.yMin === 0
+    && small.yMin === 0 && small.xPrefix === '',
+    'and its axes start near data far from zero, without the example\'s minimum or units',
+    JSON.stringify({ flippers, small }));
+
+  /* A third round: a recipe says what the table should become, in the Shape
+   * tab's own steps, so no number on the chart was typed by the assistant.
+   * Each recipe here is one the skill printed itself, run as printed. */
+  const long = 'year,source,mean\n2000,A,1.5\n2001,A,2.5\n2002,A,3.1\n2000,B,4.2\n2001,B,5.3\n2002,B,6.4\n';
+  const noted = skill(['-'], long).stdout;
+  const offered = (name) => (noted.match(new RegExp(`${name}: +--recipe '([^']+)'`)) || [])[1] || '{}';
+  const lineEach = skill(['--recipe', offered('a line each'), '-'], long);
+  const lines = JSON.parse(await linked(lineEach.stdout) || '{}').series || [];
+  check(/a long table\. "year" repeats once for each "source"/.test(noted)
+    && lines.map((s) => `${s.label}:${s.data}`).join(' ') === 'A:1.5,2.5,3.1 B:4.2,5.3,6.4',
+    'and it names a long table, with a recipe that turns it into a line per series', lineEach.stdout.slice(-300));
+  const panelEach = skill(['--recipe', offered('a panel each'), '-'], long);
+  check(/split: Split into 2 panels by source/.test(panelEach.stdout) && /"facet"/.test(await linked(panelEach.stdout)),
+    'and one that splits it into a panel per series', panelEach.stdout.slice(-300));
+  const births = `day,births\n${[10, 11, 12, 13, 14, 15, 16, 17, 18].map((b, i) => `${(i % 3) + 1},${b}`).join('\n')}\n`;
+  const roles = (skill(['--chart', 'box-plot', '-'], births).stdout.match(/If one names the groups: --recipe '([^']+)'/) || [])[1];
+  const pageFile = join(tmpdir(), `oc-choose-${process.pid}.html`);
+  const grouped = skill(['--recipe', roles || '{}', '--html', pageFile, '-'], births);
+  const html = await readFile(pageFile, 'utf8').catch(() => '');
+  await rm(pageFile, { force: true });
+  const groups = (JSON.parse(await linked(grouped.stdout) || '{}').groups || []).map((g) => `${g.label}:${g.values}`);
+  check(groups.join(' ') === '1:10,13,16 2:11,14,17 3:12,15,18',
+    'and a weekday numbered 1–7 read as the groups, by the recipe it offers', grouped.stdout.slice(-300));
+  check(html.startsWith('<!DOCTYPE html>') && html.includes('10, 13, 16'),
+    'and --html writes that chart and its data as one page', html.slice(0, 80));
+  const nasa = `year,temp\n${['1.1', '1.4', '0.9', '1.2', '1.6', '1.3', '1.8', '***'].map((t, i) => `${2000 + i},${t}`).join('\n')}\n`;
+  const stray = (skill(['--chart', 'line-basic', '-'], nasa).stdout.match(/per column charted: (\{.*\})$/m) || [])[1];
+  const dropped = skill(['--recipe', JSON.stringify({ chart: 'line-basic', steps: [JSON.parse(stray || '{}')] }), '-'], nasa);
+  check(/holds: label, temp — 7 rows/.test(dropped.stdout),
+    'and NASA\'s "***" for a year not over yet, with the step that drops its row', dropped.stdout.slice(-300));
+  const typo = skill(['--recipe', '{"chart":"line-multi","steps":[{"pivot":"sourse","value":"mean"}]}', '-'], long);
+  const twice = skill(['--recipe', offered('a line each'), '-'], `${long}2000,A,9\n`);
+  check(typo.status === 1 && /No column called "sourse" \(step 1, pivot\)\. The columns are: year, source, mean/.test(typo.stderr)
+    && twice.status === 1 && /meet in 2 rows; choose how to combine them/.test(twice.stderr),
+    'and a recipe that names no column, or would have to guess a total, fails saying which',
+    `${typo.stderr} ${twice.stderr}`.slice(0, 300));
+  check(/Kept columns: country, v/.test(skill(['--columns', 'country,v', '-'], '﻿country,v\nFrance,1\nSpain,2\n').stdout),
+    'and a World Bank file\'s byte-order mark is not part of its first column\'s name');
+}
 
 /* The README answers two readers, and says what this is not.
  *
@@ -4811,7 +4942,30 @@ const shape = await page.evaluate(async () => {
 
   const broken = t.runSteps(src, [{ op: 'nonsense' }, { op: 'limit', n: 2 }]);
 
+  // The long table an API hands over, turned to a column per source. Two
+  // readings of one year are folded only when asked how.
+  const long = { headers: ['year', 'source', 'mean'], rows: [['2000', 'A', '1'], ['2000', 'B', '2'], ['2001', 'A', '3'], ['2002', 'B', '4']] };
+  const pivot = { op: 'pivot', col: 1, key: 0, val: 2, agg: '' };
+  const twice = { headers: long.headers, rows: [...long.rows, ['2000', 'A', '5']] };
+  const flat = (x) => `${x.headers.join(',')}|${x.rows.map((r) => r.join(',')).join('|')}`;
+  const clash = t.runSteps(twice, [pivot]);
+
+  // The editor writes a distribution as group,value; read back, a weekday
+  // numbered 1–7 stays its groups rather than two groups called group and value.
+  const reg = await import('/js/studio/registry.js');
+  const d = await import('/js/studio/dataio.js');
+  const box = reg.getChart('box-plot');
+  const written = reg.newSpec(box);
+  d.applyData(box, written, 'group,value\n1,5\n2,6\n1,7\n2,8');
+  const reread = reg.newSpec(box);
+  d.applyData(box, reread, box.toText(written));
+
   return {
+    pivoted: flat(t.runSteps(long, [pivot]).table),
+    clash: clash.errors.join(' '),
+    folded: flat(t.runSteps(twice, [{ ...pivot, agg: 'mean' }]).table),
+    pivotSaid: t.describeStep({ ...pivot, agg: 'mean' }, long.headers),
+    numericGroups: reread.groups.map((g) => `${g.label}:${g.values}`).join(' '),
     sourceTotal: sumCol(src, 3),
     grouped: { headers: grouped.headers, rows: grouped.rows.length, total: sumCol(grouped, 1) },
     idExcluded: !grouped.headers.includes('id'),
@@ -4854,6 +5008,15 @@ check(shape.brokenSurvived === 2 && shape.brokenReported === 1,
   'a broken step is reported and the rest still run', JSON.stringify(shape));
 check(/average of revenue/i.test(shape.described),
   'a step says in words what it does', shape.described);
+check(shape.pivoted === 'year,A,B|2000,1,2|2001,3,|2002,,4',
+  'a pivot gives each source a column and each year a row, blank where none was measured', shape.pivoted);
+check(/year 2000 and source A meet in 2 rows; choose how to combine them/.test(shape.clash)
+  && shape.folded === 'year,A,B|2000,3,2|2001,3,|2002,,4'
+  && shape.pivotSaid === 'One column per source, one row per year, holding the average of mean',
+  'and two readings of one cell are refused, or folded the way it is told and says so',
+  `${shape.clash} / ${shape.folded} / ${shape.pivotSaid}`);
+check(shape.numericGroups === '1:5,7 2:6,8',
+  'a distribution whose groups are numbers reads back as those groups', shape.numericGroups);
 
 /* And it reaches the grid. Reshaping is an edit, so it has to be undoable and
  * it has to land as literal values — not as a layer the chart re-derives. */
@@ -5041,10 +5204,20 @@ const turnedGrid = await page.evaluate(async () => {
   const undone = state();
   const opts = [...document.querySelectorAll('.shape-add .shape-select option')].map((o) => o.value);
   const note = document.querySelector('.dlg-gridwrap .dlg-note').textContent;
+  // The pivot beside it has a form of its own: which column becomes the
+  // columns, which the rows, and what fills the cells.
+  [...document.querySelectorAll('.dlg-tab')].find((t) => /Shape/.test(t.textContent)).click();
+  await sleep(300);
+  const add = document.querySelector('.shape-add .shape-select');
+  add.value = 'pivot';
+  add.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(350);
   return {
     offered: true, before, after, undone,
     shapeStep: opts.includes('transpose'),
     noteSays: /Swap rows/.test(note),
+    pivotForm: [...document.querySelectorAll('.shape-step select')].map((s) => s.getAttribute('aria-label')).join('|'),
+    pivotHead: [...document.querySelectorAll('.shape-preview thead th')].map((th) => th.textContent).join(','),
   };
 });
 check(turnedGrid.offered, 'the grid offers a swap button');
@@ -5053,6 +5226,10 @@ check(turnedGrid.before === 'label,2024,2023|4' && turnedGrid.after === 'label,Q
 check(turnedGrid.undone === turnedGrid.before, 'and Undo puts it back', turnedGrid.undone);
 check(turnedGrid.shapeStep && turnedGrid.noteSays,
   'the Shape tab lists the step and the grid note names the button');
+check(turnedGrid.pivotForm === 'Column whose values become columns|Column whose values become rows'
+  + '|Where a row and a column meet more than once|Column that fills the cells'
+  && turnedGrid.pivotHead === '2024,Q1,Q2,Q3,Q4',
+  'and a pivot, whose form names each column it turns', `${turnedGrid.pivotForm} / ${turnedGrid.pivotHead}`);
 
 await page.goto(`${base}/studio.html?chart=sankey`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1800);

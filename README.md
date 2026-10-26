@@ -382,9 +382,9 @@ every row, with missing/non-numeric exclusions stated on each chart.
 
 The file most people have is five hundred transactions; the chart they want is
 revenue by region, seven bars. The **Shape** tab in the data editor closes that
-gap with six operations — filter, group, bin, sort, limit, and swapping rows
-for columns — in a pipeline where each step reads the table the one before it
-made.
+gap with seven operations — filter, group, bin, sort, limit, swapping rows
+for columns, and giving each value of a column its own column — in a pipeline
+where each step reads the table the one before it made.
 
 They are an **edit, not a layer**. They run once, and what comes out is written
 into the grid as literal values, exactly as a paste would be. Nothing is
