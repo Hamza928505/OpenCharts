@@ -59,6 +59,7 @@ export const comparisonCharts = [
       { group: 'Style', type: 'slider', key: 'opts.gutter', label: 'Label gutter', min: 80, max: 220, step: 10, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showDelta', label: 'Show change' },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
     ],
     onInit(spec) { spec.trend = [spec.upColor, spec.downColor]; },
     onChange(spec) {
@@ -167,6 +168,7 @@ export const comparisonCharts = [
       { group: 'Style', type: 'colors', key: 'candle', label: 'Up / down', names: () => ['Rising', 'Falling'] },
       { group: 'Style', type: 'slider', key: 'opts.barGap', label: 'Candle gap', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.prefix', label: 'Value prefix' },
     ],
     onInit(spec) { spec.candle = [spec.upColor, spec.downColor]; },
     onChange(spec) { [spec.upColor, spec.downColor] = spec.candle; },

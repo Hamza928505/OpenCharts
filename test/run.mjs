@@ -245,6 +245,20 @@ const results = await page.evaluate(async (ids) => {
       if (items && items.length && !legendHost.children.length) r.problems.push('legend empty');
       eng.destroyInstance(inst);
 
+      // A unit the example wrote (a % on a map of litres) is one the reader
+      // must be able to change, and changing it must reach the code.
+      const units = (o, at) => Object.entries(o || {}).flatMap(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v)
+        ? units(v, at + k + '.')
+        : typeof v === 'string' && v && /(prefix|suffix|unit)$/i.test(k) ? [at + k] : []));
+      const fixed = units(reg.newSpec(def), '').filter((k) => !def.controls.some((c) => c.key === k));
+      if (fixed.length) r.problems.push('a unit no control can change: ' + fixed.join(', '));
+      for (const c of def.controls.filter((x) => x.type === 'text' && /\b(prefix|suffix|unit name)$/i.test(x.label || ''))) {
+        const marked = reg.newSpec(def);
+        const path = c.key.split('.');
+        path.slice(0, -1).reduce((o, k) => o[k], marked)[path.at(-1)] = 'Zq';
+        if (!eng.generateCode(def, marked).js.includes('Zq')) r.problems.push(`its ${c.label} does not reach the code`);
+      }
+
       // Data editor round trip.
       if (!def.data) {
         r.problems.push('no data editor');

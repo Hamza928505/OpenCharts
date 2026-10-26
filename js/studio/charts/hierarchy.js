@@ -36,7 +36,7 @@ export const hierarchyCharts = [
       ],
       groups: [...RETAIL_GROUPS],
       colors: [C.green, C.blue, C.amber],
-      opts: { alpha: 0.78, showLabels: true, borderWidth: 1, fontSize: 11 },
+      opts: { alpha: 0.78, showLabels: true, borderWidth: 1, fontSize: 11, prefix: '$', suffix: 'K' },
     },
     controls: [
       { group: 'Style', type: 'colors', key: 'colors', label: 'Group colours', names: (s) => s.groups },
@@ -44,6 +44,8 @@ export const hierarchyCharts = [
       { group: 'Style', type: 'slider', key: 'opts.borderWidth', label: 'Gap', min: 0, max: 6, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showLabels', label: 'Show labels' },
       { group: 'Style', type: 'slider', key: 'opts.fontSize', label: 'Label size', min: 8, max: 16, step: 1, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'text', key: 'opts.prefix', label: 'Value prefix' },
+      { group: 'Labels', type: 'text', key: 'opts.suffix', label: 'Value suffix' },
     ],
     chartjs: {
       plugins: ['treemap'],
@@ -90,7 +92,7 @@ export const hierarchyCharts = [
               tooltip: {
                 callbacks: {
                   title: srcFn(`(ctx) => (ctx[0].raw._data ? ctx[0].raw._data.label : ctx[0].raw.g) || ''`),
-                  label: srcFn(`(ctx) => 'Revenue: $' + ctx.raw.v + 'K'`),
+                  label: srcFn(`(ctx) => ${JSON.stringify(spec.opts.prefix || '')} + ctx.raw.v + ${JSON.stringify(spec.opts.suffix || '')}`),
                 },
               },
             },

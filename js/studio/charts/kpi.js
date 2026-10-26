@@ -242,7 +242,7 @@ export const kpiCharts = [
         { label: 'Drive',       value: 24, color: C.amber,  icon: 'person' },
         { label: 'Walk',        value: 14, color: C.cyan,  icon: 'person' },
       ],
-      opts: { textColor: '#808080', unit: 2, iconSize: 20, gap: 5, perRow: 20, labelWidth: 130, showValues: true, shape: 'person' },
+      opts: { textColor: '#808080', unit: 2, iconSize: 20, gap: 5, perRow: 20, labelWidth: 130, showValues: true, shape: 'person', suffix: '%' },
     },
     controls: [
       { group: 'Data',  type: 'series', key: 'rows', data: false, max: 8, min: 1 },
@@ -253,6 +253,7 @@ export const kpiCharts = [
       { group: 'Style', type: 'slider', key: 'opts.gap', label: 'Icon gap', min: 1, max: 14, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
     ],
     onChange(spec) {
       spec.rows.forEach((r, i) => { if (typeof r.value !== 'number') r.value = 20 - i * 3; });
@@ -333,7 +334,7 @@ export const kpiCharts = [
             ctx.fillStyle = r.color;
             ctx.font = '600 12px "DM Sans", system-ui, sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText(r.value + '%', left + Math.ceil(icons) * step + 10, top + o.iconSize / 2 + 4);
+            ctx.fillText(r.value + o.suffix, left + Math.ceil(icons) * step + 10, top + o.iconSize / 2 + 4);
           }
         });
 

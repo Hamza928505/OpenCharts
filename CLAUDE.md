@@ -275,6 +275,20 @@ now arrives as zeros, the blank a spreadsheet would hold, with the cursor in
 its values box. The suite reads every module under `js/studio/` and fails on
 any `Math.random` but the one that mints an element id in `engines.js`.
 
+**A unit belongs to the example, so the reader has to be able to change it.**
+Fifteen charts kept a `%`, a `$` or a `°C` in their spec with no control to
+change it. So a choropleth of litres of alcohol showed "France: 11.8%" on
+hover, and a candlestick of yen was labelled in dollars. On the pie, the
+doughnut and the butterfly the `%` was not even read from the spec: it was
+written into the tooltip callback. The pictogram and the spine chart painted a
+`%` beside every value, and the treemap's tooltip said "Revenue: $…K" whatever
+the data was. Every unit an example holds now has a `… prefix` / `… suffix`
+text control, the label the choose-chart skill resets for a reader's data.
+The suite checks both halves on every chart: no unit in a spec without a
+control, and no unit control whose value never reaches the generated code. A
+`%` the chart computes itself (a 100% stack, a pareto's running share, an
+ECDF) is the chart's own and stays.
+
 ### The data editor
 
 Every chart accepts a table. The files that carry it:

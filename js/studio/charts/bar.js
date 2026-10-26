@@ -8,7 +8,7 @@
 import { C, MONTHS, QUARTERS, withAlpha, paletteAt } from '../palette.js';
 import { baseOpts, xAxis, yAxis, TICK, seriesLegend, valueAxisControls, valueAxis, AXIS_DEFAULTS } from '../chartjs-base.js';
 import { REFERENCE_CONTROL, referenceDatasets, referenceLegend } from '../reference.js';
-import { tickFormat } from '../serialize.js';
+import { tickFormat, srcFn } from '../serialize.js';
 
 /** Controls shared by the plain grouped/stacked bars. */
 const barStyleControls = [
@@ -473,6 +473,7 @@ export const barCharts = [
       { group: 'Style', type: 'text',   key: 'right.label', label: 'Right name' },
       { group: 'Style', type: 'colors', key: 'sides', label: 'Side colours', names: (s) => [s.left.label, s.right.label] },
       { group: 'Style', type: 'slider', key: 'opts.radius', label: 'Corner radius', min: 0, max: 10, step: 1, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'text', key: 'opts.suffix', label: 'Value suffix' },
     ],
     onInit(spec) { spec.sides = [spec.left.color, spec.right.color]; },
     onChange(spec) { [spec.left.color, spec.right.color] = spec.sides; },
@@ -489,11 +490,11 @@ export const barCharts = [
         options: baseOpts({
           indexAxis: 'y',
           scales: {
-            x: yAxis({ ticks: { ...TICK, callback: (v) => Math.abs(v).toFixed(1) + '%' } }),
+            x: yAxis({ ticks: { ...TICK, callback: srcFn(`(v) => Math.abs(v).toFixed(1) + ${JSON.stringify(spec.opts.suffix || '')}`) } }),
             y: xAxis(),
           },
           plugins: {
-            tooltip: { callbacks: { label: (ctx) => ' ' + ctx.dataset.label + ': ' + Math.abs(ctx.parsed.x).toFixed(1) + '%' } },
+            tooltip: { callbacks: { label: srcFn(`(ctx) => ' ' + ctx.dataset.label + ': ' + Math.abs(ctx.parsed.x).toFixed(1) + ${JSON.stringify(spec.opts.suffix || '')}`) } },
           },
         }),
       }),

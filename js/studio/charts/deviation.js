@@ -291,7 +291,7 @@ export const deviationCharts = [
       rightLabel: 'Mobile',
       leftColor: C.violet,
       rightColor: C.amber,
-      opts: { textColor: '#808080', gutter: 96, barHeight: 0.62, radius: 3, showValues: true, max: 100 },
+      opts: { textColor: '#808080', gutter: 96, barHeight: 0.62, radius: 3, showValues: true, max: 100, suffix: '%' },
     },
     controls: [
       { group: 'Data',  type: 'text',   key: 'leftLabel',  label: 'Left group name' },
@@ -302,6 +302,7 @@ export const deviationCharts = [
       { group: 'Style', type: 'slider', key: 'opts.radius', label: 'Corner radius', min: 0, max: 10, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'toggle', key: 'opts.showValues', label: 'Show values' },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
     ],
     onInit(spec) { spec.sides = [spec.leftColor, spec.rightColor]; },
     onChange(spec) { [spec.leftColor, spec.rightColor] = spec.sides; },
@@ -359,10 +360,10 @@ export const deviationCharts = [
             ctx.font = '500 11px "DM Sans", system-ui, sans-serif';
             ctx.fillStyle = spec.leftColor;
             ctx.textAlign = 'right';
-            ctx.fillText(r.left + '%', centreL - lw - 6, y + bh / 2 + 4);
+            ctx.fillText(r.left + o.suffix, centreL - lw - 6, y + bh / 2 + 4);
             ctx.fillStyle = spec.rightColor;
             ctx.textAlign = 'left';
-            ctx.fillText(r.right + '%', centreR + rw + 6, y + bh / 2 + 4);
+            ctx.fillText(r.right + o.suffix, centreR + rw + 6, y + bh / 2 + 4);
           }
         });
       },

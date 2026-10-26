@@ -146,6 +146,7 @@ export const scatterCharts = [
       { group: 'Style', type: 'slider', key: 'opts.pointRadius', label: 'Point size', min: 2, max: 12, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.alpha', label: 'Point opacity', min: 0.15, max: 1, step: 0.05, format: (v) => Math.round(v * 100) + '%' },
       ...scatterAxisControls,
+      { group: 'Axis', type: 'text', key: 'opts.xPrefix', label: 'X prefix' },
     ],
     onInit(spec) { spec.pointColor = [spec.color]; },
     onChange(spec) { spec.color = spec.pointColor[0]; },

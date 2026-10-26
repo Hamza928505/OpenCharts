@@ -70,6 +70,7 @@ export const comparisonExtraCharts = [
       { group: 'Style', type: 'toggle', key: 'opts.showDelta', label: 'Show the change' },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 20, max: 300, step: 10 },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
     ],
     onInit(spec) { spec.ends = [spec.startColor, spec.endColor]; },
     onChange(spec) {
@@ -298,6 +299,7 @@ export const comparisonExtraCharts = [
       { group: 'Axis',  type: 'slider', key: 'opts.min', label: 'Axis minimum', min: -40, max: 0, step: 5 },
       { group: 'Axis',  type: 'slider', key: 'opts.max', label: 'Axis maximum', min: 10, max: 120, step: 5 },
       { group: 'Labels', type: 'color',  key: 'opts.textColor', label: 'Text colour' },
+      { group: 'Labels', type: 'text',   key: 'opts.suffix', label: 'Value suffix' },
     ],
     onInit(spec) { spec.spanColors = [spec.lowColor, spec.highColor]; },
     onChange(spec) {

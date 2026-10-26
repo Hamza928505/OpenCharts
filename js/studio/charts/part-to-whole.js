@@ -8,6 +8,7 @@
 
 import { C, MONTHS, withAlpha } from '../palette.js';
 import { baseOpts, sliceLegend } from '../chartjs-base.js';
+import { srcFn } from '../serialize.js';
 
 /** Shared control block for the slice-based charts. */
 const sliceControls = [
@@ -52,6 +53,7 @@ export const partToWholeCharts = [
       ...sliceControls,
       { group: 'Style', type: 'slider', key: 'opts.borderWidth', label: 'Slice gap', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
       { group: 'Style', type: 'slider', key: 'opts.hoverOffset', label: 'Hover lift', min: 0, max: 24, step: 2, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'text', key: 'opts.suffix', label: 'Value suffix' },
     ],
     chartjs: {
       build: (spec) => ({
@@ -69,7 +71,7 @@ export const partToWholeCharts = [
         options: baseOpts({
           layout: { padding: 16 },
           interaction: { intersect: true, mode: 'nearest' },
-          plugins: { tooltip: { callbacks: { label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed + '%' } } },
+          plugins: { tooltip: { callbacks: { label: srcFn(`(ctx) => ' ' + ctx.label + ': ' + ctx.parsed + ${JSON.stringify(spec.opts.suffix || '')}`) } } },
         }),
       }),
     },
@@ -86,12 +88,13 @@ export const partToWholeCharts = [
       labels: ['Organic', 'Paid', 'Social', 'Direct', 'Referral'],
       values: [40, 27, 15, 11, 7],
       colors: [C.green, C.blue, C.amber, C.violet, C.cyan],
-      opts: { cutout: 68, borderWidth: 0, hoverOffset: 10 },
+      opts: { cutout: 68, borderWidth: 0, hoverOffset: 10, suffix: '%' },
     },
     controls: [
       ...sliceControls,
       { group: 'Style', type: 'slider', key: 'opts.cutout', label: 'Hole size', min: 0, max: 88, step: 2, format: (v) => v + '%' },
       { group: 'Style', type: 'slider', key: 'opts.borderWidth', label: 'Slice gap', min: 0, max: 8, step: 1, format: (v) => v + 'px' },
+      { group: 'Labels', type: 'text', key: 'opts.suffix', label: 'Value suffix' },
     ],
     chartjs: {
       build: (spec) => ({
@@ -110,7 +113,7 @@ export const partToWholeCharts = [
           cutout: spec.opts.cutout + '%',
           layout: { padding: 16 },
           interaction: { intersect: true, mode: 'nearest' },
-          plugins: { tooltip: { callbacks: { label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed + '%' } } },
+          plugins: { tooltip: { callbacks: { label: srcFn(`(ctx) => ' ' + ctx.label + ': ' + ctx.parsed + ${JSON.stringify(spec.opts.suffix || '')}`) } } },
         }),
       }),
     },
