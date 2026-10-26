@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { recommendAnalysisCharts, buildAnalysisChart, GOAL_OF_KIND } from '../js/studio/analysis-charts.js';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { recommendAnalysisCharts, buildAnalysisChart, recipeOf, GOAL_OF_KIND } from '../js/studio/analysis-charts.js';
 import { recommendCharts, LIMITS, GOALS } from '../js/studio/recommend.js';
 import { profileTable } from '../js/studio/profile.js';
 
@@ -95,4 +97,23 @@ for (const [n, few] of [[LIMITS.fewCategories, true], [LIMITS.fewCategories + 1,
 assert.ok(richPlans.every((p) => GOALS.includes(p.goal) && p.goal === GOAL_OF_KIND[p.kind]), 'every plan names a known goal');
 assert.ok(richPlans.every((p) => typeof p.caution === 'string' && p.caution.length), 'every plan carries a caution');
 assert.ok(recommendCharts(profileTable(rich), new Set(['line-basic', 'bar-vertical'])).suggestions.every((s) => GOALS.includes(s.goal)), 'report suggestions name a goal');
+
+// A plan's recipe draws what the panel draws: the choose-chart skill, given the recipe and the raw file,
+// holds as many rows as the panel's own table. Every plan, so the column with the blank is covered too.
+const skill = fileURLToPath(new URL('../.claude/skills/choose-chart/choose.mjs', import.meta.url));
+const rawCsv = [rich.headers, ...rich.rows].map((r) => r.join(',')).join('\n') + '\n';
+let checked = 0;
+for (const plan of richPlans) {
+  const recipe = recipeOf(plan, rich.headers);
+  if (!recipe) { assert.equal(plan.kind, 'crosstab', `${plan.key} has no recipe, and only a crosstab may lack one`); continue; }
+  const run = spawnSync(process.execPath, [skill, '--recipe', JSON.stringify(recipe), '-'], { input: rawCsv, encoding: 'utf8' });
+  assert.equal(run.status, 0, `${plan.key}: ${(run.stderr || run.stdout).slice(0, 200)}`);
+  const rows = Number((run.stdout.match(/holds: .* — (\d+) rows/) || [])[1]);
+  assert.equal(rows, buildAnalysisChart(rich, plan).table.rows.length, `${plan.key}: recipe and panel hold the same rows`);
+  checked++;
+}
+assert.ok(checked >= 15, `${checked} recipes checked`);
+const listing = spawnSync(process.execPath, [skill, '-'], { input: rawCsv, encoding: 'utf8' }).stdout;
+assert.match(listing, /Views of this table, aggregated/);
+assert.match(listing, /--recipe '\{"chart":"/, 'the skill prints a recipe for each view');
 console.log(`Analysis recommendations: ${many.length} views, full 403 rows/45 columns, counts, grouped arithmetic, exclusions, dates, bounds and immutable data passed.`);

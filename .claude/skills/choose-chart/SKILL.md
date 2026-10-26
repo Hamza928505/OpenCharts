@@ -80,7 +80,14 @@ the columns there are.
    with `-`. CSV, TSV and JSON rows all read. A leading block of `#` comment
    lines is skipped. For `.xlsx`, ask for a CSV export, or point the user at
    the studio's upload, which reads it.
-2. Run `choose.mjs <file>`.
+2. Run `choose.mjs <file>`. After the numbered picks it prints **Views of this
+   table, aggregated**: the same views the studio's "Analyze without AI" panel
+   offers (counts by group, an average per group, a box plot per group, a
+   distribution, a relationship, a trend), each with a `--recipe` that draws it
+   from the file as it came. On a long file these, not the whole-table picks, are
+   usually the answer. Run one, then read its `holds:` line as in step 4. A
+   recipe keeps only numeric rows of the measure, as the panel does, so both
+   draw the same table.
 3. **Check the `Header row` and `Columns` lines, and act on every
    `Note (bad)` before choosing.** If the columns came out as
    `Label, Series 1, …` while the first row holds names or years
