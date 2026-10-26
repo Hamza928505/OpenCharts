@@ -582,6 +582,40 @@ Three things it got wrong first, each now a check:
   can produce — from two stubs, since several branch on how many measures
   there are — and the suite checks them against the registry.
 
+### What a column is for
+
+`type` says what a column holds; `role` says what it is *for*, and the two
+disagree more often than they look. `profileColumn` adds a `role`
+(`identifier`, `time`, `measure`, `ordinal`, `dimension`, `label`, `text`,
+`empty`), a `roleWhy` sentence in the reader's own column name, and
+`ambiguous` plus `alternatives` where the values allow two readings. `type`
+and `idLike` mean what they always did, so nothing that read them changed.
+
+- **A code is recognised by its name, never its values.** `Zip`, `phone_number`
+  and `order_no` are numbers nobody should total; `account_balance` is a
+  quantity. `codeNameReason` reads the head noun of the name (`zip_code` -> zip,
+  `account_balance` -> balance), the same rule `looksLikeIdName` follows, for the
+  same reason: a revenue column of five distinct integers must stay a measure.
+  The suite holds that case.
+- **A scale is ambiguous, and says so.** A few whole numbers each repeated three
+  times over (stars 1-5, weekday 1-7, a 0/1 flag) is `ordinal`: something to
+  group by that could also be averaged. It moves from `numbers` to `categories`
+  only where another measure remains and no date is present - beside a date a
+  small whole-number series is far more likely a count to plot over time - and
+  the report adds an `info` note saying it chose. A lone scale stays drawable.
+- **Units and places need evidence.** `unit` is `percent` or `currency` only from
+  the cells (90% end in `%`, or share one currency symbol) or the heading
+  (`Cost (USD)`). `geo` is `country`, `city`, `latitude` or `longitude` from the
+  heading's head noun, and a coordinate must also sit on the globe. A `Region`
+  column is never assumed to be countries.
+- **One rule uses places so far**: `geographic`, a country column plus a measure,
+  leads with `choropleth`. Names that the atlas does not know still draw grey,
+  which the suggestion says ("wherever the names match the atlas").
+
+`LIMITS` (the cut-offs rules and analysis plans share) now lives in
+`profile.js`, because the profiler needs one of them and must not import the
+layers above it; `recommend.js` re-exports it.
+
 ### Which chart fits a table
 
 `DataMatch.js` asks `checkTableShape` for every chart at once and hands the

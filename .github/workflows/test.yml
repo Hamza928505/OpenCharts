@@ -39,6 +39,7 @@ jobs:
 
       - name: Check local data analysis (no AI)
         run: |
+          node test/profile-roles.mjs
           node test/analysis-charts.mjs
           node test/data-analysis.mjs
 

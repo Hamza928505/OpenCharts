@@ -55,6 +55,90 @@ const CATEGORY_CEILING = 50;
 
 const isBlank = (v) => v == null || String(v).trim() === '';
 
+/**
+ * The cut-offs a rule or a plan reads. Defined here, below `recommend.js` and
+ * `analysis-charts.js`, because the profiler needs one of them to tell a scale
+ * from a quantity and must not import the layers above it.
+ */
+export const LIMITS = {
+  fewCategories: 12, // most a vertical bar or box plot labels legibly
+  manyCategories: 60, // past this a bar per value stops being readable
+  pieMax: 5, // most slices a pie stays readable at
+  gridSide: 20, // most rows or columns a heatmap axis carries
+  gridCells: 400, // most cells in a two-way grid
+  distributionRows: 30, // fewest rows worth drawing a shape from
+  manyMeasures: 4, // measures per row before parallel axes make sense
+};
+
+/* ── what a column *is for* ──────────────────────────────────────────────── */
+
+const nameTokens = (name) => String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+const CODE_TAIL = new Set(['code', 'number', 'no', 'num', 'nr']);
+const CODE_HEADS = new Set(['zip', 'zipcode', 'postal', 'postcode', 'phone', 'tel', 'fax', 'fips',
+  'sku', 'isbn', 'ssn', 'serial', 'barcode', 'account', 'acct']);
+
+/**
+ * Why a *numeric* column's name says it holds a code, or null. By the name's
+ * head noun, so `zip_code` and `order_no` are codes while `account_balance` is
+ * a quantity. Never by the values: see `looksLikeIdName`.
+ */
+function codeNameReason(name) {
+  const t = nameTokens(name);
+  if (!t.length) return null;
+  const tail = t.length > 1 && CODE_TAIL.has(t[t.length - 1]);
+  const head = tail ? t[t.length - 2] : t[t.length - 1];
+  if (CODE_HEADS.has(head)) return `its name is a ${head} code`;
+  return tail ? `its name ends in "${t[t.length - 1]}"` : null;
+}
+
+/**
+ * A few whole numbers, each repeated: a rating, a weekday number, a flag. It
+ * could be a scale to group by or a count to total, so the column says it is
+ * ambiguous rather than being forced one way. A revenue column of five
+ * integers is not caught: it needs three rows to every distinct value.
+ */
+const isCodedScale = (nums, distinct) =>
+  distinct >= 2 && distinct <= LIMITS.fewCategories && nums.length >= 3 * distinct
+  && nums.every(Number.isInteger);
+
+const SYMBOL = /^[-+(]?\s*([$€£¥₹₩₽₺₪])|([$€£¥₹₩₽₺₪])\s*\)?$/;
+/** A unit only where the cells or the heading say so; nothing is assumed. */
+function unitOf(name, filled) {
+  if (!filled.length) return null;
+  const cells = filled.map((v) => String(v).trim());
+  if (cells.filter((v) => /%\s*$/.test(v)).length / cells.length >= 0.9) return { kind: 'percent', basis: 'cells' };
+  const symbols = cells.map((v) => v.match(SYMBOL)).filter(Boolean).map((m) => m[1] || m[2]);
+  if (symbols.length / cells.length >= 0.9 && new Set(symbols).size === 1) {
+    return { kind: 'currency', symbol: symbols[0], basis: 'cells' };
+  }
+  if (/\((%|percent|pct)\)|\[%\]/i.test(name)) return { kind: 'percent', basis: 'heading' };
+  const code = String(name).match(/[(\[](USD|EUR|GBP|JPY|CNY|INR|CAD|AUD|CHF)[)\]]/i);
+  return code ? { kind: 'currency', code: code[1].toUpperCase(), basis: 'heading' } : null;
+}
+
+const COUNTRY_HEADS = new Set(['country', 'countries', 'nation']);
+const CITY_HEADS = new Set(['city', 'town', 'municipality']);
+const LAT_HEADS = new Set(['lat', 'latitude']);
+const LON_HEADS = new Set(['lon', 'lng', 'long', 'longitude']);
+/** Place columns, from the heading; coordinates also have to sit in range. */
+function geoOf(col, nums) {
+  const t = nameTokens(col.name);
+  if (!t.length) return null;
+  const tail = t.length > 1 && CODE_TAIL.has(t[t.length - 1]);
+  const head = tail ? t[t.length - 2] : t[t.length - 1];
+  if (col.type === 'number') {
+    const within = (lim) => nums.length > 0 && nums.every((n) => Math.abs(n) <= lim);
+    if (LAT_HEADS.has(head) && within(90)) return { kind: 'latitude', basis: 'name+range' };
+    if (LON_HEADS.has(head) && within(180)) return { kind: 'longitude', basis: 'name+range' };
+    return null;
+  }
+  if (col.type !== 'category' && col.type !== 'text') return null;
+  if (COUNTRY_HEADS.has(head)) return { kind: tail ? 'country-code' : 'country', basis: 'name' };
+  if (CITY_HEADS.has(head)) return { kind: 'city', basis: 'name' };
+  return null;
+}
+
 
 // Round for display only: tiny scientific measurements must not become zero.
 const tidy = (n) => Number.isFinite(n) ? +n.toPrecision(12) : null;
@@ -66,7 +150,7 @@ const tidy = (n) => Number.isFinite(n) ? +n.toPrecision(12) : null;
  * whether a column *measures* something, *names* something, or *orders*
  * something, and those are the three that change what you should draw.
  */
-function profileColumn(name, index, values) {
+function describeColumn(name, index, values) {
   const filled = values.filter((v) => !isBlank(v));
   const missing = values.length - filled.length;
   const distinct = new Set(filled.map((v) => String(v).trim())).size;
@@ -123,7 +207,7 @@ function profileColumn(name, index, values) {
     col.outliers = sd > 0
       ? nums.filter((n) => Math.abs(n - mean) > 3 * sd).slice(0, 5).map(tidy)
       : [];
-    col.idLike = looksLikeIdName(name) || isRowCounter(nums);
+    col.idLike = looksLikeIdName(name) || !!codeNameReason(name) || isRowCounter(nums);
     return col;
   }
 
@@ -144,6 +228,52 @@ function profileColumn(name, index, values) {
   // so splitting by it gives one group per row and shows nothing.
   col.idLike = looksLikeIdName(name)
     || (distinct === filled.length && filled.length >= ALL_DISTINCT_MIN_ROWS);
+  return col;
+}
+
+/**
+ * One column, described, and what it is for.
+ *
+ * `role` is the analytical job: `identifier`, `time`, `measure`, `ordinal`,
+ * `dimension`, `label`, `text` or `empty`. `roleWhy` is the evidence in the
+ * reader's own column name, and `ambiguous` is true where the values allow
+ * two readings, with the other in `alternatives`. Nothing is guessed past
+ * that: `type` and `idLike` keep meaning what they always did.
+ */
+function profileColumn(name, index, values) {
+  const col = describeColumn(name, index, values);
+  const filled = values.filter((v) => !isBlank(v));
+  const nums = col.type === 'number' ? filled.map(toNumber).filter(Number.isFinite) : [];
+  const q = `"${name}"`;
+  const set = (role, why, more = {}) => Object.assign(col, { role, roleWhy: why, ambiguous: false, ...more });
+
+  if (col.type === 'empty') set('empty', `${q} is empty`);
+  else if (col.type === 'date') set('time', `${q} reads as dates`);
+  else if (col.type === 'number' && col.idLike) {
+    const why = looksLikeIdName(name) ? 'its name says identifier'
+      : codeNameReason(name) || 'it counts 1, 2, 3… in order';
+    set('identifier', `${q} is an identifier (${why}), so it is not totalled or averaged`);
+  } else if (col.type === 'number' && isCodedScale(nums, col.distinct)) {
+    set('ordinal', `${q} holds ${col.distinct} whole numbers, each repeated — a scale to group by, `
+      + 'though averaging it is also reasonable', { ambiguous: true, alternatives: ['measure'] });
+  } else if (col.type === 'number') set('measure', `${q} is numeric, so it can be totalled and averaged`);
+  else if (col.nearlyNumeric) {
+    set('text', `${q} is mostly numbers but not enough to read as a measure`,
+      { ambiguous: true, alternatives: ['measure'] });
+  } else if (col.idLike) {
+    const named = looksLikeIdName(name) || !!codeNameReason(name);
+    set(named ? 'identifier' : 'label', named ? `${q} is named like an identifier`
+      : `${q} has a different word in nearly every row, so it names rows rather than groups them`);
+  } else if (col.type === 'category') {
+    set('dimension', `${q} has ${col.distinct} values, few enough to group by`);
+  } else set('label', `${q} has ${col.distinct} distinct values, too many to group by`);
+
+  if (col.type === 'number') {
+    const unit = unitOf(name, filled);
+    if (unit) col.unit = unit;
+  }
+  const geo = geoOf(col, nums);
+  if (geo) col.geo = geo;
   return col;
 }
 
@@ -279,6 +409,9 @@ function qualityNotes(cols, duplicates) {
         text: `"${c.name}" looks like an identifier — totalling it produces a number that means nothing.`,
       });
     }
+    if (c.role === 'ordinal') {
+      out.push({ level: 'info', column: c.name, text: `${c.roleWhy}.` });
+    }
     if (c.type === 'number' && c.outliers && c.outliers.length) {
       out.push({
         level: 'info',
@@ -324,9 +457,17 @@ export function profileTable(table) {
   const columns = headers.map((h, i) =>
     profileColumn(h || `Column ${i + 1}`, i, rows.map((r) => r[i])));
 
-  const numbers = columns.filter((c) => c.type === 'number' && !c.idLike);
-  const categories = columns.filter((c) => c.type === 'category' && !c.idLike);
   const dates = columns.filter((c) => c.type === 'date');
+  let numbers = columns.filter((c) => c.type === 'number' && !c.idLike);
+  let categories = columns.filter((c) => c.type === 'category' && !c.idLike);
+  // A scale (1-5 stars, weekday 1-7) is a column to group by. It leaves the
+  // measures only where another measure remains, and not beside a date, where
+  // a small whole-number series is far more likely a count to plot over time.
+  const scales = numbers.filter((c) => c.role === 'ordinal');
+  if (scales.length && !dates.length && numbers.some((c) => c.role === 'measure')) {
+    numbers = numbers.filter((c) => c.role !== 'ordinal');
+    categories = [...categories, ...scales].sort((a, b) => a.index - b.index);
+  }
   const groups = columns.filter((c) => !c.idLike && c.distinct >= 2
     && c.distinct <= CATEGORY_CEILING && c.distinct < c.filled);
   const duplicates = duplicateGroups({ headers, rows });
@@ -369,6 +510,7 @@ export function profileTable(table) {
     numbers,
     categories,
     dates,
+    geo: columns.filter((c) => c.geo),
     groups,
     duplicates,
     relationshipsLimited: variable.length > scanned.length || groups.length > 40,
