@@ -2602,6 +2602,14 @@ duplicate rows. It caught Parallel Sets writing `{from, to, flow}` into a
 renderer that reads `record[dimensionName]`, and then seventeen more charts
 whose header row is a row of years.
 
+A fixed point cannot see a writer that splits a name, because the split
+version is stable too. `toText` joined its cells with bare commas, so a World
+Bank file's `Korea, Rep.` reopened in the editor as two cells and every value
+after it moved a column — in all 105 charts that write a name back, and in the
+accessible table and the AI prompt, which read the same text. `csv` in
+`data-schemas.js` now quotes through `toCSV`, and the suite puts a comma and a
+quote into one name of every chart's example.
+
 One check earns its keep more than any other: **the data must reach the chart.**
 For every chart the suite applies two different tables and requires the
 generated code to differ — numbers and labels tested separately, because a

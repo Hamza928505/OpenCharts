@@ -286,6 +286,24 @@ const results = await page.evaluate(async (ids) => {
               }
             }
           }
+
+          // A name holding a comma is one cell. `toText` joined cells with
+          // bare commas, so a World Bank file's "Korea, Rep." came back from
+          // the editor as two, and every value after it moved a column.
+          const named = parseTableFor(def.data.example || '');
+          const at = (named.rows[0] || []).findIndex((c) => c && !Number.isFinite(Number(c)));
+          if (at >= 0) {
+            named.rows[0][at] += ', "Jr"';
+            const sp = reg.newSpec(def);
+            if (applyData(def, sp, named).ok) {
+              if (typeof def.onChange === 'function') def.onChange(sp);
+              // The spiral keeps values and no names, so writes none back.
+              const text = def.toText(sp);
+              if (text.includes('Jr') && !parseTableFor(text).rows.some((row) => row.some((c) => c.endsWith(', "Jr"')))) {
+                r.problems.push('a name holding a comma comes back from the editor as two cells');
+              }
+            }
+          }
         }
 
         // ...and the data must actually *reach* the chart.

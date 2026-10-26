@@ -14,7 +14,10 @@
  *   toText       serialise the live spec back to CSV
  */
 
-const csv = (rows) => rows.map((r) => r.join(',')).join('\n');
+import { toCSV } from './dataio.js';
+
+// Quoted where a cell needs it: "Korea, Rep." is one cell, not two.
+const csv = (rows) => toCSV(null, rows);
 
 /* ── writers ─────────────────────────────────────────────────────────────── */
 
