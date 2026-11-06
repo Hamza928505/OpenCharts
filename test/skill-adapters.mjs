@@ -246,6 +246,12 @@ try {
   assert.equal(dupSetsBuilt.holds.rows, 2, 'parallel-sets folds duplicate dimension tuples into one record per distinct combination');
   assert.deepEqual(dupSetsBuilt.holds.first, ['Organic', 'Desktop', 'Purchase', '25']);
 
+  // Finding 10: standalone export CSS uses border-box and a shrinkable grid track so the page does not overflow a 390 px window.
+  const { generateCode } = await import('../js/studio/engines.js');
+  const standaloneHtml = generateCode(boxDef, newSpec(boxDef)).standalone;
+  assert.match(standaloneHtml, /grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'standalone body grid shrinks below max-width on narrow viewports');
+  assert.match(standaloneHtml, /\.chart-card\s*\{[\s\S]*?box-sizing:\s*border-box;\s*min-width:\s*0;/, 'chart-card includes border-box and min-width: 0');
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);

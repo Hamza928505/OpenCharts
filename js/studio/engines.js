@@ -474,6 +474,8 @@ export function renderLegend(container, items, inst) {
 const BASE_CSS = `.chart-card {
   /* The card is a figure now, and a figure carries a browser default
      margin of 1em 40px that the card never wanted. */
+  box-sizing: border-box;
+  min-width: 0;
   margin: 0;
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -1281,11 +1283,13 @@ function buildStandalone(def, spec, html, css, js) {
     ...scriptBlock,
     `<style>`,
     `body {`,
+    `  box-sizing: border-box;`,
     `  margin: 0;`,
     `  min-height: 100vh;`,
     `  display: grid;`,
+    `  grid-template-columns: minmax(0, 1fr);`,
     `  place-items: center;`,
-    `  padding: 32px;`,
+    `  padding: clamp(12px, 4vw, 32px);`,
     `  background: #ffffff;`,
     `  font-family: 'IBM Plex Sans', system-ui, sans-serif;`,
     `}`,
