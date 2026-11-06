@@ -41,7 +41,9 @@ function periodsAcross(columns, rows) {
   for (const p of PERIODS) {
     const named = columns.filter((c) => p.test(clean(c.name)) && c.type === 'number');
     if (named.length < p.min || named.length * 2 < columns.length) continue;
-    const lead = columns.find((c) => !named.includes(c));
+    const rawLead = columns.find((c) => !named.includes(c));
+    const lead = columns.find((c) => !named.includes(c) && c.role !== 'identifier'
+      && (c.index < named[0].index || c.type !== 'number'));
     const leadPeriod = !!lead && (lead.type === 'date' || lead.role === 'time'
       || PERIODS.some((q) => rows.slice(0, 20).every((r) => q.test(clean(r[lead.index])))));
     return {
@@ -50,8 +52,9 @@ function periodsAcross(columns, rows) {
       count: named.length,
       first: named[0].name,
       last: named[named.length - 1].name,
-      lead: lead ? lead.name : null,
-      // `Year` down the side as well makes a grid, not a list of things.
+      lead: (lead || rawLead) ? (lead || rawLead).name : null,
+      // `Year` down the side as well makes a grid, not a list of things; a row
+      // counter down the side names nothing at all, so a swap is meaningless.
       rowsAre: !lead ? 'unknown' : leadPeriod ? 'periods' : 'things',
       rows: rows.length,
     };
@@ -73,8 +76,17 @@ function multiValued(columns, rows) {
       // A comma is also how a name or an address is written, so it has to be
       // most of the column and the pieces have to be short, to be a list.
       if (joined.length / cells.length < (sep === ',' ? 0.3 : 0.15) || joined.length < 3) continue;
-      const parts = cells.flatMap((v) => v.split(sep).map(clean).filter(Boolean));
-      const short = parts.filter((p) => p.length <= (sep === ',' ? 20 : 40)).length;
+      const splitCells = cells.map((v) => v.split(sep).map(clean).filter(Boolean)).filter((p) => p.length > 0);
+      if (sep === ',') {
+        // A comma "list" where every (or nearly every) cell has the same number
+        // of parts is a structured name ("Allard, K") or place ("Minneapolis, Minnesota").
+        const byLen = new Map();
+        for (const p of splitCells) byLen.set(p.length, (byLen.get(p.length) || 0) + 1);
+        const topCount = Math.max(0, ...byLen.values());
+        if (topCount / splitCells.length >= 0.95) continue;
+      }
+      const parts = splitCells.flat();
+      const short = parts.filter((p) => p.length <= (sep === ',' ? 20 : 25)).length;
       if (short / parts.length < 0.9) continue;
       const distinct = new Set(parts);
       // A tag comes round again; a name does not. This is what separates a list
