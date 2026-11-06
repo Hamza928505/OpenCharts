@@ -210,6 +210,17 @@ try {
   const histPick = yearValRanked.suggestions.find((s) => s.id === 'histogram');
   assert.ok(histPick && histPick.verify.clean, 'year/value histogram drops year and holds only the measure');
 
+  // Finding 3: MCP server uses async spawn so a running tool call does not block ping, and refuses oversized tables.
+  const order = [];
+  const slowCall = tool('recommend_charts', { path: 'test/benchmark/data/wbpop.csv' }).then((r) => { order.push('tool'); return r; });
+  const fastPing = ask('ping').then((r) => { order.push('ping'); return r; });
+  await Promise.all([slowCall, fastPing]);
+  assert.deepEqual(order, ['ping', 'tool'], 'ping answers while a tool call is still running in its child process');
+  const tooManyRows = 'a,b\n' + '1,2\n'.repeat(50005);
+  const refusedOversized = await tool('profile_table', { text: tooManyRows });
+  assert.equal(refusedOversized.isError, true, 'oversized table is refused');
+  assert.match(refusedOversized.body, /over 50,000 rows; filter or aggregate it first/);
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);

@@ -120,6 +120,7 @@ const PER_ROW = new Set(['labelSeries', 'labelValue', 'items', 'matrix', 'rowSer
 
 /** Past 8 KB of path a web server refuses the request: GitHub Pages answers 414. */
 const SERVER_LIMIT = 8192;
+const MAX_ROWS = 50000;
 
 function readTable() {
   if (!source) return null;
@@ -134,6 +135,9 @@ function readTable() {
   // Bank file opens with a byte-order mark, which would be part of its first
   // column's name.
   const lines = bytes.toString('utf8').replace(/^﻿/, '').split(/\r?\n/);
+  if (lines.length > MAX_ROWS + 100) {
+    fail(`That table has over ${MAX_ROWS.toLocaleString('en-US')} rows; filter or aggregate it first.`);
+  }
   let lead = 0;
   while (lead < lines.length && /^\s*(#|$)/.test(lines[lead])) lead++;
   const comments = lines.slice(0, lead).filter((l) => l.trim()).length;
@@ -143,6 +147,9 @@ function readTable() {
   const text = rest.join('\n');
   const parsed = parseTable(text, header);
   if (!parsed.headers.length) fail('No table in that input — expected CSV, TSV or JSON rows.');
+  if (parsed.rows.length > MAX_ROWS) {
+    fail(`That table has ${parsed.rows.length.toLocaleString('en-US')} rows (over ${MAX_ROWS.toLocaleString('en-US')}); filter or aggregate it first.`);
+  }
   // A headerless table is turned without the `Label, Series 1` it was given.
   let table = swap
     ? transposeTable({ headers: parsed.hadHeader ? parsed.headers : [], rows: parsed.rows })

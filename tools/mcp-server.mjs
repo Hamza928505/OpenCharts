@@ -26,7 +26,7 @@
  * Files are read, and pages written, only inside the starting folder, or inside
  * OPENCHARTS_MCP_ROOT when that is set.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
@@ -35,7 +35,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = realpathSync(resolve(process.env.OPENCHARTS_MCP_ROOT || process.cwd()));
 const CHOOSE = fileURLToPath(new URL('../.claude/skills/choose-chart/choose.mjs', import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
-const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_ROWS = 50000;
+const CALL_TIMEOUT_MS = Number(process.env.OPENCHARTS_MCP_TIMEOUT_MS) || 30000;
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 class ToolError extends Error {}
@@ -106,25 +108,58 @@ const TOOLS = [
 /** Whether the caller gave a table (either a file path or non-empty text). */
 const hasTable = (input) => input.path != null || (typeof input.text === 'string' && input.text.trim().length > 0);
 
-/** Run choose.mjs --json and return what it said, or throw what it complained of. */
-function choose(args, input, text, { allowNoTable = false } = {}) {
+/** Run choose.mjs --json asynchronously and return what it said, or throw what it complained of. */
+async function choose(args, input, text, { allowNoTable = false } = {}) {
   const source = input.path != null ? inside(input.path, { mustExist: true }) : null;
   const tableArg = [];
   if (source) {
-    if (!statSync(source).isFile()) bad(`${input.path} is not a file.`);
-    if (statSync(source).size > MAX_BYTES) bad(`${input.path} is over ${MAX_BYTES / 1024 / 1024} MB.`);
+    const st = statSync(source);
+    if (!st.isFile()) bad(`${input.path} is not a file.`);
+    if (st.size > MAX_BYTES) bad(`${input.path} is over ${MAX_BYTES / 1024 / 1024} MB; filter or aggregate it first.`);
     tableArg.push(source);
   } else if (typeof input.text === 'string' && input.text.trim()) {
     if (Buffer.byteLength(input.text) > MAX_BYTES) {
       bad('That table is too large to pass as text; save it to a file and give path.');
     }
+    let lines = 0;
+    for (let i = 0; i < input.text.length; i++) {
+      if (input.text.charCodeAt(i) === 10 && ++lines > MAX_ROWS) {
+        bad(`That table has over ${MAX_ROWS.toLocaleString('en-US')} rows; filter or aggregate it first.`);
+      }
+    }
     tableArg.push('-');
   } else if (!allowNoTable) {
     bad('Give a table: path (a file in the working folder) or text.');
   }
-  const run = spawnSync(process.execPath, [CHOOSE, '--json', ...args, ...tableArg], {
-    input: tableArg[0] === '-' ? text : undefined, encoding: 'utf8', timeout: 120000, maxBuffer: 100 * 1024 * 1024, cwd: ROOT,
+  const run = await new Promise((resolveRun) => {
+    const child = spawn(process.execPath, [CHOOSE, '--json', ...args, ...tableArg], {
+      cwd: ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+    }, CALL_TIMEOUT_MS);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { if (stderr.length < 4096) stderr += chunk; });
+    child.stdin.on('error', () => {});
+    if (tableArg[0] === '-' && text != null) child.stdin.end(text, 'utf8');
+    else child.stdin.end();
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolveRun({ stdout, stderr, error, timedOut });
+    });
+    child.on('close', () => {
+      clearTimeout(timer);
+      resolveRun({ stdout, stderr, timedOut });
+    });
   });
+  if (run.timedOut) bad(`The chooser timed out after ${CALL_TIMEOUT_MS / 1000}s.`);
   let result;
   try { result = JSON.parse(run.stdout); } catch { bad(`The chooser did not answer: ${(run.stderr || run.error?.message || 'no output').slice(0, 300)}`); }
   if (result.error) bad(result.error);
@@ -146,16 +181,16 @@ function reading(input) {
 }
 
 const HANDLERS = {
-  profile_table(input) {
-    const r = choose(reading(input), input, input.text);
+  async profile_table(input) {
+    const r = await choose(reading(input), input, input.text);
     return { table: r.table, notes: r.notes };
   },
-  recommend_charts(input) {
+  async recommend_charts(input) {
     if (!hasTable(input)) return choose(['--list'], input, undefined, { allowNoTable: true });
     const question = input.question == null ? [] : ['--question', String(input.question)];
     return choose([...reading(input), ...question], input, input.text);
   },
-  build_chart(input) {
+  async build_chart(input) {
     const recipe = input.recipe;
     if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe) || !recipe.chart) {
       bad('recipe is an object with at least a chart, such as {"chart": "line-basic"}.');
@@ -168,7 +203,7 @@ const HANDLERS = {
   },
 };
 
-function call(name, args) {
+async function call(name, args) {
   const handler = HANDLERS[name];
   if (!handler) return null;
   const tool = TOOLS.find((t) => t.name === name);
@@ -181,7 +216,7 @@ function call(name, args) {
     for (const k of Object.keys(input)) {
       if (!allowed.has(k)) bad(`${name} has no "${k}" argument; it takes ${[...allowed].join(', ')}.`);
     }
-    return { content: [{ type: 'text', text: JSON.stringify(handler(input), null, 2) }] };
+    return { content: [{ type: 'text', text: JSON.stringify(await handler(input), null, 2) }] };
   } catch (e) {
     if (e instanceof ToolError || e.code === 'ENOENT') {
       return { isError: true, content: [{ type: 'text', text: e instanceof ToolError ? e.message : `No such file: ${args?.path}` }] };
@@ -190,7 +225,7 @@ function call(name, args) {
   }
 }
 
-function handle(message) {
+async function handle(message) {
   const { id, method, params } = message;
   const reply = (result) => ({ jsonrpc: '2.0', id, result });
   const fail = (code, text) => ({ jsonrpc: '2.0', id, error: { code, message: text } });
@@ -204,7 +239,7 @@ function handle(message) {
     case 'ping': return reply({});
     case 'tools/list': return reply({ tools: TOOLS });
     case 'tools/call': {
-      const result = call(params?.name, params?.arguments);
+      const result = await call(params?.name, params?.arguments);
       return result ? reply(result) : fail(-32602, `Unknown tool: ${params?.name}`);
     }
     default:
@@ -222,11 +257,15 @@ function main() {
       process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`);
       return;
     }
-    let response;
-    try { response = handle(message); } catch (e) {
-      response = { jsonrpc: '2.0', id: message.id ?? null, error: { code: -32603, message: String(e.message || e) } };
-    }
-    if (response) process.stdout.write(`${JSON.stringify(response)}\n`);
+    Promise.resolve().then(() => handle(message)).then(
+      (response) => {
+        if (response) process.stdout.write(`${JSON.stringify(response)}\n`);
+      },
+      (e) => {
+        const response = { jsonrpc: '2.0', id: message.id ?? null, error: { code: -32603, message: String(e.message || e) } };
+        process.stdout.write(`${JSON.stringify(response)}\n`);
+      },
+    );
   });
 }
 
