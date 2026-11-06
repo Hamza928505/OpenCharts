@@ -66,9 +66,12 @@ const NODE_SHAPES = new Set(['links', 'dimensions', 'tree']);
  * the edge list, which is two columns of node names and nothing else.
  */
 const CATEGORICAL_SHAPES = new Set([...NODE_SHAPES, 'edges']);
+const FLOW_SHAPES = new Set(['links', 'dimensions', 'edges']);
 
 /** The most nodes one stage of a flow or one level of a tree carries legibly. */
 const MAX_NODES = 24;
+/** Past this many raw rows a flow diagram needs grouping first. */
+const MAX_FLOW_ROWS = 500;
 
 const NON_ID_WORDS = /^(?:valid|invalid|fluid|acid|grid|paid|unpaid|prepaid|solid|humid|rapid|arid|lipid|hybrid|pyramid|steroid|oid|alkaloid|thyroid|covid|bid|lid|rid)$/i;
 
@@ -230,6 +233,7 @@ function candidateWidths(expected, rules, words, numbers) {
 function projectFor(def, table, cls) {
   const expected = expectedFormat(def);
   if (!expected.shape || NAMED_PLACE_SHAPES.has(expected.shape)) return null;
+  if (FLOW_SHAPES.has(expected.shape) && table.rows.length > MAX_FLOW_ROWS) return null;
 
   const words = CATEGORICAL_SHAPES.has(expected.shape) ? cls.categorical : cls.words;
   const rules = columnRules(expected.shape);
@@ -296,10 +300,13 @@ export function rankCharts(table) {
     const entry = { def, message: fit.message, columns: expected.columns, hint: expected.hint };
     const labelCols = countOf(columnRules(expected.shape).text, table.headers);
     const stagePool = expected.shape === 'tree' ? cls.words : cls.categorical;
-    const stagesOk = !CATEGORICAL_SHAPES.has(expected.shape)
-      || Array.from({ length: Math.min(labelCols, table.headers.length) }, (_, c) => c).every((c) => stagePool.includes(c));
+    const tooManyFlowRows = FLOW_SHAPES.has(expected.shape) && table.rows.length > MAX_FLOW_ROWS;
+    const stagesOk = !tooManyFlowRows && (!CATEGORICAL_SHAPES.has(expected.shape)
+      || Array.from({ length: Math.min(labelCols, table.headers.length) }, (_, c) => c).every((c) => stagePool.includes(c)));
     if (fit.ok && !stagesOk) {
-      entry.message = 'This chart needs category names in its stage columns, not numbers or unique IDs.';
+      entry.message = tooManyFlowRows
+        ? 'This table has too many raw rows for a flow diagram; group the stages first.'
+        : 'This chart needs category names in its stage columns, not numbers or unique IDs.';
     }
     let slice;
     const getSlice = () => (slice === undefined ? (slice = projectFor(def, table, cls)) : slice);

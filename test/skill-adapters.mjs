@@ -234,6 +234,18 @@ try {
   assert.equal(bigLinkRun.body.link.withData, false);
   assert.ok(!bigLinkRun.body.link.url.includes('&s='), 'JSON link holds the plain studio URL when too long');
 
+  // Finding 14: flow charts over > 500 raw rows are not offered un-aggregated, and parallel-sets folds duplicate dimension tuples.
+  const longFlowCsv = 'dept,status,amount\n'
+    + Array.from({ length: 800 }, (_, i) => `${['Sales', 'Eng', 'Ops'][i % 3]},${['Open', 'Won'][i % 2]},${10 + (i % 5)}`).join('\n') + '\n';
+  const longFlowRanked = json(['-'], longFlowCsv).body;
+  assert.ok(longFlowRanked.suggestions.every((s) => !['sankey', 'chord', 'parallel-sets', 'alluvial'].includes(s.id)),
+    'flow charts are not offered un-aggregated over > 500 raw rows');
+  const dupSetsCsv = 'channel,device,outcome,count\n'
+    + 'Organic,Desktop,Purchase,10\nOrganic,Desktop,Purchase,15\nPaid,Mobile,Bounce,20\n';
+  const dupSetsBuilt = json(['--chart', 'parallel-sets', '-'], dupSetsCsv).body;
+  assert.equal(dupSetsBuilt.holds.rows, 2, 'parallel-sets folds duplicate dimension tuples into one record per distinct combination');
+  assert.deepEqual(dupSetsBuilt.holds.first, ['Organic', 'Desktop', 'Purchase', '25']);
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);

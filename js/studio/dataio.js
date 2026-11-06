@@ -706,7 +706,7 @@ export const SHAPES = {
     });
 
     const links = order.map((id) => byHop.get(id));
-    if (!links.length) return null;
+    if (!links.length || links.length > 250) return null;
 
     const patch = { [key]: links };
     // Refresh the node list so colours and legends follow the new links.
@@ -742,15 +742,23 @@ export const SHAPES = {
     if (dims.length < 2) return null;
 
     const valueField = opts.valueField || 'value';
-    const records = [];
+    const order = [];
+    const byTuple = new Map();
     rows.forEach((r) => {
       if (dims.some((_, i) => !String(r[i] ?? '').trim())) return;   // a gap is not a record
-      const rec = {};
-      dims.forEach((d, i) => { rec[d] = String(r[i]).trim(); });
-      rec[valueField] = num(r[dims.length], 1);
-      records.push(rec);
+      const vals = dims.map((_, i) => String(r[i]).trim());
+      const id = JSON.stringify(vals);
+      if (!byTuple.has(id)) {
+        const rec = {};
+        dims.forEach((d, i) => { rec[d] = vals[i]; });
+        rec[valueField] = 0;
+        byTuple.set(id, rec);
+        order.push(id);
+      }
+      byTuple.get(id)[valueField] += num(r[dims.length], 1);
     });
-    if (!records.length) return null;
+    const records = order.map((id) => byTuple.get(id));
+    if (!records.length || records.length > 250) return null;
 
     const colorKey = opts.colorByKey || 'colorBy';
     return {
@@ -766,8 +774,18 @@ export const SHAPES = {
   edges(table, spec, opts = {}) {
     const { rows } = table;
     if (!rows.length) return null;
-    const links = rows.filter((r) => r[0] && r[1]).map((r) => ({ source: r[0], target: r[1] }));
-    if (!links.length) return null;
+    const seenEdges = new Set();
+    const links = [];
+    rows.forEach((r) => {
+      const s = String(r[0] ?? '').trim();
+      const t = String(r[1] ?? '').trim();
+      if (!s || !t || s === t) return;
+      const id = JSON.stringify([s, t]);
+      if (seenEdges.has(id)) return;
+      seenEdges.add(id);
+      links.push({ source: s, target: t });
+    });
+    if (!links.length || links.length > 250) return null;
 
     const seen = [...new Set(links.flatMap((l) => [l.source, l.target]))];
     // Preserve any group assignment the user already had for a known node.

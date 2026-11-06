@@ -133,7 +133,7 @@ export function recipeOf(plan, headers) {
     case 'group':
       return { chart: plan.id, steps: [{ group: a, agg: plan.agg, values: [b] }] };
     case 'spread':
-      return { chart: plan.id, steps: [numeric(b)], columns: [a, b], roles: { group: a, value: b } };
+      return { chart: plan.id, steps: [{ sort: a }, numeric(b)], columns: [a, b], roles: { group: a, value: b } };
     case 'distribution':
       return { chart: plan.id, steps: [numeric(a)], columns: [a] };
     case 'relationship':
@@ -175,7 +175,13 @@ export function buildAnalysisChart(source, plan) {
     detail = corr.r === null ? 'Not enough paired variation for Pearson correlation.' : `Pearson r = ${corr.r}; association is not causation.`;
   } else if (plan.kind === 'spread') {
     const pairs = source.rows.map((row) => [String(row[plan.group] ?? '').trim() || '(blank)', toNumber(row[plan.measure])])
-      .filter((pair) => Number.isFinite(pair[1]));
+      .filter((pair) => Number.isFinite(pair[1]))
+      .sort((a, b) => {
+        const na = toNumber(a[0]);
+        const nb = toNumber(b[0]);
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+        return a[0].localeCompare(b[0]);
+      });
     usedRows = pairs.length;
     table = { headers: [source.headers[plan.group], source.headers[plan.measure]], rows: pairs.map(([k, v]) => [k, String(v)]) };
     detail = 'Every valid value is in its group; none are averaged away.';
