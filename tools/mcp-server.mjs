@@ -44,6 +44,8 @@ const bad = (message) => { throw new ToolError(message); };
 /** A path the caller named, resolved, and refused unless it is inside ROOT. */
 function inside(p, { mustExist }) {
   const full = resolve(ROOT, String(p));
+  const preRel = relative(ROOT, full);
+  if (preRel === '' || preRel.startsWith('..') || isAbsolute(preRel)) bad(`${p} is outside the folder this server was started in (${ROOT}).`);
   // A file that does not exist yet is judged by the folder it would be in.
   const real = mustExist ? realpathSync(full) : resolve(realpathSync(dirname(full)), basename(full));
   const rel = relative(ROOT, real);
@@ -69,7 +71,7 @@ const TOOLS = [
   },
   {
     name: 'recommend_charts',
-    description: 'Which of the library\'s charts can read this table and are worth drawing, each with the reason in the table\'s own column names and what that chart can mislead about. Also the aggregated views (a chart of a grouped or pivoted table) with the recipe that draws each. `score` is a relative ordering, never a probability.',
+    description: 'Which of the library\'s charts can read this table and are worth drawing, each with the reason in the table\'s own column names, what that chart can mislead about, and verify.clean. Also the aggregated views (with measure-bearing views ahead of row counts) and the recipe that draws each. Do not hand back the initial link when verify.clean is false; call build_chart with a recipe or columns first. Called with no path or text, lists every chart in the registry and the columns it reads.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -82,14 +84,14 @@ const TOOLS = [
   },
   {
     name: 'build_chart',
-    description: 'Run a recipe on the table and report what the chart will hold. Check verify (ok, clean) and warnings before showing the link: they name blank cells drawn as zero, dates that double back, groups that are really numbers. rendered is always null: drawing is not checked here.',
+    description: 'Run a recipe on the table and report what the chart will hold. Check verify (ok, clean) and warnings before showing the link: they name blank cells drawn as zero, dates that double back, groups that are really numbers, or columns missing from the chart (pass recipe.columns to pick them). rendered is always null: drawing is not checked here. Called with {"recipe": {"chart": "<id>"}} and no table, describes the columns that chart reads and returns its example link.',
     inputSchema: {
       type: 'object',
       properties: {
         ...TABLE_PROPERTIES,
         recipe: {
           type: 'object',
-          description: 'What to draw and how to get the table there. {"chart": "line-multi", "steps": [{"pivot": "source", "rows": "year", "value": "net_generation"}]}. Keys: chart (required), skip, header, swap, columns, steps (filter, group, bin, sort, limit, transpose, pivot), roles {group, value}, facet.',
+          description: 'What to draw and how to get the table there. {"chart": "line-multi", "steps": [{"pivot": "source", "rows": "year", "value": "net_generation"}]}. Keys: chart (required), skip, header, swap, columns, steps (filter, group, bin, sort, limit, transpose, pivot, split), roles {group, value}, facet.',
           properties: { chart: { type: 'string' } },
           required: ['chart'],
         },
@@ -101,19 +103,27 @@ const TOOLS = [
   },
 ];
 
+/** Whether the caller gave a table (either a file path or non-empty text). */
+const hasTable = (input) => input.path != null || (typeof input.text === 'string' && input.text.trim().length > 0);
+
 /** Run choose.mjs --json and return what it said, or throw what it complained of. */
-function choose(args, input, text) {
+function choose(args, input, text, { allowNoTable = false } = {}) {
   const source = input.path != null ? inside(input.path, { mustExist: true }) : null;
+  const tableArg = [];
   if (source) {
     if (!statSync(source).isFile()) bad(`${input.path} is not a file.`);
     if (statSync(source).size > MAX_BYTES) bad(`${input.path} is over ${MAX_BYTES / 1024 / 1024} MB.`);
-  } else if (typeof input.text !== 'string' || !input.text.trim()) {
+    tableArg.push(source);
+  } else if (typeof input.text === 'string' && input.text.trim()) {
+    if (Buffer.byteLength(input.text) > MAX_BYTES) {
+      bad('That table is too large to pass as text; save it to a file and give path.');
+    }
+    tableArg.push('-');
+  } else if (!allowNoTable) {
     bad('Give a table: path (a file in the working folder) or text.');
-  } else if (Buffer.byteLength(input.text) > MAX_BYTES) {
-    bad('That table is too large to pass as text; save it to a file and give path.');
   }
-  const run = spawnSync(process.execPath, [CHOOSE, '--json', ...args, source || '-'], {
-    input: source ? undefined : text, encoding: 'utf8', timeout: 120000, maxBuffer: 100 * 1024 * 1024, cwd: ROOT,
+  const run = spawnSync(process.execPath, [CHOOSE, '--json', ...args, ...tableArg], {
+    input: tableArg[0] === '-' ? text : undefined, encoding: 'utf8', timeout: 120000, maxBuffer: 100 * 1024 * 1024, cwd: ROOT,
   });
   let result;
   try { result = JSON.parse(run.stdout); } catch { bad(`The chooser did not answer: ${(run.stderr || run.error?.message || 'no output').slice(0, 300)}`); }
@@ -141,6 +151,7 @@ const HANDLERS = {
     return { table: r.table, notes: r.notes };
   },
   recommend_charts(input) {
+    if (!hasTable(input)) return choose(['--list'], input, undefined, { allowNoTable: true });
     const question = input.question == null ? [] : ['--question', String(input.question)];
     return choose([...reading(input), ...question], input, input.text);
   },
@@ -153,15 +164,24 @@ const HANDLERS = {
       if (extname(String(input.page)).toLowerCase() !== '.html') bad('page is a .html file name.');
       return inside(input.page, { mustExist: false });
     })()];
-    return choose(['--recipe', JSON.stringify(recipe), ...page], input, input.text);
+    return choose(['--recipe', JSON.stringify(recipe), ...page], input, input.text, { allowNoTable: !page.length });
   },
 };
 
 function call(name, args) {
   const handler = HANDLERS[name];
   if (!handler) return null;
+  const tool = TOOLS.find((t) => t.name === name);
   try {
-    return { content: [{ type: 'text', text: JSON.stringify(handler(args || {}), null, 2) }] };
+    if (args != null && (typeof args !== 'object' || Array.isArray(args))) {
+      bad('Tool arguments must be an object.');
+    }
+    const input = args || {};
+    const allowed = new Set(Object.keys(tool.inputSchema.properties));
+    for (const k of Object.keys(input)) {
+      if (!allowed.has(k)) bad(`${name} has no "${k}" argument; it takes ${[...allowed].join(', ')}.`);
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(handler(input), null, 2) }] };
   } catch (e) {
     if (e instanceof ToolError || e.code === 'ENOENT') {
       return { isError: true, content: [{ type: 'text', text: e instanceof ToolError ? e.message : `No such file: ${args?.path}` }] };

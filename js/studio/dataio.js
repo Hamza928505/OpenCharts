@@ -711,10 +711,7 @@ export const SHAPES = {
     const patch = { [key]: links };
     // Refresh the node list so colours and legends follow the new links.
     if (opts.nodesKey) {
-      const seen = [];
-      links.forEach((l) => {
-        [l[fromF], l[toF]].forEach((n) => { if (!seen.includes(n)) seen.push(n); });
-      });
+      const seen = [...new Set(links.flatMap((l) => [l[fromF], l[toF]]))];
       patch[opts.nodesKey] = seen;
       patch[opts.colorsKey || 'colors'] = seen.map((_, i) => PALETTE[i % PALETTE.length]);
     }
@@ -772,10 +769,7 @@ export const SHAPES = {
     const links = rows.filter((r) => r[0] && r[1]).map((r) => ({ source: r[0], target: r[1] }));
     if (!links.length) return null;
 
-    const seen = [];
-    links.forEach((l) => {
-      [l.source, l.target].forEach((n) => { if (!seen.includes(n)) seen.push(n); });
-    });
+    const seen = [...new Set(links.flatMap((l) => [l.source, l.target]))];
     // Preserve any group assignment the user already had for a known node.
     const prev = new Map((spec.nodes || []).map((n) => [n.id, n.group]));
     return {

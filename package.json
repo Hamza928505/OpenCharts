@@ -46,6 +46,10 @@
     "benchmark": "node test/benchmark.mjs",
     "check": "node --check js/studio/registry.js && node --check js/studio/engines.js && node --check js/studio/dataio.js"
   },
+  "bin": {
+    "opencharts-mcp": "./tools/mcp-server.mjs",
+    "choose-chart": "./.claude/skills/choose-chart/choose.mjs"
+  },
   "files": [
     "index.html",
     "ai.html",
@@ -62,6 +66,8 @@
     "js/",
     "data/",
     "lib/",
+    "tools/mcp-server.mjs",
+    ".claude/skills/choose-chart/",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
     "README.md"

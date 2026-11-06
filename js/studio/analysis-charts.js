@@ -107,10 +107,12 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
         why: 'Several measures on one time axis. Only dates where every measure has a valid value are drawn.' });
     }
   }
-  // Interleave analyses so the first page is useful before any filtering.
+  // Interleave analyses so the first page is useful before any filtering;
+  // measure-bearing views lead when the table has numbers to chart.
+  const order = [1, 2, 3, 4, 5, 0, 6, 7, 8];
   const plans = [];
   const longest = Math.max(...buckets.map((bucket) => bucket.length));
-  for (let i = 0; i < longest; i++) for (const bucket of buckets) if (bucket[i]) plans.push(bucket[i]);
+  for (let i = 0; i < longest; i++) for (const b of order) if (buckets[b][i]) plans.push(buckets[b][i]);
   return plans;
 }
 

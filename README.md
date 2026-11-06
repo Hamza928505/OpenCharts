@@ -300,6 +300,26 @@ The prompt follows whatever is on screen. Edit the colours, swap the data,
 change the axis — copy it afterwards and the brief describes that chart, not
 the library default.
 
+### As a skill or an MCP server
+
+A coding assistant working in a terminal can also run the matcher, profiler and
+transform pipeline directly on a local file — without opening a browser:
+
+```bash
+# CLI skill (.claude/skills/choose-chart/SKILL.md)
+node .claude/skills/choose-chart/choose.mjs data.csv
+node .claude/skills/choose-chart/choose.mjs --recipe '{"chart":"bar-vertical","steps":[{"group":"region","agg":"mean","values":["sales"]}]}' --html chart.html data.csv
+
+# MCP server (profile_table, recommend_charts, build_chart)
+claude mcp add opencharts -- node tools/mcp-server.mjs
+```
+
+Both run the same `profile.js`, `DataMatch.js`, `recommend.js`,
+`analysis-charts.js` and `recipe.js` modules the gallery uses, verify that the
+resulting chart holds the expected rows without silent zero-fills or ungrouped
+duplicate labels, and return a shareable studio link or a standalone `.html`
+page.
+
 ## Not sure how to read a chart?
 
 Every chart in the studio has a **How to read this chart** panel above it: what
@@ -616,7 +636,7 @@ the pinned CDN URLs, map boundaries included.
   came from.
 - The gallery footer lists every library the project ships.
 
-Charts that need nothing say so plainly — 42 of the 96 load no library at all.
+Charts that need nothing say so plainly — 54 of the <!-- count:charts -->115<!-- /count --> load no library at all.
 
 Versions are pinned in `js/studio/cdn.js`, which is the single source of truth
 for all of the above. It matches the builds vendored in `lib/`; if you update
@@ -633,13 +653,14 @@ Charts are built on whichever engine suits them; the badge on each tile says whi
 
 | Engine | Count | Notes |
 |---|---|---|
-| Chart.js | 39 | Plus the sankey, matrix, treemap and boxplot plugins |
-| Canvas 2D | 48 | Hand-drawn, no charting library at all |
-| D3 | 21 | SVG output, including all the maps and the globe |
-| OpenCharts | 5 | The dependency-free engine in `js/core` + `js/charts` |
-| DOM / CSS | 1 | The waffle chart is just styled divs |
+| Chart.js | <!-- count:chartjs -->39<!-- /count --> | Plus the sankey, matrix, treemap and boxplot plugins |
+| Canvas 2D | <!-- count:canvas -->48<!-- /count --> | Hand-drawn, no charting library at all |
+| D3 | <!-- count:d3 -->21<!-- /count --> | SVG output, including all the maps and the globe |
+| OpenCharts | <!-- count:native -->5<!-- /count --> | The dependency-free engine in `js/core` + `js/charts` |
+| DOM / CSS | <!-- count:dom -->1<!-- /count --> | The waffle chart is just styled divs |
+| Apache ECharts | <!-- count:echarts -->1<!-- /count --> | Heatmap |
 
-Charts are grouped into 15 categories: Line & Area, Bar, Deviation, Part to
+Charts are grouped into <!-- count:categories -->15<!-- /count --> categories: Line & Area, Bar, Deviation, Part to
 Whole, Radar, Scatter, Distribution, Hierarchy, Network, Flow, Comparison,
 Finance, Geo, KPI & Micro, and Custom Engine.
 

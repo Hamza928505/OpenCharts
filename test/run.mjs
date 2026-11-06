@@ -645,6 +645,7 @@ const match = await page.evaluate(async () => {
     return {
       detected,
       cards: document.querySelectorAll('.card').length,
+      whole: document.querySelectorAll('.card-fit:not(.part)').length,
       chips: [...document.querySelectorAll('.match-col-chip b')].map((c) => c.textContent),
       verdict: (document.querySelector('.match-verdict') || {}).textContent || '',
       banner: !!document.querySelector('.match-note'),
@@ -723,9 +724,9 @@ check(match.years.detected === false,
   'a header row of years cannot be detected — the box says so');
 check(match.yearsFixed.chips.join(',') === 'region,2023,2024',
   'and ticking the box settles it', match.yearsFixed.chips.join(','));
-check(match.yearsFixed.cards > match.flow.cards,
+check(match.yearsFixed.whole > match.flow.whole,
   'a plain label-and-values table suits far more charts',
-  `${match.yearsFixed.cards} vs ${match.flow.cards}`);
+  `${match.yearsFixed.whole} vs ${match.flow.whole}`);
 check(match.cleared === match.total, 'and the banner leads back to every chart',
   `${match.cleared} of ${match.total}`);
 check(match.widened.keptTable && match.widened.keptFit && match.widened.box.trim() !== '',

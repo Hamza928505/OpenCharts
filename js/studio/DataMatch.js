@@ -69,6 +69,21 @@ const CATEGORICAL_SHAPES = new Set([...NODE_SHAPES, 'edges']);
 /** The most nodes one stage of a flow or one level of a tree carries legibly. */
 const MAX_NODES = 24;
 
+const NON_ID_WORDS = /^(?:valid|invalid|fluid|acid|grid|paid|unpaid|prepaid|solid|humid|rapid|arid|lipid|hybrid|pyramid|steroid|oid|alkaloid|thyroid|covid|bid|lid|rid)$/i;
+
+/** Column headings that name a row or entity identifier rather than a measurement. */
+const ROW_ID_NAME = /^(id|.*[_ -]id|[a-z0-9]*id|rownames?|row[._ -]?(id|num|number|name)s?|unnamed:\s*\d+|column 1|code|.*[_ -]code|key|uuid|guid|index|idx|no|num|number|.*[_ -](number|num|no|nr)|.*seq|fips[_ -].*|rank)$/i;
+const WORD_ID_NAME = /^(rownames?|row[._ -]?names?|unnamed:\s*\d+|column 1|id|.*[_ -]id|studyid|usubjid|subjid)$/i;
+
+const isRowIdName = (name) => {
+  const s = String(name || '').trim();
+  if (!s || NON_ID_WORDS.test(s) || /^year[_ -]?id$/i.test(s) || s === 'NO') return false;
+  return ROW_ID_NAME.test(s);
+};
+
+const isRowCounter = (vals) =>
+  vals.length > 3 && (vals[0] === 0 || vals[0] === 1) && vals.every((n, i) => n === vals[0] + i);
+
 /**
  * Sort the columns into the ones that hold numbers, the ones that hold words,
  * and the ones that name a category.
@@ -87,29 +102,49 @@ const MAX_NODES = 24;
  *     as a hairball.
  */
 function classifyColumns(table) {
-  const words = [];
-  const numbers = [];
+  const allWords = [];
+  const wordIds = [];
+  const allNumbers = [];
+  const numIds = [];
   const categorical = [];
   const sample = table.rows.slice(0, SAMPLE_ROWS);
   const nodeCeiling = Math.min(MAX_NODES, Math.max(2, Math.floor(sample.length / 2)));
 
-  table.headers.forEach((_, c) => {
+  table.headers.forEach((name, c) => {
     let seen = 0;
     let wordy = 0;
     const distinct = new Set();
+    const nums = [];
     for (const row of sample) {
       const v = String(row[c] ?? '').trim();
       if (!v) continue;
       seen++;
       distinct.add(v);
       if (!looksNumeric(v)) wordy++;
+      else nums.push(Number(v));
     }
     // A column that is empty the whole way down is nobody's data.
     if (!seen) return;
-    if (wordy) words.push(c); else numbers.push(c);
+    if (wordy) {
+      allWords.push(c);
+      if (WORD_ID_NAME.test(String(name || '').trim())) wordIds.push(c);
+    } else {
+      allNumbers.push(c);
+      if (isRowIdName(name) || isRowCounter(nums)) numIds.push(c);
+    }
     if (wordy / seen >= 0.9 && distinct.size <= nodeCeiling) categorical.push(c);
   });
-  return { words, numbers, categorical };
+  const nonIdWords = allWords.filter((c) => !wordIds.includes(c));
+  const nonIdNumbers = allNumbers.filter((c) => !numIds.includes(c));
+  const dropWordIds = nonIdWords.length >= 1 || nonIdNumbers.length >= 2;
+  const words = dropWordIds ? nonIdWords : allWords;
+  const dropNumIds = words.length ? nonIdNumbers.length >= 1 : nonIdNumbers.length >= 2;
+  const numbers = dropNumIds ? nonIdNumbers : allNumbers;
+  const rowIds = [
+    ...(dropWordIds ? wordIds : []),
+    ...(dropNumIds ? numIds : []),
+  ];
+  return { words, numbers, rowIds, categorical: categorical.filter((c) => !rowIds.includes(c)) };
 }
 
 /** The table narrowed to these columns, in this order. */
@@ -241,8 +276,18 @@ export function rankCharts(table) {
     const expected = expectedFormat(def);
     const fit = checkTableShape(def, table);
     const entry = { def, message: fit.message, columns: expected.columns, hint: expected.hint };
+    const labelCols = countOf(columnRules(expected.shape).text, table.headers);
+    const stagePool = expected.shape === 'tree' ? cls.words : cls.categorical;
+    const stagesOk = !CATEGORICAL_SHAPES.has(expected.shape)
+      || Array.from({ length: Math.min(labelCols, table.headers.length) }, (_, c) => c).every((c) => stagePool.includes(c));
+    if (fit.ok && !stagesOk) {
+      entry.message = 'This chart needs category names in its stage columns, not numbers or unique IDs.';
+    }
+    let slice;
+    const getSlice = () => (slice === undefined ? (slice = projectFor(def, table, cls)) : slice);
+    const dropRowId = cls.rowIds.some((c) => c < expected.reads) && getSlice() && !refusedBy(def, getSlice().table);
 
-    if (fit.ok) {
+    if (fit.ok && stagesOk && !dropRowId) {
       const refused = refusedBy(def, table);
       if (!refused) { fits.push(entry); continue; }
       // The shape passed and the reader still said no. Say what the reader
@@ -250,9 +295,8 @@ export function rankCharts(table) {
       entry.message = refused;
     }
 
-    const slice = projectFor(def, table, cls);
-    if (slice && !refusedBy(def, slice.table)) {
-      partial.push({ ...entry, message: slice.message, using: slice.using, table: slice.table });
+    if (getSlice() && !refusedBy(def, getSlice().table)) {
+      partial.push({ ...entry, message: getSlice().message, using: getSlice().using, table: getSlice().table });
     } else {
       misses.push(entry);
     }

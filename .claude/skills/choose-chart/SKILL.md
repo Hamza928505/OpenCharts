@@ -54,30 +54,39 @@ that before handing anything over ([reading-the-output.md](reading-the-output.md
    lines is skipped. For `.xlsx`, ask for a CSV export, or point the user at the
    studio's upload, which reads it.
 2. Run `choose.mjs <file>`, with `--question` when they told you what they want
-   to show. After the numbered picks it prints **Views of this table,
-   aggregated**: the views the studio's "Analyze without AI" panel offers (counts
-   by group, an average per group, a box plot per group, a distribution, a
-   relationship, a trend), each with a `--recipe` that draws it from the file as
-   it came. On a long file these, not the whole-table picks, are usually the
-   answer. A view's recipe keeps only numeric rows of the measure, as the panel
-   does, so both draw the same table.
+   to show (or call MCP `recommend_charts`). After the numbered picks it prints
+   **Views of this table, aggregated**: the views the studio's "Analyze without
+   AI" panel offers (an average/median/total per group, a distribution, a
+   relationship, a trend, a box plot per group, counts by group), each with a
+   `--recipe` that draws it from the file as it came. On a long file these, not
+   the whole-table picks, are usually the answer. **When the table has numeric
+   measures, prefer a measure-bearing view (`Average/Total <measure> by <group>`,
+   `<x> vs <y>`, `Distribution of <measure>`, `Average <measure> over <date>`)
+   over a plain row-count view (`Counts by <group>`), unless the user asked for
+   counts.**
 3. **Check the `Header row` and `Columns` lines, and act on every
    `Note (bad)` before choosing.** Headers, notes above the data and a
    rows-for-columns table are fixed with flags: see the table section of
    [reading-the-output.md](reading-the-output.md). So are a `Note (warn)` about
    several values in a cell (a `split` step) and about a measure repeated down
-   the rows (total it once per group, not per row).
-4. **Verify before you show anything.** Read each chart's `holds:` line and every
-   `!` line under it (with `--json`: `holds`, `warnings`, `verify`). `verify.ok`
-   says the recipe ran and the chart has rows; `verify.clean` says it also raised
-   no warning. **`verify.rendered` is always null: nothing here draws the chart.**
-   The link is where it is seen. Act on each warning as
-   [reading-the-output.md](reading-the-output.md) says, rerun, and read the new
-   `holds:` line.
+   the rows (total it once per group, not per row). **Never plot a numeric
+   column marked `(id, ignored)` (`id`, `rownames`, `1, 2, 3…`) as a measurement
+   series or box-plot group.**
+4. **Verify before you show anything — never hand back the initial link when it
+   has `!` warnings (`verify.clean` is `false`).** Read each chart's `holds:`
+   line and every `!` line under it (with `--json` / MCP: `holds`, `warnings`,
+   `verify`). `verify.ok` says the recipe ran and the chart has rows;
+   `verify.clean` says it also raised no warning. **`verify.rendered` is always
+   null: nothing here draws the chart.** If the top suggestion has `!` warnings,
+   do NOT just rerun `--chart <id>` (or `build_chart` with `{"chart": "<id>"}`)
+   unchanged — fix the cause with `--columns` / `recipe.columns`, `roles`, or a
+   view `--recipe` as [reading-the-output.md](reading-the-output.md) says, rerun,
+   and read the new `holds:` line until `verify.clean` is `true`.
 5. Answer with the chart, why, its `watch` line, one or two alternatives, every
    `Note` line as written, and the link, but only one whose `holds:` line has no
-   unresolved `!`. The ending of [reading-the-output.md](reading-the-output.md)
-   says what else goes in, and what to do about a link too long for the server.
+   unresolved `!` (`verify.clean: true`). The ending of
+   [reading-the-output.md](reading-the-output.md) says what else goes in, and
+   what to do about a link too long for the server.
 
 **The user's question beats the rule order.** The rules only see the table. If
 the user said what they want to show, such as a share of a total, a ranking,
@@ -94,12 +103,15 @@ recommendation. Offer the charts it lists as able to read the table.
 
 ## When the user only describes what they want
 
-1. Run `--list` and choose by category and blurb. For worked examples by
-   domain, grep `data/opencharts-use-cases.md`, which has ten real use cases per
-   chart under `## \`<id>\`` headings. Those are hand-written; `--list` is
-   generated from the registry and wins if they disagree.
-2. Run `--chart <id>` for the columns it reads, an example table, how to read
-   it and what to watch, and tell the user the shape of table to bring.
+1. Run `--list` (or call MCP `recommend_charts` with `{}`) and choose by
+   category and blurb. For worked examples by domain, grep
+   `data/opencharts-use-cases.md`, which has ten real use cases per chart under
+   `## \`<id>\`` headings. Those are hand-written; `--list` is generated from
+   the registry and wins if they disagree.
+2. Run `--chart <id>` with no file (or call MCP `build_chart` with
+   `{"recipe": {"chart": "<id>"}}`) for the columns it reads, an example table,
+   how to read it and what to watch, and tell the user the shape of table to
+   bring.
 3. Name one alternative and say it is a judgement. There is no data yet to
    check it against.
 

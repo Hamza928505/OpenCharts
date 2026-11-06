@@ -147,6 +147,41 @@ try {
   assert.equal((await tool('profile_table', { path: 'test/benchmark/data/nothing.csv' })).isError, true);
   assert.match((await tool('profile_table', { path: join(dir, '..') })).body, /outside the folder|not a file/);
 
+  // Table-free calls: when the user only describes what they want (no data yet).
+  const mcpList = JSON.parse((await tool('recommend_charts', {})).body);
+  assert.equal(mcpList.mode, 'list');
+  assert.ok(mcpList.charts.length >= 115);
+  const mcpChartInfo = JSON.parse((await tool('build_chart', { recipe: { chart: 'sankey' } })).body);
+  assert.equal(mcpChartInfo.mode, 'chart');
+  assert.equal(mcpChartInfo.chart.id, 'sankey');
+  assert.ok(Array.isArray(mcpChartInfo.chart.reads.columns) && mcpChartInfo.link.withData === false);
+
+  // Row identifiers (rownames, id) are excluded from projections and box-plot roles hints.
+  const withRownames = 'rownames,group,speed,dist\n'
+    + Array.from({ length: 12 }, (_, i) => `${i + 1},${i % 2 ? 'A' : 'B'},${10 + i},${20 + i * 3}`).join('\n') + '\n';
+  const rRanked = JSON.parse((await tool('recommend_charts', { text: withRownames })).body);
+  assert.ok(rRanked.suggestions.every((s) => !s.using || !s.using.includes('rownames')), 'projections leave out rownames when real measures exist');
+  assert.notEqual(rRanked.views[0].recipe.steps[0].agg, 'count', 'measure-bearing views lead ahead of row counts');
+  assert.ok(rRanked.notes.some((n) => /"rownames" looks like an identifier/.test(n)), 'profile quality notes reach the top-level notes array');
+
+  // Calling build_chart with only {"chart": id} preserves the missing-column warning when a partial projection dropped a column named in why.
+  const pairs = [[5, 1], [1, 2], [4, 3], [2, 4], [6, 5], [3, 6], [5, 7], [1, 8], [4, 9], [2, 10], [6, 11], [3, 12]];
+  const offTopicCsv = 'name,noise,x,y\n' + pairs.map(([n, x], i) => `${'pqr'[i % 3]},${n},${x},${x * 2}`).join('\n') + '\n';
+  const offRanked = JSON.parse((await tool('recommend_charts', { text: offTopicCsv })).body);
+  const missingPick = offRanked.suggestions.find((s) => s.warnings.some((w) => /the reason is about/.test(w)));
+  assert.ok(missingPick, 'a partial pick that drops the column named in why warns in recommend_charts');
+  const unfixedBuild = JSON.parse((await tool('build_chart', { text: offTopicCsv, recipe: { chart: missingPick.id } })).body);
+  assert.equal(unfixedBuild.verify.clean, false, 're-running build_chart without columns keeps verify.clean false');
+  assert.ok(unfixedBuild.warnings.some((w) => /the reason is about/.test(w)));
+
+  // Large all-numeric tables (like 4,971 x 12 weather ensemble forecasts) do not match flow/node charts or stall.
+  const bigNumeric = Array.from({ length: 12 }, (_, c) => `m${c}`).join(',') + '\n'
+    + Array.from({ length: 2000 }, (_, r) => Array.from({ length: 12 }, (__, c) => ((r * 13 + c * 7) % 997) / 10).join(',')).join('\n') + '\n';
+  const t0 = Date.now();
+  const bigRanked = JSON.parse((await tool('recommend_charts', { text: bigNumeric })).body);
+  assert.ok(Date.now() - t0 < 5000, `large all-numeric table ranked in ${Date.now() - t0}ms`);
+  assert.ok(bigRanked.suggestions.every((s) => !['chord', 'sankey', 'parallel-sets'].includes(s.id)));
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);
