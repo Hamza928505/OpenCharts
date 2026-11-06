@@ -221,6 +221,19 @@ try {
   assert.equal(refusedOversized.isError, true, 'oversized table is refused');
   assert.match(refusedOversized.body, /over 50,000 rows; filter or aggregate it first/);
 
+  // Findings 5 & 6: missing file in --json answers {"error": ...} (no stack trace), and links past 8,192 chars set linkTooLong and return the plain studio link.
+  const missingRun = choose(['--json', 'test/benchmark/data/does-not-exist.csv']);
+  assert.equal(missingRun.status, 1);
+  assert.equal(missingRun.stderr, '', 'no raw stack trace on stderr in --json mode');
+  assert.match(JSON.parse(missingRun.stdout).error, /No such file/);
+  const bigLinkCsv = 'item,v1,v2,v3,v4\n'
+    + Array.from({ length: 1200 }, (_, i) => `item_${i}_${(i * 7919) % 104729},${(i * 31) % 997},${(i * 47) % 991},${(i * 59) % 983},${(i * 73) % 977}`).join('\n') + '\n';
+  const bigLinkRun = json(['-'], bigLinkCsv);
+  assert.equal(bigLinkRun.body.linkTooLong, true, 'large link exceeds 8,192 chars and sets linkTooLong: true');
+  assert.equal(bigLinkRun.body.link.linkTooLong, true);
+  assert.equal(bigLinkRun.body.link.withData, false);
+  assert.ok(!bigLinkRun.body.link.url.includes('&s='), 'JSON link holds the plain studio URL when too long');
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);

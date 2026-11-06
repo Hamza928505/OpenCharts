@@ -124,7 +124,12 @@ const MAX_ROWS = 50000;
 
 function readTable() {
   if (!source) return null;
-  const bytes = readFileSync(source === '-' ? 0 : source);
+  let bytes;
+  try {
+    bytes = readFileSync(source === '-' ? 0 : source);
+  } catch (e) {
+    fail(e.code === 'ENOENT' ? `No such file: ${source}` : `Could not read ${source}: ${e.message}`);
+  }
   // .xlsx is a ZIP and .xls an OLE file; the browser reads both, Node here
   // has no DOMParser to do it with.
   if ((bytes[0] === 0x50 && bytes[1] === 0x4b) || (bytes[0] === 0xd0 && bytes[1] === 0xcf)) {
@@ -514,7 +519,7 @@ async function link(def, spec, title) {
   const plain = url.toString();
   if (spec) url.searchParams.set('s', await encodeSpec(spec));
   const text = url.toString();
-  if (spec && url.pathname.length + url.search.length > SERVER_LIMIT) {
+  if (spec && (text.length > SERVER_LIMIT || url.pathname.length + url.search.length > SERVER_LIMIT)) {
     out(`${title} on its example, since no link can hold this table:`);
     out(`  ${plain}`);
     out(`  (With the table the link is ${text.length} characters, and web servers refuse links past ${SERVER_LIMIT}:`
@@ -522,14 +527,14 @@ async function link(def, spec, title) {
       + (html ? `${html} holds the chart with it.)`
         : 'Rerun with --html <file.html> for the chart and its data as one page, or --save <file.csv>'
           + ' for the columns it reads, to upload in the chart\'s data editor.)'));
-    return { url: plain, withData: false, tooLong: true, length: text.length };
+    return { url: plain, withData: false, tooLong: true, linkTooLong: true, length: text.length };
   }
   out(spec ? `${title} with this data:` : `${title} (example data):`);
   out(`  ${text}`);
   if (text.length > URL_COMFORTABLE) {
     out(`  (${text.length} characters: some apps cut long links. If it opens on the example, paste the table into the studio's data editor instead.)`);
   }
-  return { url: text, withData: !!spec, tooLong: false, length: text.length };
+  return { url: text, withData: !!spec, tooLong: false, linkTooLong: false, length: text.length };
 }
 
 /** The three recipes that turn a long table, one line each, one panel each, or one of them. */
@@ -724,6 +729,7 @@ if (list) {
         verify: verifyOf(readable, h, warnings),
       } : {}),
       link: where,
+      linkTooLong: !!(where && where.tooLong),
       ...(html ? { page: html } : {}),
     });
   }
@@ -833,6 +839,7 @@ if (list) {
       adjustments: adjusted,
       verify: top ? verifyOf(top.using ? 'partial' : 'fits', topHeld, topWarnings) : null,
       link: where,
+      linkTooLong: !!(where && where.tooLong),
       ...(html ? { page: html } : {}),
     });
   }
