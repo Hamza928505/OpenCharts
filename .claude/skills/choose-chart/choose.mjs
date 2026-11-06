@@ -274,20 +274,24 @@ function report(def, whole, table, why) {
     // Read one group per column, a weekday or a score beside the measure is
     // drawn as a group of its own numbers. Few whole numbers, each in many
     // rows, is what a column naming groups looks like.
+    const idCols = new Set(profileTable(whole).columns.filter((c) => c.idLike).map((c) => c.name));
     const spread = table.headers.map((name, c) => {
       const vals = table.rows.map((r) => r[c]).filter((v) => String(v ?? '').trim() !== '');
       const nums = vals.map((v) => toNumber(v)).filter(Number.isFinite);
       const n = new Set(nums).size;
       const few = vals.length && n >= 2 && n <= 24 && n * 2 <= vals.length && vals.every((v) => Number.isInteger(toNumber(v)));
-      const idLike = ID_NAME.test(String(name || '').trim())
+      const idLike = idCols.has(name) || ID_NAME.test(String(name || '').trim())
         || (nums.length > 3 && nums[0] <= 1 && nums.every((v, i) => v === nums[0] + i));
       return { name, n, few, idLike };
     });
     // The fewest values first, and the measure that varies most: births by
     // weekday, not by year or by day of the month.
-    const few = spread.filter((s) => s.few && !s.idLike).sort((a, b) => a.n - b.n);
-    const measures = spread.filter((s) => !s.few && !s.idLike);
-    const value = ((measures.length ? measures : spread.filter((s) => !s.few)).sort((a, b) => b.n - a.n)[0] || {}).name;
+    const nonId = spread.filter((s) => !s.idLike);
+    const fewAll = nonId.filter((s) => s.few).sort((a, b) => a.n - b.n);
+    const measures = nonId.filter((s) => !s.few);
+    const valuePool = measures.length ? measures : nonId.filter((s) => !fewAll.length || s.name !== fewAll[0].name);
+    const value = ([...valuePool].sort((a, b) => b.n - a.n)[0] || {}).name;
+    const few = fewAll.filter((s) => s.name !== value);
     if (few.length && value) {
       out(`   ! ${few.slice(0, 3).map((f) => `"${f.name}" holds ${f.n} different whole numbers`).join(', ')}`
         + `, drawn as ${few.length === 1 ? 'a group' : 'groups'} of ${few.length === 1 ? 'its' : 'their'} own values.`

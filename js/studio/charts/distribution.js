@@ -173,12 +173,12 @@ export const distributionCharts = [
           type: 'boxplot',
           data: {
             labels: spec.groups.map((g) => g.label),
-            datasets: spec.groups.map((g) => {
+            datasets: spec.groups.map((g, i) => {
               const values = g.values || [];
               return {
                 label: g.label,
                 // The boxplot controller takes one array of raw values per slot.
-                data: [values],
+                data: spec.groups.map((_, j) => (j === i ? values : null)),
                 backgroundColor: withAlpha(g.color, spec.opts.alpha),
                 borderColor: g.color,
                 borderWidth: spec.opts.borderWidth,
@@ -193,7 +193,7 @@ export const distributionCharts = [
           options: baseOpts({
             interaction: { intersect: false, mode: 'nearest' },
             scales: {
-              x: xAxis(),
+              x: xAxis({ stacked: true }),
               y: yAxis({ ticks: { ...TICK, callback: tickFormat({ prefix: spec.opts.prefix }) } }),
             },
           }),

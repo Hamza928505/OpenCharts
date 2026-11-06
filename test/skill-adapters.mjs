@@ -182,6 +182,34 @@ try {
   assert.ok(Date.now() - t0 < 5000, `large all-numeric table ranked in ${Date.now() - t0}ms`);
   assert.ok(bigRanked.suggestions.every((s) => !['chord', 'sankey', 'parallel-sets'].includes(s.id)));
 
+  // Finding 11: box-plot places each group's values at its own x-axis tick slot, not all at slot 0.
+  const { getChart, newSpec } = await import('../js/studio/registry.js');
+  const boxDef = getChart('box-plot');
+  const boxCfg = boxDef.chartjs.build(newSpec(boxDef));
+  assert.equal(boxCfg.options.scales.x.stacked, true, 'box-plot x-axis stacks slots so each group centers on its tick');
+  boxCfg.data.datasets.forEach((ds, i) => {
+    assert.equal(ds.data.length, boxCfg.data.labels.length);
+    assert.ok(Array.isArray(ds.data[i]) && ds.data[i].length > 0, `group ${i} sits at tick ${i}`);
+    ds.data.forEach((slot, j) => { if (j !== i) assert.equal(slot, null); });
+  });
+
+  // Finding 12: repair recipe on a box-plot never picks an identifier column (rownames, id) as the value column.
+  const gravCsv = 'rownames,g,series\n'
+    + Array.from({ length: 24 }, (_, i) => `${i + 1},${70 + (i % 8)},${i < 12 ? 7 : 8}`).join('\n') + '\n';
+  const gravBox = json(['--chart', 'box-plot', '--columns', 'rownames,g,series', '-'], gravCsv);
+  assert.ok(gravBox.body.warnings.some((w) => w.includes('"group":"series","value":"g"') && !w.includes('rownames')),
+    'box-plot repair recipe names g as value, never rownames');
+
+  // Finding 13: a two-column year/value table (with or without rownames) reads year as time, not as a second series.
+  const yearValCsv = 'rownames,year,incidence\n'
+    + Array.from({ length: 32 }, (_, i) => `${i + 1},${1950 + i},${(1.1 + (i % 7) * 0.4).toFixed(1)}`).join('\n') + '\n';
+  const yearValRanked = json(['-'], yearValCsv).body;
+  const linePick = yearValRanked.suggestions.find((s) => s.id === 'line-basic');
+  assert.ok(linePick && linePick.verify.clean, 'year/value line-basic is clean');
+  assert.deepEqual(linePick.holds.headers, ['label', 'incidence'], 'year is the x-axis label, not a second series');
+  const histPick = yearValRanked.suggestions.find((s) => s.id === 'histogram');
+  assert.ok(histPick && histPick.verify.clean, 'year/value histogram drops year and holds only the measure');
+
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
   assert.equal((await ask('resources/list')).error.code, -32601);

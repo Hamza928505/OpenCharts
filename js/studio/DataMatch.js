@@ -16,6 +16,7 @@ import { CHARTS, newSpec } from './registry.js';
 import {
   checkTableShape, expectedFormat, looksNumeric, columnRules, countOf, applyData,
 } from './dataio.js';
+import { looksDateLike } from './timeaxis.js';
 
 /** Where a table is handed to the studio, since it is too big for a URL. */
 export const HANDOFF_KEY = 'opencharts.table';
@@ -106,6 +107,7 @@ function classifyColumns(table) {
   const wordIds = [];
   const allNumbers = [];
   const numIds = [];
+  const dates = [];
   const categorical = [];
   const sample = table.rows.slice(0, SAMPLE_ROWS);
   const nodeCeiling = Math.min(MAX_NODES, Math.max(2, Math.floor(sample.length / 2)));
@@ -113,6 +115,7 @@ function classifyColumns(table) {
   table.headers.forEach((name, c) => {
     let seen = 0;
     let wordy = 0;
+    let datey = 0;
     const distinct = new Set();
     const nums = [];
     for (const row of sample) {
@@ -120,6 +123,7 @@ function classifyColumns(table) {
       if (!v) continue;
       seen++;
       distinct.add(v);
+      if (looksDateLike(v)) datey++;
       if (!looksNumeric(v)) wordy++;
       else nums.push(Number(v));
     }
@@ -128,9 +132,20 @@ function classifyColumns(table) {
     if (wordy) {
       allWords.push(c);
       if (WORD_ID_NAME.test(String(name || '').trim())) wordIds.push(c);
+      if (datey / seen >= 0.9) dates.push(c);
     } else {
-      allNumbers.push(c);
-      if (isRowIdName(name) || isRowCounter(nums)) numIds.push(c);
+      const id = isRowIdName(name) || isRowCounter(nums);
+      const lead = allWords.filter((i) => !wordIds.includes(i)).length === 0
+        && allNumbers.filter((i) => !numIds.includes(i)).length === 0;
+      const yearLike = !id && !looksNumeric(name) && datey / seen >= 0.9
+        && (/(?:^|[_ -])(year|yr|yyyy|date|time|period|cohort)s?(?:$|[_ -])|dxyr/i.test(String(name || '').trim()) || lead);
+      if (yearLike) {
+        allWords.push(c);
+        dates.push(c);
+      } else {
+        allNumbers.push(c);
+        if (id) numIds.push(c);
+      }
     }
     if (wordy / seen >= 0.9 && distinct.size <= nodeCeiling) categorical.push(c);
   });
@@ -144,7 +159,7 @@ function classifyColumns(table) {
     ...(dropWordIds ? wordIds : []),
     ...(dropNumIds ? numIds : []),
   ];
-  return { words, numbers, rowIds, categorical: categorical.filter((c) => !rowIds.includes(c)) };
+  return { words, numbers, rowIds, dates, categorical: categorical.filter((c) => !rowIds.includes(c)) };
 }
 
 /** The table narrowed to these columns, in this order. */
@@ -195,6 +210,9 @@ function candidateWidths(expected, rules, words, numbers) {
       for (let n = Math.min(MAX_WIDTH, numbers.length); n >= 1; n--) push(0, n);
     }
     for (let n = widest; n >= 1; n--) push(1, n);
+    if (!words.length) {
+      for (let n = Math.min(MAX_WIDTH, numbers.length); n >= expected.min; n--) push(0, n);
+    }
     return out;
   }
   // A fixed run of positions, with or without a name in front of it.
@@ -285,7 +303,9 @@ export function rankCharts(table) {
     }
     let slice;
     const getSlice = () => (slice === undefined ? (slice = projectFor(def, table, cls)) : slice);
-    const dropRowId = cls.rowIds.some((c) => c < expected.reads) && getSlice() && !refusedBy(def, getSlice().table);
+    const dropDate = expected.shape === 'observations' && cls.dates.some((c) => c < expected.reads);
+    const dropRowId = (cls.rowIds.some((c) => c < expected.reads) || dropDate)
+      && getSlice() && !refusedBy(def, getSlice().table);
 
     if (fit.ok && stagesOk && !dropRowId) {
       const refused = refusedBy(def, table);
