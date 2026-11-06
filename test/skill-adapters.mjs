@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -251,6 +251,21 @@ try {
   const standaloneHtml = generateCode(boxDef, newSpec(boxDef)).standalone;
   assert.match(standaloneHtml, /grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'standalone body grid shrinks below max-width on narrow viewports');
   assert.match(standaloneHtml, /\.chart-card\s*\{[\s\S]*?box-sizing:\s*border-box;\s*min-width:\s*0;/, 'chart-card includes border-box and min-width: 0');
+
+  // MCP schema checks: build_chart lists split, unknown arguments are rejected, and outside paths get the same answer whether or not they exist.
+  assert.match(JSON.stringify(tools[2].inputSchema), /split/, 'build_chart schema description lists split');
+  const bogusArg = await tool('profile_table', { path: 'test/benchmark/data/drinks.csv', bogus: true });
+  assert.equal(bogusArg.isError, true, 'unknown arguments are rejected as additionalProperties: false says');
+  assert.match(bogusArg.body, /has no "bogus" argument/);
+  const outsideExisting = join(dir, 'exists.csv');
+  writeFileSync(outsideExisting, 'a,b\n1,2\n');
+  const outsideMissing = join(dir, 'missing.csv');
+  const outExistReply = await tool('profile_table', { path: outsideExisting });
+  const outMissReply = await tool('profile_table', { path: outsideMissing });
+  assert.equal(outExistReply.isError, true);
+  assert.equal(outMissReply.isError, true);
+  assert.equal(outExistReply.body.replace('exists.csv', ''), outMissReply.body.replace('missing.csv', ''), 'outside path gets the same answer whether or not it exists');
+  assert.match(outMissReply.body, /is outside the folder/);
 
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);
