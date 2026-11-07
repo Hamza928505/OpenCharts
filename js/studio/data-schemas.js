@@ -468,6 +468,7 @@ export const DATA_SCHEMAS = {
   },
   'calendar-heatmap': {
     shape: 'labelValue',
+    mergesRepeats: true,
     example: 'date,count\n2025-01-04,3\n2025-01-05,7\n2025-01-06,2',
     hint: 'Two columns: an ISO date and a count.',
     toText: (s) => csv([
@@ -475,7 +476,10 @@ export const DATA_SCHEMAS = {
     ]),
     onData(spec) {
       const map = {};
-      (spec.labels || []).forEach((d, i) => { map[d] = (spec.values || [])[i] || 0; });
+      // A day named twice holds both rows.
+      (spec.labels || []).forEach((d, i) => {
+        map[d] = (Object.hasOwn(map, d) ? map[d] : 0) + ((spec.values || [])[i] || 0);
+      });
       spec.dayValues = map;
       delete spec.labels; delete spec.values;
     },

@@ -10,9 +10,12 @@
 
 import { paletteAt } from './palette.js';
 import { attachColourPicker } from './colorpicker.js';
-import { parseTable, applyData, expectedFormat, checkTableShape, transposeTable } from './dataio.js';
+import {
+  parseTable, applyData, expectedFormat, checkTableShape, transposeTable,
+  wordColumns, repeatsDrawnApart, combineRepeats,
+} from './dataio.js';
 import { chooseDataFile } from './fileimport.js';
-import { rankCharts, requestMatch } from './DataMatch.js';
+import { rankCharts, requestMatch, canCount, countColumn, countRows } from './DataMatch.js';
 import { ask } from './confirm.js';
 import { toast } from './toast.js';
 import { openDataDialog } from './DataDialog.js';
@@ -801,6 +804,12 @@ function widgetData(ctrl, spec, notify, def) {
       return;
     }
 
+    // Which sheet is the reader's to say, and the editor is where they can.
+    if (res.sheets && res.sheets.length > 1) {
+      openDataDialog(def, spec, afterApply, res.text, { file: res });
+      return;
+    }
+
     const table = parseTable(res.text, expectedFormat(def).columns);
     const fit = checkTableShape(def, table);
     if (!fit.ok) {
@@ -824,12 +833,20 @@ function widgetData(ctrl, spec, notify, def) {
       const turned = transposeTable(table.hadHeader ? table : { headers: [], rows: table.rows });
       const turnedFit = turned.rows.length ? checkTableShape(def, turned) : { ok: false };
 
+      // A file of words has nothing to measure and something to count, which
+      // the editor opens on so the reader sees the counts and can undo them.
+      const countAt = !turnedFit.ok && canCount(def) && wordColumns(def, table).length ? countColumn(table) : -1;
+      const countName = countAt >= 0 ? table.headers[countAt] : null;
+
       const choice = await ask({
         title: `${res.name} does not match this chart`,
         text: turnedFit.ok
           ? `${fit.message} With rows and columns swapped it does fit, so the editor `
             + 'can open on it that way round — the table there has a button to turn it back.'
-          : fit.message,
+          : (countName
+            ? `${fit.message} It can count how many rows hold each value of "${countName}" instead, `
+              + 'and every column of your file stays one tick away in the editor.'
+            : fit.message),
         list: [
           `This chart reads: ${fit.expected.columns.join(', ') || fit.expected.hint}`,
           `Your file has: ${table.headers.join(', ')}`,
@@ -837,7 +854,7 @@ function widgetData(ctrl, spec, notify, def) {
           fit.expected.grows ? `Note: ${fit.expected.grows}` : null,
         ].filter(Boolean),
         tone: 'stop',
-        confirm: turnedFit.ok ? 'Open it swapped' : 'Open the editor',
+        confirm: turnedFit.ok ? 'Open it swapped' : (countName ? `Count rows per ${countName}` : 'Open the editor'),
         alt: elsewhere ? `See ${elsewhere} charts that read this` : null,
         cancel: 'Cancel',
       });
@@ -854,7 +871,10 @@ function widgetData(ctrl, spec, notify, def) {
       // table goes over as a table, not as text: its header row is the file's
       // label column, which the header guess gets wrong whenever those are
       // years, and this is the one caller that knows.
-      if (choice) openDataDialog(def, spec, afterApply, turnedFit.ok ? turned : res.text);
+      if (choice) {
+        const seed = turnedFit.ok ? turned : (countName ? countRows(table, countAt) : res.text);
+        openDataDialog(def, spec, afterApply, seed, { file: res, source: countName ? table : null });
+      }
       return;
     }
 
@@ -863,8 +883,9 @@ function widgetData(ctrl, spec, notify, def) {
       await ask({ title: 'That file could not be used', text: applied.message, tone: 'stop', confirm: 'OK' });
       return;
     }
-    toast(`${res.name} — ${applied.message}`, 'ok');
-    afterApply(applied.message);
+    const noted = [applied.message, ...(res.notes || [])].join(' ');
+    toast(`${res.name} — ${noted}`, 'ok', res.notes?.length ? 6000 : undefined);
+    afterApply(noted);
   };
 
   const afterApply = (message) => {
@@ -953,6 +974,26 @@ function widgetData(ctrl, spec, notify, def) {
     uploadBtn.addEventListener('click', uploadFile);
 
     body.append(card, editBtn, uploadBtn, status);
+
+    // Stays while the table holds repeats, rather than a toast that has gone by
+    // the time somebody wonders why one city has forty-seven bars.
+    const repeats = spec.facet ? [] : repeatsDrawnApart(def, table);
+    if (repeats.length) {
+      const note = el('div', 'data-repeats');
+      note.append(el('p', null,
+        `${repeats[0].label} appears ${repeats[0].count} times`
+        + `${repeats.length > 1 ? `, and ${repeats.length - 1} more label${repeats.length === 2 ? '' : 's'} repeat` : ''}. `
+        + 'Each row is its own mark.'));
+      const combine = el('button', 'btn btn-sm', 'Combine repeats');
+      combine.type = 'button';
+      combine.addEventListener('click', () => {
+        const applied = applyData(def, spec, combineRepeats(table));
+        if (!applied.ok) { status.textContent = applied.message; status.className = 'data-status bad'; return; }
+        afterApply(`Added up ${repeats.length} repeated label${repeats.length === 1 ? '' : 's'}. Undo brings the rows back.`);
+      });
+      note.append(combine);
+      body.append(note);
+    }
 
     // What this chart actually reads, in the columns' own words. Stated before
     // a file is chosen, not after it fails — the whole point is that a reader

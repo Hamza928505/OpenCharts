@@ -116,6 +116,12 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
   return plans;
 }
 
+/** The columns no plan uses and why, in the profile's own sentences. */
+export function columnsInNoView(profile, plans) {
+  const used = new Set(plans.flatMap((plan) => plan.columns));
+  return profile.columns.filter((c) => !used.has(c.index));
+}
+
 /**
  * The recipe (the JSON `choose.mjs --recipe` takes) that draws this plan from
  * the file as it came, or null where no recipe can say it. A recipe names

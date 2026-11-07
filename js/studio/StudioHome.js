@@ -1,8 +1,9 @@
 /** The studio's starting place: data in, chart out, saved work close by. */
 import { getChart } from './registry.js';
 import { parseTable, toCSV } from './dataio.js';
-import { rankCharts, handOff, takeHandOff, clearHandOff } from './DataMatch.js';
+import { rankCharts, handOff, takeHandOff, clearHandOff, unusedNote } from './DataMatch.js';
 import { readDataFile } from './fileimport.js';
+import { createTableControls } from './tablecontrols.js';
 import { listSaved, removeSaved, renameSaved, exportShelf, importShelf, whenSaved } from './shelf.js';
 import { mountThemeToggle } from './theme.js';
 import { ask } from './confirm.js';
@@ -21,6 +22,11 @@ export class StudioHome {
     this.status = $('#workspace-data-status');
     this.savedStatus = $('#workspace-saved-status');
     this.suggestions = $('#workspace-suggestions');
+    this.controls = createTableControls({
+      onSheet: (csv) => { this.input.value = csv; this.renderData(); },
+      onColumns: () => this.renderData(),
+    });
+    this.suggestions.before(this.controls.el);
     mountThemeToggle($('#hub-theme-mount'));
     this.renderStarters();
     this.renderSaved();
@@ -38,6 +44,7 @@ export class StudioHome {
       const result = await readDataFile(file);
       if (!result.ok) { this.status.textContent = result.message; return; }
       this.input.value = result.text;
+      this.controls.setFile(result);
       this.renderData();
     });
     $('#workspace-clear').addEventListener('click', () => {
@@ -72,7 +79,8 @@ export class StudioHome {
 
     const held = takeHandOff();
     if (held) {
-      this.input.value = toCSV(held.headers, held.rows);
+      const whole = held.source || held;
+      this.input.value = toCSV(whole.headers, whole.rows);
       this.renderData();
     }
   }
@@ -93,30 +101,39 @@ export class StudioHome {
     this.suggestions.replaceChildren();
     const raw = this.input.value.trim();
     if (!raw) {
+      this.controls.clear();
       this.status.textContent = 'Files are read in your browser. Supported: CSV, TSV, JSON, and Excel up to 10 MB.';
       return;
     }
-    const table = parseTable(raw);
-    if (!table.rows.length) {
+    const whole = parseTable(raw);
+    if (!whole.rows.length) {
       this.status.textContent = 'No readable rows yet. Check the first row and the separator.';
       return;
     }
-    this.status.textContent = `${table.rows.length} rows · ${table.headers.length} columns. Choose a chart to continue.`;
-    const columns = element('p', 'workspace-columns', `Columns: ${table.headers.join(' · ')}`);
+    this.controls.setTable(whole);
+    const table = this.controls.chosen();
+    // A reader who cannot find their first row should be told where it went.
+    const skipped = whole.skipped
+      ? ` Skipped ${whole.skipped} row${whole.skipped === 1 ? '' : 's'} of title above the table.` : '';
+    this.status.textContent = `${table.rows.length} rows · ${table.headers.length} of ${whole.headers.length} columns.${skipped} Choose a chart to continue.`;
     const title = element('h3', null, 'Charts for this data');
     const ranked = rankCharts(table);
     const candidates = [...ranked.fits, ...ranked.partial].slice(0, 6);
     if (!candidates.length) {
-      this.suggestions.append(columns, title, element('p', null, 'No chart reads this table yet. Check its headers or try another shape.'));
+      this.suggestions.append(title, element('p', null, 'No chart reads this table yet. Check its headers or try another shape.'));
       return;
     }
     const list = element('div', 'workspace-recommendations');
     for (const choice of candidates) {
       const button = element('button', 'workspace-recommendation');
       button.type = 'button';
-      button.append(element('strong', null, choice.def.title), element('span', null, choice.table ? `Uses: ${choice.table.headers.join(', ')}` : choice.def.category));
+      const reads = choice.counted ? `Counts rows per ${choice.counted}`
+        : (choice.table ? `Uses: ${choice.table.headers.join(', ')}` : choice.def.category);
+      const unused = unusedNote(choice);
+      button.append(element('strong', null, choice.def.title), element('span', null, reads));
+      if (unused) button.append(element('span', 'workspace-unused', unused));
       button.addEventListener('click', () => {
-        if (!handOff(choice.table || table)) {
+        if (!handOff(choice.table || table, null, whole)) {
           this.status.textContent = 'This browser could not store the table. Try a smaller file or enable browser storage.';
           return;
         }
@@ -124,7 +141,7 @@ export class StudioHome {
       });
       list.append(button);
     }
-    this.suggestions.append(columns, title, list);
+    this.suggestions.append(title, list);
   }
 
   renderSaved() {

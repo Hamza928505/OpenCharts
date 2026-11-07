@@ -63,13 +63,24 @@ A real export is forty-five columns of an experiment — an id, a date, a
 category and forty numbers — and no chart in the library reads a table that
 shape, because none reads forty-five columns. Asking every chart about the
 whole thing used to return an empty gallery, which is not an answer. Each tile
-now names the columns it takes, in your words, and opens on exactly those. The
-maps are the honest exception: any three columns satisfy their arithmetic and
-would draw a blank world, so they say no rather than pretend.
+now names the columns it takes and the ones it leaves out, in your words, and
+opens on those it takes. The maps are the honest exception: any three columns
+satisfy their arithmetic and would draw a blank world, so they say no rather than
+pretend.
+
+**Nothing of yours goes unless you take it out.** Every column is listed with a
+tick box before any chart, and the ones a chart does not read stay one tick away
+in the data editor. Each sheet of a workbook is on a picker, with **All sheets**
+to stack them and add a `Sheet` column; hidden sheets are left out, and you are
+told. A column of words is never drawn as zeros: with no numbers in the table,
+charts that suit it offer to count the rows per value. A repeated label is added up
+on the charts that can keep only one, which say so, and kept as separate marks on
+the rest, with **Combine repeats** beside the data.
 
 A spreadsheet written for people rarely starts at its header — there is a title
 in A1, often a row of merged section banners under it. Those are skipped, and
-the reader is told how many rows went.
+the reader is told how many rows went. A date stored by Excel as a serial number
+is read as a date, from the cell's own format.
 
 **Series run down your file rather than across it?** Every chart reads a
 series from a column, and a file laid out one row per product with the months

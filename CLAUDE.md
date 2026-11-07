@@ -418,9 +418,9 @@ resolved *again* afterwards and the pending colours written to that.
 
 ### Reshaping a table
 
-`rankCharts` solved half of the wide-table problem: it takes a 45-column export
-and projects out the columns a chart can read. But a projection only *chooses*
-columns — it cannot combine rows. The file most people have is five hundred
+`rankCharts` solved half of the wide-table problem: given a 45-column export it
+says which columns a chart can read, names the rest, and leaves them a tick away.
+But a projection only *chooses* columns — it cannot combine rows. The file most people have is five hundred
 transactions and the chart they want is revenue by region, seven bars, and no
 amount of column-picking gets from one to the other. The answer used to be
 "aggregate it in a spreadsheet first", which is the step this tool exists to
@@ -778,6 +778,55 @@ The suite holds the whole thing to one promise: every projection it offers is
 applied, and the data has to reach the spec. See "wide table" in `test/run.mjs`,
 and "every chart the matcher offers is read by its own reader" beside it, which
 asks the question of four different tables at once.
+
+**The tool never removes a reader's data on its own; only the reader does.** A
+projection is a default a chart reads from, not an edit to the table. It used to
+act like one: a tile handed the studio its two columns and the other four were
+gone for good, with nothing saying so. That was reported, fairly, as the project
+deleting columns. Four things hold the line now:
+
+- **A `partial` entry carries `unused`**, the columns it does not read, and every
+  tile and suggestion names them (`unusedNote`).
+- **`createTableControls` in `tablecontrols.js`** puts the sheet picker and one
+  tick box per column on screen before any chart, in the matcher, on the studio's
+  starting page and above the editor's grid. Every column starts ticked, and an
+  untick re-ranks what is left. Picks reach `applyData` as they are, skipping the
+  matcher's defaults.
+- **`handOff(table, prepared, source)` stores the whole table** as `source`, so
+  the editor can bring back a column the chart was not opened on. A tick writes
+  through `grid.setData`, so it is undoable and the ticks follow the undo. If
+  storage refuses the extra size the slice still goes, and the studio says only
+  those columns came. Where a chart refused the table and drew its example,
+  nothing is ticked and the columns are there to tick in.
+- **`classifyColumns` chooses defaults, not removals.** A GUID or long hash is
+  still listed and tickable; it is only passed over as a default label while
+  another word column exists, by an exact test of its cells.
+
+**A word is never a zero.** `num()` turns any word into 0, and an all-words value
+column used to pass through it: a list of companies, one empty bar each, `ok: true`.
+`applyData` now refuses when a value column has filled cells and none of them
+numeric, naming it (`wordColumns`, returned as `res.words`), and `refusedBy`
+demotes the false fits that followed. A column with a few bad cells keeps the
+flagged path, because that is a table to fix rather than one with nothing to draw.
+
+**A table with no numbers has something to count.** With no number column,
+`rankCharts` offers counted entries, `{ counted, table }`: one row per value of
+`countColumn` with `Rows` beside it, built by `groupSummary`, the most first. The
+tile says `counts rows per Category`. `canCount` is an explicit list of the Bar,
+Part to Whole and Hierarchy families and four comparisons, because the shapes
+alone offered 65 charts, and a category has no order for a line to run along, is
+not a day for a calendar, and clamped to 100 on a gauge reads as a full dial. In
+the editor and on a sidebar upload the count is an action written to the grid, not
+a silent fallback, so the numbers are looked at before they are used.
+
+**A repeated label is either added or kept, and either way it is said.** Ten
+charts key by label (`tree`, `regions` and `calendar-heatmap`, flagged
+`mergesRepeats`) and used to keep the last value, so `A=10, A=20` drew 20. They
+add up now, the rule `links` already followed, and the message says how many were
+added. Bars, pies and the other per-row charts keep every mark, because a repeat
+can be real, so `repeatsDrawnApart` drives a lasting note in the sidebar and in the
+matcher's report, with `Combine repeats` (`combineRepeats`) beside it in the
+sidebar. It is an ordinary data edit, so it undoes.
 
 **Narrowing the grid and holding a table are two different states.** `this.fit`
 is the set of charts that can read it; `this.onlyFit` is whether the grid is
@@ -2084,8 +2133,9 @@ did the original pass and is idempotent if a new chart is written the old way.
 Two ways in, one path: **Upload a file** in the sidebar and the editor's
 **Open a file** tab both end at `readDataFile()`. The sidebar route applies
 straight to the chart when the shape fits and hands over to the grid when it
-does not; `openDataDialog(def, spec, onApply, seedText)` takes that fourth
-argument for exactly that handover.
+does not, or when the workbook has more than one sheet, since which one is the
+reader's to say; `openDataDialog(def, spec, onApply, seed, from)` takes those last
+two arguments for exactly that handover.
 
 `expectedFormat(def)` and `checkTableShape(def, table)` in `dataio.js` are the
 one source for both halves of the promise — the columns named in the sidebar
@@ -2100,8 +2150,26 @@ end is still usable; refusing it outright would be worse than saying so.
 `js/studio/fileimport.js` reads .xlsx, .csv, .tsv and .txt into the same CSV
 text the paste tab produces, so everything downstream stays on one parsing
 path. An .xlsx is a ZIP of XML and both have had native browser support for
-years — `DecompressionStream` and `DOMParser` — so it is 200 lines rather than
-the 1MB a general-purpose library costs, and the no-dependency promise holds.
+years — `DecompressionStream` and `DOMParser` — so it is a few hundred lines
+rather than the 1MB a general-purpose library costs, and the no-dependency promise
+holds.
+
+**A workbook is more than its first sheet.** An .xlsx comes back with `sheets`
+(the visible names), `sheet` (the one in `text`, the first) and `pick(choice)`,
+which reads another from the bytes already held; `ALL_SHEETS` stacks them all,
+matched by heading, with a `Sheet` column first. Hidden and `veryHidden` sheets are
+left out, and `notes` says how many, along with any row or column cap that bit.
+Each sheet goes through `parseTable` on the way into a stack, so its own title rows
+are dropped by the rule that drops them anywhere else.
+
+**A date is only a date by its style.** Excel stores a serial, so `45460.48` used
+to reach a chart as a measure and "Average Modified by City" was a suggestion.
+`styles.xml` says which cells are dates (`cellXfs` → `numFmtId`, the built-in ids
+and any custom code with date tokens outside quotes) and `date1904` where they
+count from. Those cells become ISO text, in UTC, and the same number unstyled stays
+a number. Turning them into words took the only number out of a header's second
+row, so `readsAsHeading` lets a row of distinct, short, non-recurring words
+over rows of words count as a header, in both `parseTable` and `preambleRows`.
 
 **It reads files people were sent by someone else, so the file is hostile until
 proven otherwise.** Every check exists because of a specific failure:
@@ -2115,8 +2183,9 @@ proven otherwise.** Every check exists because of a specific failure:
   as .xlsx" rather than failing obscurely.
 - Archive size, per-entry inflated size, total inflated size and entry count
   are all capped, so a zip bomb cannot run the tab out of memory.
-- Only three paths are read out of the archive, matched exactly — a crafted
-  `../../` entry name matches nothing.
+- Only named parts are read out of the archive (the workbook and its rels, the
+  shared strings, the styles, and the sheets the workbook lists), matched exactly
+  — a crafted `../../` entry name matches nothing.
 - A part carrying a `DOCTYPE` is refused outright; `DOMParser` resolves no
   external entities anyway, but a spreadsheet has no business having one.
 - **Formulas are never evaluated** — only a cell's cached value is read.

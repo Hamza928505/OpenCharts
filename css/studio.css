@@ -905,6 +905,28 @@ img, canvas, svg { max-width: 100%; display: block; }
 /* Named in the reader's own words rather than the example's, because these
  * are the columns of their table this chart will actually take. */
 .card-fit.part { color: var(--ink-soft); }
+.card-unused {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.workspace-unused { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); overflow-wrap: anywhere; }
+
+/* Which sheet and which columns: the reader's to choose, so never folded away. */
+.table-controls { display: flex; flex-direction: column; gap: .6rem; margin: .8rem 0; min-width: 0; }
+.table-controls[hidden], .table-sheet[hidden], .table-columns[hidden], .table-notes[hidden] { display: none; }
+.match-import .table-controls { grid-column: 1 / -1; margin: 0; }
+.table-controls-label { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); padding: 0; }
+.table-sheet { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.table-sheet-select { flex: 0 1 26rem; min-width: 0; padding: .3rem .45rem; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-sm); }
+.table-notes { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-faint); }
+.table-columns { min-width: 0; margin: 0; padding: 0; border: 0; }
+.table-column-list { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; max-height: 9rem; overflow-y: auto; }
+.table-column { display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; padding: .2rem .5rem; font-size: 12px; background: var(--surface-2); border: 1px solid var(--rule); border-radius: var(--r-sm); cursor: pointer; }
+.table-column-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.table-column-role { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); }
+
+.data-repeats { display: flex; flex-direction: column; gap: .4rem; font-size: 11.5px; line-height: 1.4; color: var(--ink-soft); overflow-wrap: anywhere; }
+.data-repeats p { margin: 0; }
 
 @media (max-width: 900px) {
   .matchbar { padding-left: 1.15rem; padding-right: 1.15rem; }

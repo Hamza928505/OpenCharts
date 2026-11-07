@@ -25,9 +25,11 @@
  *   4. **Zip bombs cannot run us out of memory.** The archive, each entry,
  *      the total inflated size and the entry count are all capped, and a
  *      declared size that disagrees with reality aborts the read.
- *   5. **Only three paths are ever read** out of the archive, matched
- *      exactly. A crafted entry name — `../../etc/passwd`, an absolute path,
- *      a very long one — matches nothing and is skipped.
+ *   5. **Only named parts are ever read** out of the archive, matched
+ *      exactly: the workbook and its relationships, the shared strings, the
+ *      styles (which say which numbers are dates), and the worksheets the
+ *      workbook lists. A crafted entry name — `../../etc/passwd`, an absolute
+ *      path, a very long one — matches nothing and is skipped.
  *   6. **No XXE.** The XML goes through `DOMParser` as `application/xml`,
  *      which does not resolve external entities in any browser. A file with a
  *      DOCTYPE is refused anyway, since a spreadsheet has no business having
@@ -46,11 +48,11 @@
  * it is about not drawing a chart out of a file that was never data.
  */
 
-import { looksLikeTable } from './dataio.js';
+import { looksLikeTable, parseTable, toCSV } from './dataio.js';
 
 /** 10MB. Comfortably more than any hand-made spreadsheet, and a hard ceiling. */
 const MAX_FILE = 10 * 1024 * 1024;
-/** What the three XML parts may inflate to in total. */
+/** What the XML parts of one read may inflate to in total. */
 const MAX_INFLATED = 40 * 1024 * 1024;
 /** A real .xlsx has tens of entries. Thousands means something else. */
 const MAX_ENTRIES = 2048;
@@ -219,39 +221,97 @@ function columnOf(ref) {
   return n - 1;
 }
 
-async function readXlsx(buffer) {
+/* ── which numbers are dates ─────────────────────────────────────────────────
+ * Excel stores a date as a count of days: `45460.48` is 17 June 2024. Only the
+ * cell's style says so, and a reader that ignores the style hands over a column
+ * of five-digit "measures" that a chart will happily average. Time-only formats
+ * (18–21, 45–47) stay as they are: a time of day has no date to write.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+const BUILTIN_DATE_FORMATS = new Set([14, 15, 16, 17, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  50, 51, 52, 53, 54, 55, 56, 57, 58]);
+
+/** Whether a custom number format writes a date, ignoring its quoted words and colour tags. */
+function isDateFormat(code) {
+  const bare = String(code).split(';')[0]
+    .replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/\[[^\]]*\]/g, '').toLowerCase();
+  return /[yd]|m{3,}/.test(bare);
+}
+
+/** The indexes into `cellXfs` whose number format is a date. */
+function dateStylesOf(doc) {
+  const custom = new Map([...doc.getElementsByTagName('numFmt')]
+    .map((n) => [Number(n.getAttribute('numFmtId')), n.getAttribute('formatCode') || '']));
+  const xfs = doc.getElementsByTagName('cellXfs')[0];
+  const out = new Set();
+  if (!xfs) return out;
+  [...xfs.getElementsByTagName('xf')].forEach((xf, i) => {
+    const id = Number(xf.getAttribute('numFmtId'));
+    if (custom.has(id) ? isDateFormat(custom.get(id)) : BUILTIN_DATE_FORMATS.has(id)) out.add(i);
+  });
+  return out;
+}
+
+/**
+ * A date serial as `2024-06-17` or `2024-06-17 11:31:51`, in UTC, or null where
+ * the number is not a date Excel could write. Serials below 60 sit before the
+ * 29 February 1900 that Excel counts and never happened, so they move by a day.
+ */
+function serialToDate(text, date1904) {
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 1 || n >= 2958466) return null;
+  const days = date1904 ? n + 1462 : (n < 60 ? n + 1 : n);
+  const iso = new Date(Math.round((days - 25569) * 86400) * 1000).toISOString();
+  return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 19).replace('T', ' ');
+}
+
+/* ── the workbook ────────────────────────────────────────────────────────── */
+
+/**
+ * The workbook's visible sheets and what is needed to read any of them.
+ *
+ * In the workbook's own order rather than by file name, because Excel does not
+ * renumber when sheets are deleted or moved. A hidden sheet is left out and
+ * counted: somebody hid it, and it is usually a formula's lookup table.
+ */
+async function openWorkbook(buffer) {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const entries = readZipDirectory(view, bytes);
-
   const find = (name) => entries.find((e) => e.name === name);
+  const notes = [];
 
-  // Which sheet is first in the workbook's own order, rather than assuming
-  // sheet1.xml — Excel does not renumber when sheets are deleted or moved.
-  let sheetPath = 'xl/worksheets/sheet1.xml';
+  let sheets = [];
+  let hidden = 0;
+  let date1904 = false;
   const wbEntry = find('xl/workbook.xml');
   const relsEntry = find('xl/_rels/workbook.xml.rels');
   if (wbEntry && relsEntry) {
     try {
       const wb = parseXml(await readEntry(view, bytes, wbEntry), 'workbook');
       const rels = parseXml(await readEntry(view, bytes, relsEntry), 'workbook relationships');
-      const firstSheet = wb.querySelector('sheets > sheet');
-      const relId = firstSheet && (firstSheet.getAttribute('r:id') || firstSheet.getAttribute('id'));
-      if (relId) {
-        const rel = [...rels.getElementsByTagName('Relationship')]
-          .find((r) => r.getAttribute('Id') === relId);
+      const pr = wb.getElementsByTagName('workbookPr')[0];
+      date1904 = !!pr && ['1', 'true'].includes(pr.getAttribute('date1904'));
+      const relations = [...rels.getElementsByTagName('Relationship')];
+      for (const sheet of wb.querySelectorAll('sheets > sheet')) {
+        if (['hidden', 'veryHidden'].includes(sheet.getAttribute('state'))) { hidden++; continue; }
+        const relId = sheet.getAttribute('r:id') || sheet.getAttribute('id');
+        const rel = relations.find((r) => r.getAttribute('Id') === relId);
         const target = rel && rel.getAttribute('Target');
         // Only a plain relative path inside xl/ is accepted; anything with a
         // scheme, a leading slash or a `..` segment is ignored.
         if (target && /^[\w./-]+$/.test(target) && !target.includes('..') && !target.startsWith('/')) {
-          sheetPath = target.startsWith('xl/') ? target : 'xl/' + target.replace(/^\.\//, '');
+          const path = target.startsWith('xl/') ? target : 'xl/' + target.replace(/^\.\//, '');
+          if (find(path)) sheets.push({ name: sheet.getAttribute('name') || path, path });
         }
       }
     } catch { /* fall back to sheet1.xml */ }
   }
-
-  const sheetEntry = find(sheetPath) || find('xl/worksheets/sheet1.xml');
-  if (!sheetEntry) throw new Error('that .xlsx has no readable worksheet');
+  if (!sheets.length) {
+    if (!find('xl/worksheets/sheet1.xml')) throw new Error('that .xlsx has no readable worksheet');
+    sheets = [{ name: 'Sheet1', path: 'xl/worksheets/sheet1.xml' }];
+  }
+  if (hidden) notes.push(`${hidden} hidden sheet${hidden === 1 ? ' is' : 's are'} not offered.`);
 
   // Shared strings hold most cell text; a sheet of numbers has no such part.
   let shared = [];
@@ -267,62 +327,189 @@ async function readXlsx(buffer) {
     });
   }
 
-  const sheet = parseXml(await readEntry(view, bytes, sheetEntry), 'worksheet');
-  const rows = [];
-  for (const row of sheet.getElementsByTagName('row')) {
-    if (rows.length >= MAX_ROWS) break;
-    const cells = [];
-    for (const c of row.getElementsByTagName('c')) {
-      const ref = c.getAttribute('r') || '';
-      const at = ref ? columnOf(ref) : cells.length;
-      if (at < 0 || at >= MAX_COLS) continue;
-
-      const type = c.getAttribute('t');
-      let value = '';
-      if (type === 'inlineStr') {
-        const t = c.getElementsByTagName('t')[0];
-        value = t ? t.textContent : '';
-      } else {
-        // `v` is the cached value. A cell may also carry an `f` formula; it is
-        // deliberately never read, let alone evaluated.
-        const v = c.getElementsByTagName('v')[0];
-        const text = v ? v.textContent : '';
-        if (type === 's') value = shared[Number(text)] ?? '';
-        else if (type === 'b') value = text === '1' ? 'TRUE' : 'FALSE';
-        else if (type === 'e') value = '';        // #REF!, #DIV/0! and friends
-        else value = text;
-      }
-      while (cells.length < at) cells.push('');
-      cells[at] = value;
+  let dateStyles = new Set();
+  const stylesEntry = find('xl/styles.xml');
+  if (stylesEntry) {
+    try {
+      dateStyles = dateStylesOf(parseXml(await readEntry(view, bytes, stylesEntry), 'styles'));
+    } catch {
+      notes.push('The cell formats could not be read, so any dates show as numbers.');
     }
-    rows.push(cells);
   }
 
-  // Trailing empty rows and columns are an artefact of how sheets are saved.
-  while (rows.length && !rows[rows.length - 1].some((c) => String(c).trim())) rows.pop();
-  if (!rows.length) throw new Error('that sheet is empty');
+  /** One sheet's rows, and how much of it the caps cut off. */
+  const readGrid = async (sheet) => {
+    const text = await readEntry(view, bytes, find(sheet.path));
+    const doc = parseXml(text, 'worksheet');
+    const rows = [];
+    let cutRows = false;
+    let cutCols = false;
+    for (const row of doc.getElementsByTagName('row')) {
+      if (rows.length >= MAX_ROWS) {
+        // A sheet saved with a million empty rows has lost nothing by stopping.
+        if (row.querySelector('v, t')) { cutRows = true; break; }
+        continue;
+      }
+      const cells = [];
+      for (const c of row.getElementsByTagName('c')) {
+        const ref = c.getAttribute('r') || '';
+        const at = ref ? columnOf(ref) : cells.length;
+        if (at < 0) continue;
+        if (at >= MAX_COLS) {
+          if (c.querySelector('v, t')) cutCols = true;
+          continue;
+        }
 
+        const type = c.getAttribute('t');
+        let value = '';
+        if (type === 'inlineStr') {
+          const t = c.getElementsByTagName('t')[0];
+          value = t ? t.textContent : '';
+        } else {
+          // `v` is the cached value. A cell may also carry an `f` formula; it is
+          // deliberately never read, let alone evaluated.
+          const v = c.getElementsByTagName('v')[0];
+          const cached = v ? v.textContent : '';
+          if (type === 's') value = shared[Number(cached)] ?? '';
+          else if (type === 'b') value = cached === '1' ? 'TRUE' : 'FALSE';
+          else if (type === 'e') value = '';        // #REF!, #DIV/0! and friends
+          else if (cached && (!type || type === 'n') && dateStyles.has(Number(c.getAttribute('s')))) {
+            value = serialToDate(cached, date1904) ?? cached;
+          } else value = cached;
+        }
+        while (cells.length < at) cells.push('');
+        cells[at] = value;
+      }
+      rows.push(cells);
+    }
+
+    // Trailing empty rows are an artefact of how sheets are saved.
+    while (rows.length && !rows[rows.length - 1].some((c) => String(c).trim())) rows.pop();
+    const cuts = [];
+    if (cutRows) cuts.push(`Only the first ${MAX_ROWS.toLocaleString('en')} rows of "${sheet.name}" were read.`);
+    if (cutCols) cuts.push(`Only the first ${MAX_COLS} columns of "${sheet.name}" were read.`);
+    return { rows, cuts, inflated: text.length };
+  };
+
+  return { sheets, notes, readGrid };
+}
+
+/** Rows as CSV, squared off to the widest. */
+function gridToCsv(rows) {
   const width = Math.max(...rows.map((r) => r.length));
-  return rows.map((r) => {
+  return toCSV(null, rows.map((r) => {
     const padded = [...r];
     while (padded.length < width) padded.push('');
-    return padded.map(csvCell).join(',');
-  }).join('\n');
+    return padded;
+  }));
 }
 
-/** Quote a cell for CSV. */
-function csvCell(v) {
-  const s = String(v == null ? '' : v);
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+/**
+ * Every visible sheet stacked into one table, with a `Sheet` column first.
+ *
+ * Columns are matched by heading rather than position, so a sheet with one more
+ * column than the rest, or the same ones in another order, still lines up; a
+ * cell the sheet has no column for stays blank.
+ */
+async function stackSheets(book) {
+  const headers = [];
+  const rows = [];
+  const notes = [];
+  const skipped = [];
+  let inflated = 0;
+  for (const sheet of book.sheets) {
+    const grid = await book.readGrid(sheet);
+    inflated += grid.inflated;
+    if (inflated > MAX_INFLATED) throw new Error('that .xlsx expands to far more than a spreadsheet should');
+    notes.push(...grid.cuts);
+    if (!grid.rows.length) { skipped.push(sheet.name); continue; }
+    const table = parseTable(gridToCsv(grid.rows), true);
+    const columnOfHeader = table.headers.map((h) => {
+      const name = String(h).trim();
+      let at = headers.indexOf(name);
+      if (at < 0) at = headers.push(name) - 1;
+      return at;
+    });
+    for (const row of table.rows) {
+      if (rows.length >= MAX_ROWS) {
+        notes.push(`Only the first ${MAX_ROWS.toLocaleString('en')} rows across the sheets were read.`);
+        break;
+      }
+      const out = [sheet.name];
+      row.forEach((cell, c) => { out[columnOfHeader[c] + 1] = cell; });
+      rows.push(out);
+    }
+    if (rows.length >= MAX_ROWS) break;
+  }
+  if (!rows.length) throw new Error('those sheets are empty');
+  if (skipped.length) notes.push(`Empty, so not included: ${skipped.join(', ')}.`);
+
+  let name = 'Sheet';
+  for (let n = 2; headers.includes(name); n++) name = `Sheet ${n}`;
+  const all = [name, ...headers];
+  return {
+    text: toCSV(all, rows.map((r) => Array.from({ length: all.length }, (_, c) => r[c] ?? ''))),
+    notes: [...new Set(notes)],
+  };
 }
+
+/** What a reader offers for a workbook: the first sheet, and a way to any other. */
+async function readXlsx(buffer) {
+  const book = await openWorkbook(buffer);
+  const readOne = async (sheet) => {
+    const grid = await book.readGrid(sheet);
+    return { sheet, grid };
+  };
+
+  // The first sheet with anything on it, since an empty cover sheet is no
+  // reason to tell somebody their workbook is empty.
+  let first = null;
+  for (const sheet of book.sheets) {
+    const read = await readOne(sheet);
+    if (read.grid.rows.length) { first = read; break; }
+  }
+  if (!first) throw new Error('that sheet is empty');
+
+  const pick = async (choice) => {
+    try {
+      if (choice === ALL_SHEETS) {
+        const { text, notes } = await stackSheets(book);
+        return { ok: true, text, sheet: ALL_SHEETS, notes: [...book.notes, ...notes] };
+      }
+      const sheet = book.sheets.find((s) => s.name === choice);
+      if (!sheet) return err('That sheet is not in this workbook.');
+      const { grid } = await readOne(sheet);
+      if (!grid.rows.length) return err(`"${sheet.name}" is empty.`);
+      return { ok: true, text: gridToCsv(grid.rows), sheet: sheet.name, notes: [...book.notes, ...grid.cuts] };
+    } catch (e) {
+      return err(e.message || 'That sheet could not be read.');
+    }
+  };
+
+  return {
+    text: gridToCsv(first.grid.rows),
+    sheets: book.sheets.map((s) => s.name),
+    sheet: first.sheet.name,
+    notes: [...book.notes, ...first.grid.cuts],
+    pick,
+  };
+}
+
+/** The value `pick` takes to stack every sheet rather than read one. */
+export const ALL_SHEETS = '\u0000all';
 
 /* ── the entry point ─────────────────────────────────────────────────────── */
 
 /**
  * Read a user's file into CSV text.
  *
+ * A workbook also answers `sheets` (the visible ones), `sheet` (the one in
+ * `text`), `notes` (anything left out, in words for the reader) and `pick(name)`,
+ * which reads another sheet, or `ALL_SHEETS`, from the bytes already held.
+ *
  * @param {File} file
- * @returns {Promise<{ok: true, text: string, kind: string} | {ok: false, message: string}>}
+ * @returns {Promise<{ok: true, text: string, kind: string, sheets?: string[], sheet?: string,
+ *   notes?: string[], pick?: function} | {ok: false, message: string}>}
  */
 export async function readDataFile(file) {
   if (!file) return err('No file chosen.');
@@ -367,8 +554,7 @@ async function fromBytes(buffer, looksXlsx) {
         + 'give it an .xlsx extension; otherwise unpack it first.');
     }
     try {
-      const text = await readXlsx(buffer);
-      return { ok: true, text, kind: 'xlsx' };
+      return { ok: true, kind: 'xlsx', ...await readXlsx(buffer) };
     } catch (e) {
       return err(e.message || 'That .xlsx could not be read.');
     }
@@ -485,9 +671,7 @@ export async function readDataUrl(rawUrl) {
       + 'use File → Share → Publish to web and choose CSV, then paste that link.');
   }
 
-  const out = await fromBytes(buffer, path.endsWith('.xlsx') || path.endsWith('.xlsm'));
-  if (!out.ok) return out;
-  return { ok: true, text: out.text, kind: out.kind };
+  return fromBytes(buffer, path.endsWith('.xlsx') || path.endsWith('.xlsm'));
 }
 
 /**

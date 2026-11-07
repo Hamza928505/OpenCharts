@@ -12,8 +12,10 @@
  */
 
 import {
-  parseTable, applyData, toCSV, looksNumeric, expectedFormat, columnRules, countOf,
+  parseTable, applyData, toCSV, looksNumeric, expectedFormat, columnRules, countOf, wordColumns,
 } from './dataio.js';
+import { takeHandOff, canCount, countColumn, countRows } from './DataMatch.js';
+import { createTableControls } from './tablecontrols.js';
 import { createDataGrid } from './DataGrid.js';
 import { createCombobox } from './Combobox.js';
 import { createCheckList } from './CheckList.js';
@@ -53,8 +55,11 @@ const el = (tag, cls, text) => {
  *   guessed at; a table is taken as it stands, for a caller that already knows
  *   which row is the header — the guess fails on exactly the table a swap
  *   produces, whose header row is the file's label column and may be years.
+ * @param {object} [from] where that seed came from
+ * @param {object} [from.file]   what `readDataFile` said, for its sheet picker
+ * @param {object} [from.source] the whole table, when the seed is part of it
  */
-export function openDataDialog(def, spec, onApply, seed) {
+export function openDataDialog(def, spec, onApply, seed, from = {}) {
   const seedTable = seed && typeof seed === 'object' && Array.isArray(seed.rows) ? seed : null;
   const seedText = seedTable ? toCSV(seedTable.headers, seedTable.rows) : seed;
   const desc = def.data || {};
@@ -198,6 +203,7 @@ export function openDataDialog(def, spec, onApply, seed) {
       status.className = 'dlg-status';
       // Adding or renaming a column changes what can be split on.
       refreshFacet();
+      tableControls.showing(grid.getData().headers);
     },
   });
 
@@ -248,9 +254,36 @@ export function openDataDialog(def, spec, onApply, seed) {
     refreshFacet();
   }
 
+  /* The columns of the reader's file, whichever of them this chart was opened
+   * on. They came with a chart from the gallery, or they are the file just
+   * opened here; either way a column this chart does not read is one tick away
+   * and only the reader takes one out. Every tick goes through `grid.setData`,
+   * so it can be undone. */
+  const fromFile = (table) => {
+    grid.setData({ headers: table.headers, rows: table.rows });
+    refreshFacet();
+    status.textContent = 'Rewritten from your file, so any cell you typed in is back as the file has it. Undo returns the table as it was.';
+    status.className = 'dlg-status';
+  };
+  const tableControls = createTableControls({
+    onSheet: (csv) => {
+      const table = parseTable(csv, expectedCols);
+      if (!table.rows.length) return;
+      tableControls.setTable(table);
+      fromFile(tableControls.chosen());
+    },
+    onColumns: fromFile,
+  });
+  // No column of the file in the grid means nothing is ticked rather than a
+  // guess: a chart that refused the table still shows its own example, and the
+  // reader's columns are there to tick into it.
+  const fileTable = from.source || (seed ? start : takeHandOff()?.source);
+  if (from.file) tableControls.setFile(from.file);
+  if (fileTable) tableControls.setTable(fileTable, start.headers);
+
   /* Tab 1 — the grid */
   const gridPanel = el('div', 'dlg-gridwrap');
-  gridPanel.appendChild(grid.el);
+  gridPanel.append(tableControls.el, grid.el);
   const gridNote = el('p', 'dlg-note');
   gridNote.innerHTML =
     'Click a cell and type. <kbd>Tab</kbd> moves across, <kbd>Enter</kbd> moves down. '
@@ -798,6 +831,8 @@ export function openDataDialog(def, spec, onApply, seed) {
 
       // Into the grid, where it can be checked and corrected before it reaches
       // the chart — the same place a paste and a file both land.
+      tableControls.setFile(res);
+      tableControls.setTable(table);
       grid.setData({ headers: table.headers, rows: table.rows });
       status.className = 'dlg-note file-status ok';
       status.textContent = `Read ${table.rows.length} row${table.rows.length === 1 ? '' : 's'} `
@@ -862,6 +897,8 @@ export function openDataDialog(def, spec, onApply, seed) {
 
       // Straight into the grid, where it can be checked and corrected before
       // it reaches the chart — the same place a paste lands.
+      tableControls.setFile(res);
+      tableControls.setTable(table);
       grid.setData({ headers: table.headers, rows: table.rows });
       status.className = 'dlg-note file-status ok';
       status.textContent = `Read ${table.rows.length} row${table.rows.length === 1 ? '' : 's'} `
@@ -1166,6 +1203,35 @@ export function openDataDialog(def, spec, onApply, seed) {
     // Apply can be pressed from any tab, so make sure the chosen split column
     // still exists in the table being applied.
     refreshFacet();
+
+    // A column of words is not a table with problems to overlook: there is
+    // nothing in it to draw. So it is asked here, ahead of "use it anyway", and
+    // the count lands in the grid to be looked at, the way a Shape step does.
+    if (!facetBy) {
+      const table = grid.getData();
+      const words = wordColumns(def, table);
+      const column = words.length && canCount(def) ? countColumn(table) : -1;
+      if (column >= 0) {
+        const name = table.headers[column];
+        const yes = await ask({
+          title: 'That column holds words, not numbers',
+          text: `"${words[0]}" has nothing for this chart to measure. It can count how many rows hold each `
+            + `value of "${name}" instead, and a value that repeats is counted once per row.`,
+          tone: 'warn',
+          confirm: `Count rows per ${name}`,
+          cancel: 'Let me fix it',
+        });
+        select('grid');
+        if (yes) {
+          const counted = countRows(table, column);
+          grid.setData({ headers: counted.headers, rows: counted.rows });
+          refreshFacet();
+          status.textContent = `Counted rows per ${name}. Press "Use this data" to draw it.`;
+          status.className = 'dlg-status';
+        }
+        return;
+      }
+    }
 
     const check = grid.validate();
     if (!check.ok) {
