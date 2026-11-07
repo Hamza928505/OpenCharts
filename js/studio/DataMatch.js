@@ -14,8 +14,10 @@
 
 import { CHARTS, newSpec } from './registry.js';
 import {
-  checkTableShape, expectedFormat, looksNumeric, columnRules, countOf, applyData,
+  checkTableShape, expectedFormat, looksNumeric, columnRules, countOf, applyData, undrawnColumns,
 } from './dataio.js';
+import { groupSummary } from './profile.js';
+import { looksDateLike } from './timeaxis.js';
 
 /** Where a table is handed to the studio, since it is too big for a URL. */
 export const HANDOFF_KEY = 'opencharts.table';
@@ -65,9 +67,36 @@ const NODE_SHAPES = new Set(['links', 'dimensions', 'tree']);
  * the edge list, which is two columns of node names and nothing else.
  */
 const CATEGORICAL_SHAPES = new Set([...NODE_SHAPES, 'edges']);
+const FLOW_SHAPES = new Set(['links', 'dimensions', 'edges']);
 
 /** The most nodes one stage of a flow or one level of a tree carries legibly. */
 const MAX_NODES = 24;
+/** Past this many raw rows a flow diagram needs grouping first. */
+const MAX_FLOW_ROWS = 500;
+
+const NON_ID_WORDS = /^(?:valid|invalid|fluid|acid|grid|paid|unpaid|prepaid|solid|humid|rapid|arid|lipid|hybrid|pyramid|steroid|oid|alkaloid|thyroid|covid|bid|lid|rid)$/i;
+
+/** Column headings that name a row or entity identifier rather than a measurement. */
+const ROW_ID_NAME = /^(id|.*[_ -]id|[a-z0-9]*id|rownames?|row[._ -]?(id|num|number|name)s?|unnamed:\s*\d+|column 1|code|.*[_ -]code|key|uuid|guid|index|idx|no|num|number|.*[_ -](number|num|no|nr)|.*seq|fips[_ -].*|rank)$/i;
+const WORD_ID_NAME = /^(rownames?|row[._ -]?names?|unnamed:\s*\d+|column 1|id|.*[_ -]id|studyid|usubjid|subjid)$/i;
+
+const isRowIdName = (name) => {
+  const s = String(name || '').trim();
+  if (!s || NON_ID_WORDS.test(s) || /^year[_ -]?id$/i.test(s) || s === 'NO') return false;
+  return ROW_ID_NAME.test(s);
+};
+
+const isRowCounter = (vals) =>
+  vals.length > 3 && (vals[0] === 0 || vals[0] === 1) && vals.every((n, i) => n === vals[0] + i);
+
+/**
+ * A GUID, or a long run of hex or base64 with no spaces: a key a database wrote.
+ * Like `isRowCounter`, an exact test on the values, and it only decides which
+ * column a chart reaches for first. The column stays in the table and the
+ * reader's list.
+ */
+const OPAQUE_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9+/_-]{32,}={0,2})$/i;
+const isOpaqueIdColumn = (cells) => cells.length > 0 && cells.every((v) => OPAQUE_ID.test(v));
 
 /**
  * Sort the columns into the ones that hold numbers, the ones that hold words,
@@ -87,33 +116,107 @@ const MAX_NODES = 24;
  *     as a hairball.
  */
 function classifyColumns(table) {
-  const words = [];
-  const numbers = [];
+  const allWords = [];
+  const wordIds = [];
+  const allNumbers = [];
+  const numIds = [];
+  const dates = [];
   const categorical = [];
   const sample = table.rows.slice(0, SAMPLE_ROWS);
   const nodeCeiling = Math.min(MAX_NODES, Math.max(2, Math.floor(sample.length / 2)));
 
-  table.headers.forEach((_, c) => {
+  table.headers.forEach((name, c) => {
     let seen = 0;
     let wordy = 0;
+    let datey = 0;
     const distinct = new Set();
+    const nums = [];
+    const cells = [];
     for (const row of sample) {
       const v = String(row[c] ?? '').trim();
       if (!v) continue;
       seen++;
+      cells.push(v);
       distinct.add(v);
+      if (looksDateLike(v)) datey++;
       if (!looksNumeric(v)) wordy++;
+      else nums.push(Number(v));
     }
     // A column that is empty the whole way down is nobody's data.
     if (!seen) return;
-    if (wordy) words.push(c); else numbers.push(c);
+    if (wordy) {
+      allWords.push(c);
+      if (WORD_ID_NAME.test(String(name || '').trim()) || isOpaqueIdColumn(cells)) wordIds.push(c);
+      if (datey / seen >= 0.9) dates.push(c);
+    } else {
+      const id = isRowIdName(name) || isRowCounter(nums);
+      const lead = allWords.filter((i) => !wordIds.includes(i)).length === 0
+        && allNumbers.filter((i) => !numIds.includes(i)).length === 0;
+      const yearLike = !id && !looksNumeric(name) && datey / seen >= 0.9
+        && (/(?:^|[_ -])(year|yr|yyyy|date|time|period|cohort)s?(?:$|[_ -])|dxyr/i.test(String(name || '').trim()) || lead);
+      if (yearLike) {
+        allWords.push(c);
+        dates.push(c);
+      } else {
+        allNumbers.push(c);
+        if (id) numIds.push(c);
+      }
+    }
     if (wordy / seen >= 0.9 && distinct.size <= nodeCeiling) categorical.push(c);
   });
-  return { words, numbers, categorical };
+  const nonIdWords = allWords.filter((c) => !wordIds.includes(c));
+  const nonIdNumbers = allNumbers.filter((c) => !numIds.includes(c));
+  const dropWordIds = nonIdWords.length >= 1 || nonIdNumbers.length >= 2;
+  const words = dropWordIds ? nonIdWords : allWords;
+  const dropNumIds = words.length ? nonIdNumbers.length >= 1 : nonIdNumbers.length >= 2;
+  const numbers = dropNumIds ? nonIdNumbers : allNumbers;
+  const rowIds = [
+    ...(dropWordIds ? wordIds : []),
+    ...(dropNumIds ? numIds : []),
+  ];
+  return { words, numbers, rowIds, dates, categorical: categorical.filter((c) => !rowIds.includes(c)) };
+}
+
+/* ── A table with no numbers in it ───────────────────────────────────────────
+ * A list of companies, a city and a category has nothing for a chart to measure,
+ * and what it does hold is how often each value comes up. Counting says that, in
+ * a table the reader can see before accepting it, and a name that repeats counts
+ * once per row rather than being lost.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Where one count per label draws a true picture: bars, parts of a whole and
+ * hierarchies, which compare named amounts. Not a line (a category has no order
+ * to run along), a calendar (a category is not a day) or a gauge, which reads one
+ * row and clamps it to 100, so a count of 300 would read as a full dial.
+ */
+const COUNT_CATEGORIES = new Set(['Bar', 'Part to Whole', 'Hierarchy']);
+const COUNT_CHARTS = new Set(['dot-plot', 'pareto', 'tally-chart', 'word-cloud']);
+export const canCount = (def) => def.id !== 'doughnut-gauge'
+  && (COUNT_CATEGORIES.has(def.category) || COUNT_CHARTS.has(def.id));
+
+/**
+ * The column to count rows by: the first that names a category, then the first
+ * of any words. Dates and identifiers are left to last, since one per row is
+ * not a group. -1 where the table has no word column.
+ */
+export function countColumn(table) {
+  const cls = classifyColumns(table);
+  const pickable = (c) => !cls.dates.includes(c) && !cls.rowIds.includes(c);
+  const pick = cls.categorical.find(pickable) ?? cls.words.find(pickable) ?? cls.words[0];
+  return pick ?? -1;
+}
+
+/** One row per value of this column and how many rows hold it, the most first. */
+export function countRows(table, column) {
+  const rows = groupSummary(table, column, null, 'count')
+    .sort((a, b) => b.count - a.count)
+    .map((g) => [g.key || '(blank)', String(g.count)]);
+  return { headers: [table.headers[column], 'Rows'], rows, hadHeader: true, skipped: 0 };
 }
 
 /** The table narrowed to these columns, in this order. */
-function project(table, columns) {
+export function project(table, columns) {
   return {
     headers: columns.map((c) => table.headers[c]),
     rows: table.rows.map((r) => columns.map((c) => r[c] ?? '')),
@@ -160,6 +263,9 @@ function candidateWidths(expected, rules, words, numbers) {
       for (let n = Math.min(MAX_WIDTH, numbers.length); n >= 1; n--) push(0, n);
     }
     for (let n = widest; n >= 1; n--) push(1, n);
+    if (!words.length) {
+      for (let n = Math.min(MAX_WIDTH, numbers.length); n >= expected.min; n--) push(0, n);
+    }
     return out;
   }
   // A fixed run of positions, with or without a name in front of it.
@@ -177,6 +283,7 @@ function candidateWidths(expected, rules, words, numbers) {
 function projectFor(def, table, cls) {
   const expected = expectedFormat(def);
   if (!expected.shape || NAMED_PLACE_SHAPES.has(expected.shape)) return null;
+  if (FLOW_SHAPES.has(expected.shape) && table.rows.length > MAX_FLOW_ROWS) return null;
 
   const words = CATEGORICAL_SHAPES.has(expected.shape) ? cls.categorical : cls.words;
   const rules = columnRules(expected.shape);
@@ -235,14 +342,37 @@ export function rankCharts(table) {
   const partial = [];
   const misses = [];
   const cls = classifyColumns(table);
+  const notUsing = (using) => table.headers.filter((_, c) => !using.includes(c));
+
+  // Nothing here to measure, so the question is how often each value comes up.
+  const countCol = cls.numbers.length || !table.rows.length ? -1 : countColumn(table);
+  const counted = countCol >= 0 ? countRows(table, countCol) : null;
 
   for (const def of CHARTS) {
     if (!def.data) continue;
     const expected = expectedFormat(def);
     const fit = checkTableShape(def, table);
-    const entry = { def, message: fit.message, columns: expected.columns, hint: expected.hint };
+    const entry = {
+      def, message: fit.message, columns: expected.columns, hint: expected.hint,
+      unused: undrawnColumns(def, table),
+    };
+    const labelCols = countOf(columnRules(expected.shape).text, table.headers);
+    const stagePool = expected.shape === 'tree' ? cls.words : cls.categorical;
+    const tooManyFlowRows = FLOW_SHAPES.has(expected.shape) && table.rows.length > MAX_FLOW_ROWS;
+    const stagesOk = !tooManyFlowRows && (!CATEGORICAL_SHAPES.has(expected.shape)
+      || Array.from({ length: Math.min(labelCols, table.headers.length) }, (_, c) => c).every((c) => stagePool.includes(c)));
+    if (fit.ok && !stagesOk) {
+      entry.message = tooManyFlowRows
+        ? 'This table has too many raw rows for a flow diagram; group the stages first.'
+        : 'This chart needs category names in its stage columns, not numbers or unique IDs.';
+    }
+    let slice;
+    const getSlice = () => (slice === undefined ? (slice = projectFor(def, table, cls)) : slice);
+    const dropDate = expected.shape === 'observations' && cls.dates.some((c) => c < expected.reads);
+    const dropRowId = (cls.rowIds.some((c) => c < expected.reads) || dropDate)
+      && getSlice() && !refusedBy(def, getSlice().table);
 
-    if (fit.ok) {
+    if (fit.ok && stagesOk && !dropRowId) {
       const refused = refusedBy(def, table);
       if (!refused) { fits.push(entry); continue; }
       // The shape passed and the reader still said no. Say what the reader
@@ -250,9 +380,15 @@ export function rankCharts(table) {
       entry.message = refused;
     }
 
-    const slice = projectFor(def, table, cls);
-    if (slice && !refusedBy(def, slice.table)) {
-      partial.push({ ...entry, message: slice.message, using: slice.using, table: slice.table });
+    if (getSlice() && !refusedBy(def, getSlice().table)) {
+      const { message, using, table: sub } = getSlice();
+      partial.push({ ...entry, message, using, table: sub, unused: notUsing(using) });
+    } else if (counted && canCount(def) && checkTableShape(def, counted).ok && !refusedBy(def, counted)) {
+      const name = table.headers[countCol];
+      partial.push({
+        ...entry, message: `Counts rows per ${name}.`, using: [countCol], table: counted,
+        counted: name, unused: notUsing([countCol]),
+      });
     } else {
       misses.push(entry);
     }
@@ -270,6 +406,14 @@ export function rankCharts(table) {
   partial.sort((a, b) => b.using.length - a.using.length || byName(a, b));
 
   return { fits, partial, misses, shape: describe(table) };
+}
+
+/** What this chart leaves out, for the line under its name. Null where nothing. */
+export function unusedNote(entry) {
+  const unused = entry.unused || [];
+  if (!unused.length) return null;
+  const shown = unused.slice(0, 4).join(', ');
+  return `not used: ${shown}${unused.length > 4 ? ` +${unused.length - 4} more` : ''}`;
 }
 
 function score(entry, width) {
@@ -338,17 +482,31 @@ const MATCH_REQUEST_KEY = 'opencharts.match-request';
  * pasted into, so it carries a timestamp and stops applying after
  * `HANDOFF_TTL`. `clearHandOff` is the deliberate way out, and the gallery's
  * own Clear button calls it.
+ *
+ * **`source` is the whole table the reader brought**, when `table` is the part
+ * of it this chart reads. Opening a chart must not cost them the other columns,
+ * so the editor offers them from here. It doubles what is stored, so if the
+ * browser refuses that, the table goes alone and `sourceLost` says so on arrival.
  */
-export function handOff(table, prepared = null) {
+export function handOff(table, prepared = null, source = null) {
+  const held = {
+    at: Date.now(),
+    headers: table.headers,
+    rows: table.rows,
+    ...(prepared ? { prepared } : {}),
+  };
+  const store = (value) => localStorage.setItem(HANDOFF_KEY, JSON.stringify(value));
+  const whole = source && source !== table ? { headers: source.headers, rows: source.rows } : null;
   try {
-    localStorage.setItem(HANDOFF_KEY, JSON.stringify({
-      at: Date.now(),
-      headers: table.headers,
-      rows: table.rows,
-      ...(prepared ? { prepared } : {}),
-    }));
+    store(whole ? { ...held, source: whole } : held);
     return true;
   } catch {
+    if (whole) {
+      try {
+        store({ ...held, sourceLost: true });
+        return true;
+      } catch { /* falls through: not even the table fits */ }
+    }
     // Private mode, or a table larger than the quota. The chart still opens,
     // it just opens on its own example.
     return false;
@@ -372,9 +530,12 @@ export function takeHandOff() {
     if (!held || !Array.isArray(held.rows) || !held.rows.length) return null;
     if (!(held.at > Date.now() - HANDOFF_TTL)) { clearHandOff(); return null; }
     const prepared = held.prepared;
+    const source = held.source;
     return { headers: held.headers, rows: held.rows,
       ...(prepared && typeof prepared.chart === 'string' && prepared.spec
         && typeof prepared.spec === 'object' && !Array.isArray(prepared.spec) ? { prepared } : {}),
+      ...(source && Array.isArray(source.headers) && Array.isArray(source.rows) ? { source } : {}),
+      ...(held.sourceLost ? { sourceLost: true } : {}),
     };
   } catch {
     return null;

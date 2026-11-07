@@ -13,12 +13,13 @@ import { prefetchLibraries } from './loader.js';
 import { ALL_LIBRARIES, ALL_ASSETS } from './cdn.js';
 import { mountThemeToggle, onThemeChange } from './theme.js';
 import { escapeHtml } from './StudioApp.js';
-import { parseTable, applyData, toCSV, transposeTable } from './dataio.js';
+import { parseTable, applyData, toCSV, transposeTable, repeatsDrawnApart } from './dataio.js';
 import { isDateLabels, dateOrderIsGuess } from './timeaxis.js';
 import { chooseDataFile, readDataFile, readDataUrl } from './fileimport.js';
 import {
-  rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest,
+  rankCharts, expectedColumnsFor, handOff, clearHandOff, takeHandOff, takeMatchRequest, unusedNote,
 } from './DataMatch.js';
+import { createTableControls } from './tablecontrols.js';
 import { profileTable } from './profile.js';
 import { mountDataAnalysis } from './data-analysis.js';
 import { recommendCharts } from './recommend.js';
@@ -181,6 +182,7 @@ export class GalleryApp {
       if (!res) { setStatus('Nothing to read there.'); return; }
       if (!res.ok) { setStatus(res.message, 'bad'); return; }
       text.value = res.text;
+      controls.setFile(res);
       headerAnswered = false;
       // A new file is a new table, laid out its own way; a swap asked for on
       // the last one is not an answer about this one.
@@ -212,8 +214,11 @@ export class GalleryApp {
       this._disposeAnalysis = null;
       const raw = text.value.trim();
       if (!raw) {
+        controls.clear();
         this.table = null;
+        this.wholeTable = null;
         this.projected = new Map();
+        this.entries = new Map();
         this.fit = null;
         bar.querySelector('#match-read-summary').textContent = 'No table yet';
         read.innerHTML = '<p class="dlg-note">Paste something on the left and the gallery '
@@ -225,20 +230,26 @@ export class GalleryApp {
 
       const parsed = parseTable(raw, headerAnswered ? headerBox.checked : undefined);
       if (!headerAnswered) headerBox.checked = parsed.hadHeader;
-      const table = oriented(parsed);
-      if (!table.rows.length) {
+      const whole = oriented(parsed);
+      if (!whole.rows.length) {
         this.table = null;
         setStatus('Nothing readable in that yet.', 'bad');
         return;
       }
 
+      // Everything below reads the columns the reader kept; `wholeTable` goes
+      // with a chart to the studio so the others are still one tick away there.
+      controls.setTable(whole);
+      const table = controls.chosen();
       const ranked = rankCharts(table);
       this.table = table;
+      this.wholeTable = whole;
       bar.querySelector('#match-read-summary').textContent = `${table.rows.length} rows · ${table.headers.length} columns`;
       // A chart that cannot read all forty-five of somebody's columns can very
       // often read four of them, and which four is worth keeping: it is what
       // the tile says, what the studio opens on, and what the prompt quotes.
       this.projected = new Map(ranked.partial.map((e) => [e.def.id, e.table]));
+      this.entries = new Map([...ranked.fits, ...ranked.partial].map((e) => [e.def.id, e]));
       this.fit = new Set([...ranked.fits, ...ranked.partial].map((f) => f.def.id));
       // A new table is a new question, so it is asked narrowed again.
       this.onlyFit = true;
@@ -246,9 +257,23 @@ export class GalleryApp {
       this._renderReading(read, table, ranked, profile);
       this._disposeAnalysis = mountDataAnalysis(bar.querySelector('#match-analysis'), table, profile);
       const total = this.fit.size;
-      setStatus(`${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
+      const counting = ranked.partial.find((e) => e.counted);
+      setStatus(counting
+        ? `No column holds numbers, so ${total} charts can count rows per ${counting.counted}. Untick columns to count another.`
+        : `${total} of ${CHART_COUNT} charts can read this.`, total ? 'ok' : 'bad');
       this.render();
     };
+
+    const controls = createTableControls({
+      onSheet: (csv) => {
+        text.value = csv;
+        headerAnswered = false;
+        swapBox.checked = false;
+        run();
+      },
+      onColumns: () => run(),
+    });
+    bar.querySelector('.match-reading').before(controls.el);
 
     text.addEventListener('input', () => {
       clearTimeout(timer);
@@ -318,7 +343,8 @@ export class GalleryApp {
     // through the same door a click on a tile uses; this only says to open the
     // panel on it, and is taken once so a later visit is not hijacked by it.
     if (takeMatchRequest()) {
-      const brought = takeHandOff();
+      const held = takeHandOff();
+      const brought = held && (held.source || held);
       if (brought && brought.rows.length) {
         text.value = toCSV(brought.headers, brought.rows);
         headerAnswered = true;
@@ -553,10 +579,20 @@ export class GalleryApp {
     const verdict = `<p class="match-verdict"><b>${all.length}</b> charts can read this`
       + (groups.length ? ` — ${escapeHtml(named)}.` : '.') + '</p>';
 
+    // Said about the columns a chart would actually label its marks with: most
+    // tables repeat something, and only this column changes what gets drawn.
+    const drawn = ranked.fits[0] ? { def: ranked.fits[0].def, table }
+      : ranked.partial.find((e) => !e.counted);
+    const repeats = drawn ? repeatsDrawnApart(drawn.def, drawn.table) : [];
+
     let advice;
     if (!all.length) {
       advice = 'Nothing here reads a table this shape. Check the delimiter, or whether the '
         + 'first row is a header.';
+    } else if (ranked.partial.some((e) => e.counted)) {
+      advice = `No column here holds numbers, so these charts count the rows per <b>`
+        + `${escapeHtml(oneLine(ranked.partial.find((e) => e.counted).counted))}</b>. A value that `
+        + 'repeats is counted once per row.';
     } else if (!ranked.partial.length) {
       advice = 'Open any of them below and your table is already in it.';
     } else if (!ranked.fits.length) {
@@ -572,6 +608,12 @@ export class GalleryApp {
       + `<div class="match-cols">${chips}</div>`
       + verdict
       + `<p class="dlg-note" style="margin-top:.4rem">${advice}</p>`
+      + (repeats.length
+        ? `<p class="dlg-note" style="margin-top:.4rem"><b>${escapeHtml(oneLine(repeats[0].label))}</b> appears `
+          + `${repeats[0].count} times${repeats.length > 1 ? `, and ${repeats.length - 1} more labels repeat` : ''}. `
+          + 'A bar or a slice draws each row as its own mark, and <b>Combine repeats</b> beside the data in the '
+          + 'studio adds them up. A treemap or a map adds them up by itself and says so.</p>'
+        : '')
       + this._reportMarkup(table, ranked, profile)
       // A first column of dates is placed on a time axis by the line and area
       // charts — said here, because a gap where a month is missing is the
@@ -732,7 +774,7 @@ export class GalleryApp {
     // studio takes it on arrival. Set on mousedown as well as click so a
     // middle-click or a new tab carries it too.
     if (this.table) {
-      const carry = () => handOff(this._tableFor(def));
+      const carry = () => handOff(this._tableFor(def), null, this.wholeTable);
       card.addEventListener('mousedown', carry);
       card.addEventListener('click', carry);
     }
@@ -759,13 +801,24 @@ export class GalleryApp {
     // naming the example's instead would promise a table they have not got.
     if (this.table) {
       const slice = this.projected.get(def.id);
+      const entry = this.entries?.get(def.id);
       const cols = (slice ? slice.headers : expectedColumnsFor(def)).map(oneLine);
       if (cols.length) {
         const fit = document.createElement('div');
         fit.className = 'card-fit' + (slice ? ' part' : '');
-        fit.textContent = 'reads ' + cols.join(', ');
+        fit.textContent = entry?.counted ? `counts rows per ${oneLine(entry.counted)}` : 'reads ' + cols.join(', ');
         fit.title = cols.join(', ');
         body.appendChild(fit);
+      }
+      // What it leaves out is said as plainly as what it takes: the reader
+      // should never have to work out where a column went.
+      const unused = entry && unusedNote(entry);
+      if (unused) {
+        const left = document.createElement('div');
+        left.className = 'card-unused';
+        left.textContent = oneLine(unused);
+        left.title = entry.unused.join(', ');
+        body.appendChild(left);
       }
     }
 

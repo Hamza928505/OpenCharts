@@ -462,7 +462,14 @@ export class StudioApp {
           if (!this.announcedBrought) {
             this.announcedBrought = true;
             this.broughtData = res.message;
+            if (this.brought.sourceLost) {
+              this.broughtData += ' This browser could not keep the rest of your file, so only these columns are in the editor.';
+            }
           }
+        } else if (res.words) {
+          // The chart draws its own example now, and a reader who brought a
+          // table has to be told why that is not their data.
+          this.broughtRefused = res.message;
         }
       }
     }
@@ -490,6 +497,10 @@ export class StudioApp {
     if (this.broughtData) {
       toast('Your table — ' + this.broughtData, 'ok');
       this.broughtData = null;
+    }
+    if (this.broughtRefused) {
+      toast(`Showing this chart's example. ${this.broughtRefused} Open Edit data to choose columns.`, 'bad', 6000);
+      this.broughtRefused = null;
     }
   }
 

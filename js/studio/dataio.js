@@ -125,6 +125,26 @@ const MAX_PREAMBLE = 6;
  * data — a tree whose first path is one level deep — fails that second test and
  * is kept.
  */
+/**
+ * Whether a row of words sits over a table of words the way a heading does.
+ *
+ * A file of company names, cities and categories has no number under its
+ * header, so "words over a number" cannot find it, and it was read as a first
+ * row of data with its columns renamed `Label, Series 1`. A heading is distinct
+ * across the row and never recurs in the table below; a first row of data
+ * usually does, because the same few values repeat. A flow's paths are left out:
+ * `A > B` is a value however rarely it comes up. Two rows of data at the least,
+ * since one row under another says nothing either way.
+ */
+function readsAsHeading(row, below) {
+  if (below.length < 2) return false;
+  const cells = row.map((c) => String(c).trim()).filter(Boolean);
+  if (cells.length < 2 || new Set(cells).size < cells.length) return false;
+  if (cells.some((c) => looksNumeric(c) || c.includes('>'))) return false;
+  const heading = new Set(cells);
+  return !below.slice(0, 200).some((r) => r.some((c) => heading.has(String(c).trim())));
+}
+
 function preambleRows(grid) {
   const filled = (r) => r.reduce((n, c) => n + (String(c) === '' ? 0 : 1), 0);
   const body = Math.max(...grid.map(filled));
@@ -140,7 +160,7 @@ function preambleRows(grid) {
   const under = grid[i + 1];
   const headIsWords = head.every((c) => c === '' || !looksNumeric(c));
   const underHasNumber = under.some((c) => c !== '' && looksNumeric(c));
-  return headIsWords && underHasNumber ? i : 0;
+  return headIsWords && (underHasNumber || readsAsHeading(head, grid.slice(i + 1))) ? i : 0;
 }
 
 /**
@@ -439,6 +459,7 @@ export function parseTable(text, expected) {
     const got = grid[0].map(norm);
     hadHeader = got.length >= want.length && want.every((w, i) => w === got[i]);
   }
+  if (!hadHeader) hadHeader = readsAsHeading(grid[0], grid.slice(1));
 
   const headers = hadHeader
     ? grid[0].map((h, i) => h || `Column ${i + 1}`)
@@ -706,15 +727,12 @@ export const SHAPES = {
     });
 
     const links = order.map((id) => byHop.get(id));
-    if (!links.length) return null;
+    if (!links.length || links.length > 250) return null;
 
     const patch = { [key]: links };
     // Refresh the node list so colours and legends follow the new links.
     if (opts.nodesKey) {
-      const seen = [];
-      links.forEach((l) => {
-        [l[fromF], l[toF]].forEach((n) => { if (!seen.includes(n)) seen.push(n); });
-      });
+      const seen = [...new Set(links.flatMap((l) => [l[fromF], l[toF]]))];
       patch[opts.nodesKey] = seen;
       patch[opts.colorsKey || 'colors'] = seen.map((_, i) => PALETTE[i % PALETTE.length]);
     }
@@ -745,15 +763,23 @@ export const SHAPES = {
     if (dims.length < 2) return null;
 
     const valueField = opts.valueField || 'value';
-    const records = [];
+    const order = [];
+    const byTuple = new Map();
     rows.forEach((r) => {
       if (dims.some((_, i) => !String(r[i] ?? '').trim())) return;   // a gap is not a record
-      const rec = {};
-      dims.forEach((d, i) => { rec[d] = String(r[i]).trim(); });
-      rec[valueField] = num(r[dims.length], 1);
-      records.push(rec);
+      const vals = dims.map((_, i) => String(r[i]).trim());
+      const id = JSON.stringify(vals);
+      if (!byTuple.has(id)) {
+        const rec = {};
+        dims.forEach((d, i) => { rec[d] = vals[i]; });
+        rec[valueField] = 0;
+        byTuple.set(id, rec);
+        order.push(id);
+      }
+      byTuple.get(id)[valueField] += num(r[dims.length], 1);
     });
-    if (!records.length) return null;
+    const records = order.map((id) => byTuple.get(id));
+    if (!records.length || records.length > 250) return null;
 
     const colorKey = opts.colorByKey || 'colorBy';
     return {
@@ -769,13 +795,20 @@ export const SHAPES = {
   edges(table, spec, opts = {}) {
     const { rows } = table;
     if (!rows.length) return null;
-    const links = rows.filter((r) => r[0] && r[1]).map((r) => ({ source: r[0], target: r[1] }));
-    if (!links.length) return null;
-
-    const seen = [];
-    links.forEach((l) => {
-      [l.source, l.target].forEach((n) => { if (!seen.includes(n)) seen.push(n); });
+    const seenEdges = new Set();
+    const links = [];
+    rows.forEach((r) => {
+      const s = String(r[0] ?? '').trim();
+      const t = String(r[1] ?? '').trim();
+      if (!s || !t || s === t) return;
+      const id = JSON.stringify([s, t]);
+      if (seenEdges.has(id)) return;
+      seenEdges.add(id);
+      links.push({ source: s, target: t });
     });
+    if (!links.length || links.length > 250) return null;
+
+    const seen = [...new Set(links.flatMap((l) => [l.source, l.target]))];
     // Preserve any group assignment the user already had for a known node.
     const prev = new Map((spec.nodes || []).map((n) => [n.id, n.group]));
     return {
@@ -811,7 +844,9 @@ export const SHAPES = {
         let next = node.children.find((c) => c.name === name);
         if (!next) { next = { name }; node.children.push(next); }
         node = next;
-        if (depth === path.length - 1) node.value = value;
+        // The same path twice is one leaf holding both rows, which is what
+        // `links` does with a repeated hop; keeping the last lost the rest.
+        if (depth === path.length - 1) node.value = (node.value || 0) + value;
       });
     });
 
@@ -880,7 +915,13 @@ export const SHAPES = {
     const { rows } = table;
     if (!rows.length) return null;
     const values = {};
-    rows.forEach((r) => { if (r[0]) values[String(r[0]).trim()] = num(r[1]); });
+    // A place named twice holds both rows. `hasOwn`, because a cell may say
+    // `constructor`, and adding to what an empty object inherits is not a sum.
+    rows.forEach((r) => {
+      if (!r[0]) return;
+      const place = String(r[0]).trim();
+      values[place] = (Object.hasOwn(values, place) ? values[place] : 0) + num(r[1]);
+    });
     return Object.keys(values).length
       ? { [opts.key || 'regionValues']: values, dataMode: 'regions' }
       : null;
@@ -950,6 +991,18 @@ export function applyData(def, spec, input) {
   const shape = SHAPES[desc.shape];
   if (!shape) return { ok: false, message: `Unknown data shape "${desc.shape}".` };
 
+  // Before anything is written, so a refused table leaves the chart as it was.
+  const words = wordColumns(def, table);
+  if (words.length) {
+    const named = words.length === 1 ? `"${words[0]}" holds` : `"${words[0]}" and ${words.length - 1} more hold`;
+    return {
+      ok: false,
+      words,
+      message: `${named} words, not numbers, so this chart has nothing to draw from `
+        + `${words.length === 1 ? 'it' : 'them'}. Count the rows per value, or use a column of numbers.`,
+    };
+  }
+
   let patch;
   try {
     patch = shape(table, spec, desc);
@@ -964,7 +1017,118 @@ export function applyData(def, spec, input) {
   if (typeof def.onData === 'function') def.onData(spec, table);
 
   const n = table.rows.length;
-  return { ok: true, message: `Loaded ${n} row${n === 1 ? '' : 's'}.` };
+  const said = [`Loaded ${n} row${n === 1 ? '' : 's'}.`];
+  const added = repeatedLabels(mergedLabels(def, table)).length;
+  if (added) said.push(`${added} repeated label${added === 1 ? ' was' : 's were'} added together.`);
+  const cut = undrawnColumns(def, table);
+  if (cut.length) {
+    said.push(`The first ${seriesCap(def)} of ${seriesCap(def) + cut.length} value columns are drawn; `
+      + `this chart holds no more. Not drawn: ${cut.join(', ')}.`);
+  }
+  return { ok: true, message: said.join(' ') };
+}
+
+/* ── What a chart does with its rows ─────────────────────────────────────────
+ * The reader's table is theirs. These say, in one place, what a chart could not
+ * hold, so nothing is dropped, zeroed or merged without the reader being told.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/** How many value columns a `labelSeries` chart holds. */
+const seriesCap = (def) => (def.data && def.data.maxSeries) || 8;
+
+/** The value columns past what a `labelSeries` chart holds, by name. */
+export function undrawnColumns(def, table) {
+  if (!def.data || def.data.shape !== 'labelSeries') return [];
+  return table.headers.slice(1 + seriesCap(def));
+}
+
+/**
+ * The value columns of this table that hold words and not one number.
+ *
+ * Drawing one means a row of zeros that nobody wrote, and a bar of 0 for every
+ * company in a list reads as data. A column with a few bad cells is a different
+ * case: `checkTableShape` names those so they can be fixed.
+ *
+ * @returns {string[]} their headings, in order
+ */
+export function wordColumns(def, table) {
+  const [from, to] = valueColumnRange(def, table);
+  const out = [];
+  for (let c = from; c < to; c++) {
+    let filled = false;
+    let numeric = false;
+    for (const row of table.rows) {
+      const v = String(row[c] ?? '').trim();
+      if (!v) continue;
+      filled = true;
+      if (looksNumeric(v)) { numeric = true; break; }
+    }
+    if (filled && !numeric) out.push(table.headers[c]);
+  }
+  return out;
+}
+
+/**
+ * Labels that appear more than once, most often first.
+ *
+ * @param {string[]} labels
+ * @returns {Array<{label: string, count: number}>}
+ */
+export function repeatedLabels(labels) {
+  const tally = new Map();
+  labels.forEach((v) => {
+    const label = String(v ?? '').trim();
+    if (label) tally.set(label, (tally.get(label) || 0) + 1);
+  });
+  return [...tally].filter(([, count]) => count > 1)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** What this chart keys a row by where it adds repeats together, or nothing. */
+function mergedLabels(def, table) {
+  const desc = def.data || {};
+  if (desc.shape === 'tree') {
+    return table.rows.map((r) => r.slice(0, -1)
+      .flatMap((cell) => String(cell ?? '').split('>')).map((p) => p.trim()).filter(Boolean).join(' > '));
+  }
+  return desc.shape === 'regions' || desc.mergesRepeats ? table.rows.map((r) => r[0]) : [];
+}
+
+/** Shapes that draw one mark per row, whatever the row's label says. */
+const PER_ROW_SHAPES = new Set(['labelSeries', 'labelValue', 'items', 'pairs', 'rowSeries']);
+
+/**
+ * Repeated labels this chart draws as separate marks, for the note that offers
+ * to combine them. A scatter's first column is a position rather than a label,
+ * and two points may share an x.
+ */
+export function repeatsDrawnApart(def, table) {
+  const desc = def.data || {};
+  if (!PER_ROW_SHAPES.has(desc.shape) || desc.mergesRepeats || desc.labelsKey === '_xs') return [];
+  return repeatedLabels(table.rows.map((r) => r[0]));
+}
+
+/**
+ * One row per label, every column of numbers added up. A column holding words
+ * keeps the first of them, since there is nothing to add. A new table rather
+ * than an edit: the caller writes it wherever an edit can be undone.
+ */
+export function combineRepeats(table) {
+  const byLabel = new Map();
+  for (const row of table.rows) {
+    const label = String(row[0] ?? '').trim();
+    if (!byLabel.has(label)) byLabel.set(label, row.map((c) => String(c ?? '')));
+    else {
+      const kept = byLabel.get(label);
+      row.forEach((c, i) => {
+        if (i && looksNumeric(String(c ?? '').trim()) && looksNumeric(kept[i].trim() || '0')) {
+          kept[i] = String(num(kept[i]) + num(c));
+        }
+      });
+    }
+  }
+  return { headers: [...table.headers], rows: [...byLabel.values()] };
 }
 
 export { num, looksNumeric };
@@ -1125,6 +1289,22 @@ export function expectedFormat(def) {
 }
 
 /**
+ * The columns this chart reads as numbers, as `[from, to)`.
+ *
+ * From the same table the grid reads, so a four-column flow is not told that
+ * its third stage is a bad number. A lone column has no label beside it: on a
+ * distribution it is the values, so its cells are what has to be numeric. Past
+ * the series a `labelSeries` chart holds, a column is not read at all.
+ */
+function valueColumnRange(def, table) {
+  const expected = expectedFormat(def);
+  const width = table.headers.length;
+  const from = width === 1 ? 0 : countOf(columnRules(expected.shape).text, table.headers);
+  const reads = expected.shape === 'labelSeries' ? 1 + seriesCap(def) : expected.reads;
+  return [from, Math.min(width, reads)];
+}
+
+/**
  * Does this table look like something the chart can read?
  *
  * Deliberately advisory. It reports what does not line up and lets the caller
@@ -1162,12 +1342,10 @@ export function checkTableShape(def, table) {
   }
 
   // The value columns have to be numbers, or the chart draws a row of zeros.
-  // Which columns those are comes from the same table the grid reads, so a
-  // four-column flow is not told that its third stage is a bad number.
-  const labelCols = countOf(columnRules(expected.shape).text, table.headers);
+  const [from, to] = valueColumnRange(def, table);
   let bad = 0;
   table.rows.slice(0, 200).forEach((r) => {
-    for (let c = labelCols; c < Math.min(r.length, expected.reads); c++) {
+    for (let c = from; c < Math.min(r.length, to); c++) {
       const v = String(r[c] ?? '').trim();
       if (v && !looksNumeric(v)) bad++;
     }
@@ -1181,7 +1359,13 @@ export function checkTableShape(def, table) {
     };
   }
 
-  return { ok: true, message: `${rows} row${rows === 1 ? '' : 's'}, ${name(got)}.`, expected };
+  const cut = undrawnColumns(def, table);
+  return {
+    ok: true,
+    expected,
+    message: `${rows} row${rows === 1 ? '' : 's'}, ${name(got)}.`
+      + (cut.length ? ` This chart holds ${seriesCap(def)} value columns, so ${name(cut.length)} will not be drawn.` : ''),
+  };
 }
 
 /* ── Is this text a table at all? ────────────────────────────────────────────

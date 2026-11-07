@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -146,6 +146,126 @@ try {
   assert.match((await tool('profile_table', {})).body, /Give a table/);
   assert.equal((await tool('profile_table', { path: 'test/benchmark/data/nothing.csv' })).isError, true);
   assert.match((await tool('profile_table', { path: join(dir, '..') })).body, /outside the folder|not a file/);
+
+  // Table-free calls: when the user only describes what they want (no data yet).
+  const mcpList = JSON.parse((await tool('recommend_charts', {})).body);
+  assert.equal(mcpList.mode, 'list');
+  assert.ok(mcpList.charts.length >= 115);
+  const mcpChartInfo = JSON.parse((await tool('build_chart', { recipe: { chart: 'sankey' } })).body);
+  assert.equal(mcpChartInfo.mode, 'chart');
+  assert.equal(mcpChartInfo.chart.id, 'sankey');
+  assert.ok(Array.isArray(mcpChartInfo.chart.reads.columns) && mcpChartInfo.link.withData === false);
+
+  // Row identifiers (rownames, id) are excluded from projections and box-plot roles hints.
+  const withRownames = 'rownames,group,speed,dist\n'
+    + Array.from({ length: 12 }, (_, i) => `${i + 1},${i % 2 ? 'A' : 'B'},${10 + i},${20 + i * 3}`).join('\n') + '\n';
+  const rRanked = JSON.parse((await tool('recommend_charts', { text: withRownames })).body);
+  assert.ok(rRanked.suggestions.every((s) => !s.using || !s.using.includes('rownames')), 'projections leave out rownames when real measures exist');
+  assert.notEqual(rRanked.views[0].recipe.steps[0].agg, 'count', 'measure-bearing views lead ahead of row counts');
+  assert.ok(rRanked.notes.some((n) => /"rownames" looks like an identifier/.test(n)), 'profile quality notes reach the top-level notes array');
+
+  // Calling build_chart with only {"chart": id} preserves the missing-column warning when a partial projection dropped a column named in why.
+  const pairs = [[5, 1], [1, 2], [4, 3], [2, 4], [6, 5], [3, 6], [5, 7], [1, 8], [4, 9], [2, 10], [6, 11], [3, 12]];
+  const offTopicCsv = 'name,noise,x,y\n' + pairs.map(([n, x], i) => `${'pqr'[i % 3]},${n},${x},${x * 2}`).join('\n') + '\n';
+  const offRanked = JSON.parse((await tool('recommend_charts', { text: offTopicCsv })).body);
+  const missingPick = offRanked.suggestions.find((s) => s.warnings.some((w) => /the reason is about/.test(w)));
+  assert.ok(missingPick, 'a partial pick that drops the column named in why warns in recommend_charts');
+  const unfixedBuild = JSON.parse((await tool('build_chart', { text: offTopicCsv, recipe: { chart: missingPick.id } })).body);
+  assert.equal(unfixedBuild.verify.clean, false, 're-running build_chart without columns keeps verify.clean false');
+  assert.ok(unfixedBuild.warnings.some((w) => /the reason is about/.test(w)));
+
+  // Large all-numeric tables (like 4,971 x 12 weather ensemble forecasts) do not match flow/node charts or stall.
+  const bigNumeric = Array.from({ length: 12 }, (_, c) => `m${c}`).join(',') + '\n'
+    + Array.from({ length: 2000 }, (_, r) => Array.from({ length: 12 }, (__, c) => ((r * 13 + c * 7) % 997) / 10).join(',')).join('\n') + '\n';
+  const t0 = Date.now();
+  const bigRanked = JSON.parse((await tool('recommend_charts', { text: bigNumeric })).body);
+  assert.ok(Date.now() - t0 < 5000, `large all-numeric table ranked in ${Date.now() - t0}ms`);
+  assert.ok(bigRanked.suggestions.every((s) => !['chord', 'sankey', 'parallel-sets'].includes(s.id)));
+
+  // Finding 11: box-plot places each group's values at its own x-axis tick slot, not all at slot 0.
+  const { getChart, newSpec } = await import('../js/studio/registry.js');
+  const boxDef = getChart('box-plot');
+  const boxCfg = boxDef.chartjs.build(newSpec(boxDef));
+  assert.equal(boxCfg.options.scales.x.stacked, true, 'box-plot x-axis stacks slots so each group centers on its tick');
+  boxCfg.data.datasets.forEach((ds, i) => {
+    assert.equal(ds.data.length, boxCfg.data.labels.length);
+    assert.ok(Array.isArray(ds.data[i]) && ds.data[i].length > 0, `group ${i} sits at tick ${i}`);
+    ds.data.forEach((slot, j) => { if (j !== i) assert.equal(slot, null); });
+  });
+
+  // Finding 12: repair recipe on a box-plot never picks an identifier column (rownames, id) as the value column.
+  const gravCsv = 'rownames,g,series\n'
+    + Array.from({ length: 24 }, (_, i) => `${i + 1},${70 + (i % 8)},${i < 12 ? 7 : 8}`).join('\n') + '\n';
+  const gravBox = json(['--chart', 'box-plot', '--columns', 'rownames,g,series', '-'], gravCsv);
+  assert.ok(gravBox.body.warnings.some((w) => w.includes('"group":"series","value":"g"') && !w.includes('rownames')),
+    'box-plot repair recipe names g as value, never rownames');
+
+  // Finding 13: a two-column year/value table (with or without rownames) reads year as time, not as a second series.
+  const yearValCsv = 'rownames,year,incidence\n'
+    + Array.from({ length: 32 }, (_, i) => `${i + 1},${1950 + i},${(1.1 + (i % 7) * 0.4).toFixed(1)}`).join('\n') + '\n';
+  const yearValRanked = json(['-'], yearValCsv).body;
+  const linePick = yearValRanked.suggestions.find((s) => s.id === 'line-basic');
+  assert.ok(linePick && linePick.verify.clean, 'year/value line-basic is clean');
+  assert.deepEqual(linePick.holds.headers, ['label', 'incidence'], 'year is the x-axis label, not a second series');
+  const histPick = yearValRanked.suggestions.find((s) => s.id === 'histogram');
+  assert.ok(histPick && histPick.verify.clean, 'year/value histogram drops year and holds only the measure');
+
+  // Finding 3: MCP server uses async spawn so a running tool call does not block ping, and refuses oversized tables.
+  const order = [];
+  const slowCall = tool('recommend_charts', { path: 'test/benchmark/data/wbpop.csv' }).then((r) => { order.push('tool'); return r; });
+  const fastPing = ask('ping').then((r) => { order.push('ping'); return r; });
+  await Promise.all([slowCall, fastPing]);
+  assert.deepEqual(order, ['ping', 'tool'], 'ping answers while a tool call is still running in its child process');
+  const tooManyRows = 'a,b\n' + '1,2\n'.repeat(50005);
+  const refusedOversized = await tool('profile_table', { text: tooManyRows });
+  assert.equal(refusedOversized.isError, true, 'oversized table is refused');
+  assert.match(refusedOversized.body, /over 50,000 rows; filter or aggregate it first/);
+
+  // Findings 5 & 6: missing file in --json answers {"error": ...} (no stack trace), and links past 8,192 chars set linkTooLong and return the plain studio link.
+  const missingRun = choose(['--json', 'test/benchmark/data/does-not-exist.csv']);
+  assert.equal(missingRun.status, 1);
+  assert.equal(missingRun.stderr, '', 'no raw stack trace on stderr in --json mode');
+  assert.match(JSON.parse(missingRun.stdout).error, /No such file/);
+  const bigLinkCsv = 'item,v1,v2,v3,v4\n'
+    + Array.from({ length: 1200 }, (_, i) => `item_${i}_${(i * 7919) % 104729},${(i * 31) % 997},${(i * 47) % 991},${(i * 59) % 983},${(i * 73) % 977}`).join('\n') + '\n';
+  const bigLinkRun = json(['-'], bigLinkCsv);
+  assert.equal(bigLinkRun.body.linkTooLong, true, 'large link exceeds 8,192 chars and sets linkTooLong: true');
+  assert.equal(bigLinkRun.body.link.linkTooLong, true);
+  assert.equal(bigLinkRun.body.link.withData, false);
+  assert.ok(!bigLinkRun.body.link.url.includes('&s='), 'JSON link holds the plain studio URL when too long');
+
+  // Finding 14: flow charts over > 500 raw rows are not offered un-aggregated, and parallel-sets folds duplicate dimension tuples.
+  const longFlowCsv = 'dept,status,amount\n'
+    + Array.from({ length: 800 }, (_, i) => `${['Sales', 'Eng', 'Ops'][i % 3]},${['Open', 'Won'][i % 2]},${10 + (i % 5)}`).join('\n') + '\n';
+  const longFlowRanked = json(['-'], longFlowCsv).body;
+  assert.ok(longFlowRanked.suggestions.every((s) => !['sankey', 'chord', 'parallel-sets', 'alluvial'].includes(s.id)),
+    'flow charts are not offered un-aggregated over > 500 raw rows');
+  const dupSetsCsv = 'channel,device,outcome,count\n'
+    + 'Organic,Desktop,Purchase,10\nOrganic,Desktop,Purchase,15\nPaid,Mobile,Bounce,20\n';
+  const dupSetsBuilt = json(['--chart', 'parallel-sets', '-'], dupSetsCsv).body;
+  assert.equal(dupSetsBuilt.holds.rows, 2, 'parallel-sets folds duplicate dimension tuples into one record per distinct combination');
+  assert.deepEqual(dupSetsBuilt.holds.first, ['Organic', 'Desktop', 'Purchase', '25']);
+
+  // Finding 10: standalone export CSS uses border-box and a shrinkable grid track so the page does not overflow a 390 px window.
+  const { generateCode } = await import('../js/studio/engines.js');
+  const standaloneHtml = generateCode(boxDef, newSpec(boxDef)).standalone;
+  assert.match(standaloneHtml, /grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'standalone body grid shrinks below max-width on narrow viewports');
+  assert.match(standaloneHtml, /\.chart-card\s*\{[\s\S]*?box-sizing:\s*border-box;\s*min-width:\s*0;/, 'chart-card includes border-box and min-width: 0');
+
+  // MCP schema checks: build_chart lists split, unknown arguments are rejected, and outside paths get the same answer whether or not they exist.
+  assert.match(JSON.stringify(tools[2].inputSchema), /split/, 'build_chart schema description lists split');
+  const bogusArg = await tool('profile_table', { path: 'test/benchmark/data/drinks.csv', bogus: true });
+  assert.equal(bogusArg.isError, true, 'unknown arguments are rejected as additionalProperties: false says');
+  assert.match(bogusArg.body, /has no "bogus" argument/);
+  const outsideExisting = join(dir, 'exists.csv');
+  writeFileSync(outsideExisting, 'a,b\n1,2\n');
+  const outsideMissing = join(dir, 'missing.csv');
+  const outExistReply = await tool('profile_table', { path: outsideExisting });
+  const outMissReply = await tool('profile_table', { path: outsideMissing });
+  assert.equal(outExistReply.isError, true);
+  assert.equal(outMissReply.isError, true);
+  assert.equal(outExistReply.body.replace('exists.csv', ''), outMissReply.body.replace('missing.csv', ''), 'outside path gets the same answer whether or not it exists');
+  assert.match(outMissReply.body, /is outside the folder/);
 
   const unknown = await ask('tools/call', { name: 'draw_everything', arguments: {} });
   assert.equal(unknown.error.code, -32602);

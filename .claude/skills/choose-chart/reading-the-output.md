@@ -39,14 +39,18 @@ column names (`label`, `group, x, y`), with its first row. Compare it with the
 `why` above it. Then act on every `!` line:
 
 - `the reason is about "x"…`: the chart took other columns. Rerun
-  `--chart <id> --columns …` with the columns in the order that chart's `Reads:`
-  line lists them. A grouped scatter reads `group, x, y`, so use
-  `--columns species,petal_length,petal_width`.
+  `--chart <id> --columns …` (or in MCP `build_chart`, pass
+  `"columns": ["…"]` inside `recipe`) with the columns in the order that chart's
+  `Reads:` line lists them. Calling `build_chart` with only `{"chart": "<id>"}`
+  without `"columns"` keeps the same wrong slice. A grouped scatter reads
+  `group, x, y`, so use `--columns species,petal_length,petal_width`.
 - `labels repeat`: one mark per row. Right for steps in time, such as months in
   order. For many observations of a few groups (150 flowers, 3 species), choose a
   chart made for raw rows instead: a grouped scatter, a box plot or a violin. Or
-  total them with a `group` step, and say what it folded. Do not compute totals
-  or averages yourself.
+  run one of the **Views of this table, aggregated** recipes (`Average <measure>
+  by <group>` or `Spread of <measure> by <group>` — prefer a measure view over
+  `Counts by <group>` whenever the table has numeric measures), and say what it
+  folded. Do not compute totals or averages yourself.
 - `every row is its own group` or `the groups are numbers`: a distribution chart
   misread the table. Where a column of whole numbers names the groups (a weekday
   1–7, a score 3–8), the line prints a `roles` recipe. Otherwise use `--columns`
@@ -73,6 +77,9 @@ column names (`label`, `group, x, y`), with its first row. Compare it with the
 
 ## What the profile hides, and what the rules do not reach
 
+- **A numeric column marked `id, ignored` (`id`, `rownames`, `1, 2, 3…`) is never
+  a measure.** Leave it out with `--columns` if a whole-table chart would plot it
+  as a series or group.
 - **A word column marked `id, ignored` may be the label you need.** The profile
   drops any word column with a different value in every row. When those are
   names (countries, people, products), the table is one row per thing. Use a

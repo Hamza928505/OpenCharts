@@ -645,6 +645,7 @@ const match = await page.evaluate(async () => {
     return {
       detected,
       cards: document.querySelectorAll('.card').length,
+      whole: document.querySelectorAll('.card-fit:not(.part)').length,
       chips: [...document.querySelectorAll('.match-col-chip b')].map((c) => c.textContent),
       verdict: (document.querySelector('.match-verdict') || {}).textContent || '',
       banner: !!document.querySelector('.match-note'),
@@ -714,18 +715,18 @@ check(match.flow.fits.histogram === 'reads value',
 check(match.flow.chips.join(',') === 'from,to,value',
   'the columns are named back to the reader', match.flow.chips.join(','));
 check(match.flow.banner, 'a filtered grid says so');
-check(match.junk.cards < 6, 'words where numbers belong rule out nearly everything',
+check(/^counts rows per /.test(match.junk.fits['bar-vertical'] || ''), 'words where numbers belong are counted, never drawn as zero',
   `${match.junk.cards} charts: ${match.junk.ids.join(',')}`);
-check(!match.junk.ids.some((id) => ['pie', 'bar-vertical', 'histogram', 'line-basic'].includes(id)),
-  'and rule out every chart that would draw those words as zero',
+check(!match.junk.ids.some((id) => ['histogram', 'line-basic'].includes(id)),
+  'and a chart with no honest count of them is not offered',
   match.junk.ids.join(','));
 check(match.years.detected === false,
   'a header row of years cannot be detected — the box says so');
 check(match.yearsFixed.chips.join(',') === 'region,2023,2024',
   'and ticking the box settles it', match.yearsFixed.chips.join(','));
-check(match.yearsFixed.cards > match.flow.cards,
+check(match.yearsFixed.whole > match.flow.whole,
   'a plain label-and-values table suits far more charts',
-  `${match.yearsFixed.cards} vs ${match.flow.cards}`);
+  `${match.yearsFixed.whole} vs ${match.flow.whole}`);
 check(match.cleared === match.total, 'and the banner leads back to every chart',
   `${match.cleared} of ${match.total}`);
 check(match.widened.keptTable && match.widened.keptFit && match.widened.box.trim() !== '',
@@ -1802,6 +1803,47 @@ const files = await page.evaluate(async () => {
   const evilBook = await buildXlsx([['xl/worksheets/sheet1.xml', evil]]);
   out.xxe = await readDataFile(file('evil.xlsx', [evilBook]));
 
+  /* A workbook of the kind people keep: several sheets whose columns do not
+     quite agree, one hidden from view, and a date that is only a date by style. */
+  const main = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const cellXml = (ref, v) => (typeof v === 'number' ? `<c r="${ref}"><v>${v}</v></c>`
+    : Array.isArray(v) ? `<c r="${ref}" s="${v[0]}"><v>${v[1]}</v></c>`
+    : `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`);
+  const sheetXml = (rows) => `<?xml version="1.0"?><worksheet ${main}><sheetData>${rows.map((row, r) =>
+    `<row r="${r + 1}">${row.map((v, c) => cellXml(String.fromCharCode(65 + c) + (r + 1), v)).join('')}</row>`).join('')}</sheetData></worksheet>`;
+  const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const book = await buildXlsx([
+    ['xl/workbook.xml', `<?xml version="1.0"?><workbook ${main} xmlns:r="${REL}"><sheets>
+      <sheet name="North" sheetId="1" r:id="rId1"/><sheet name="South" sheetId="2" r:id="rId2"/>
+      <sheet name="Secret" sheetId="3" state="veryHidden" r:id="rId3"/></sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/>
+      <Relationship Id="rId3" Target="worksheets/sheet3.xml"/></Relationships>`],
+    ['xl/styles.xml', `<?xml version="1.0"?><styleSheet ${main}><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="22"/></cellXfs></styleSheet>`],
+    ['xl/worksheets/sheet1.xml', sheetXml([['when', 'plain', 'sales'], [[1, 45460.5], 45460.5, 1], [[1, 45461.5], 45461.5, 2]])],
+    ['xl/worksheets/sheet2.xml', sheetXml([['when', 'sales', 'extra'], [[1, 45462.5], 3, 'x']])],
+    ['xl/worksheets/sheet3.xml', sheetXml([['when', 'sales'], [[1, 45463.5], 999]])],
+  ]);
+  const opened = await readDataFile(file('book.xlsx', [book]));
+  const { ALL_SHEETS } = await import('/js/studio/fileimport.js');
+  const { parseTable } = await import('/js/studio/dataio.js');
+  const all = await opened.pick(ALL_SHEETS);
+  const south = await opened.pick('South');
+  const stacked = parseTable(all.text);
+  out.workbook = {
+    sheets: opened.sheets,
+    first: opened.sheet,
+    notes: opened.notes.join(' '),
+    firstText: opened.text,
+    southText: south.text,
+    allHeaders: stacked.headers,
+    allRows: stacked.rows,
+    secretLeaked: /999|Secret/.test(all.text) || /999/.test(opened.text),
+    missing: (await opened.pick('Nope')).ok,
+  };
+
+  // What came back above carries a function, which does not cross to the suite.
+  for (const res of Object.values(out)) if (res && res.pick) delete res.pick;
   return out;
 });
 
@@ -1819,6 +1861,179 @@ check(!files.empty.ok && !files.blank.ok, 'an empty file is refused');
 check(!files.xxe.ok && /DOCTYPE/i.test(files.xxe.message),
   'a workbook carrying a DOCTYPE is refused outright', files.xxe.message);
 console.log(`  ${green('✓')} files — xlsx/csv/txt read, 6 hostile shapes refused`);
+
+/* Nothing of a reader's table goes without them saying so.
+ *
+ * The file this was reported against was a company list: nineteen sheets, of
+ * which one was read; names drawn as 0; a repeated label quietly reduced to its
+ * last value; and every column a chart did not read gone for good once a tile
+ * was clicked. Each check below is one of those. */
+const wb = files.workbook;
+check(wb.sheets.join() === 'North,South' && wb.first === 'North', 'a workbook lists its visible sheets and opens on the first',
+  wb.sheets.join());
+check(/1 hidden/.test(wb.notes) && !wb.secretLeaked, 'a hidden sheet is left out, and the reader is told', wb.notes);
+check(/2024-06-17 12:00:00/.test(wb.firstText) && /,45460\.5,/.test(wb.firstText),
+  'a cell styled as a date reads as one, and the same number unstyled stays a number', wb.firstText.split('\n')[1]);
+check(/extra/.test(wb.southText) && !/plain/.test(wb.southText), 'another sheet can be picked by name', wb.southText.split('\n')[0]);
+check(wb.allHeaders.join() === 'Sheet,when,plain,sales,extra' && wb.allRows.length === 3,
+  'All sheets stacks them by heading and adds a Sheet column', `${wb.allHeaders.join()} · ${wb.allRows.length} rows`);
+{
+  const at = (name) => wb.allHeaders.indexOf(name);
+  const south = wb.allRows.find((r) => r[at('Sheet')] === 'South');
+  check(south && south[at('sales')] === '3' && south[at('extra')] === 'x' && south[at('plain')] === '',
+    'a column one sheet lacks is blank there, not shifted', JSON.stringify(south));
+}
+check(wb.missing === false, 'a sheet that is not in the workbook is refused');
+
+const keeps = await page.evaluate(async () => {
+  const io = await import('/js/studio/dataio.js');
+  const m = await import('/js/studio/DataMatch.js');
+  const { getChart, newSpec } = await import('/js/studio/registry.js');
+  const { openDataDialog } = await import('/js/studio/DataDialog.js');
+  const applied = (id, table) => {
+    const def = getChart(id);
+    const spec = newSpec(def);
+    const res = io.applyData(def, spec, table);
+    return { ...res, text: def.toText ? def.toText(spec) : '' };
+  };
+  const out = {};
+
+  // Words are never a measure.
+  const names = io.parseTable('Name,City\nAcme,Berlin\nBeta,Berlin\nGamma,Bonn', true);
+  const refused = applied('bar-vertical', names);
+  out.refused = { ok: refused.ok, words: refused.words, message: refused.message };
+  out.mixedStillReads = applied('bar-vertical', io.parseTable('a,b\nx,1\ny,oops', true)).ok;
+  const ranked = m.rankCharts(names);
+  const offered = [...ranked.fits, ...ranked.partial];
+  out.zeroes = offered.filter((e) => /,0(\n|$)/.test(applied(e.def.id, e.table || names).text)).map((e) => e.def.id);
+  const counted = ranked.partial.filter((e) => e.counted);
+  out.countedIds = counted.map((e) => e.def.id);
+  out.countedOn = counted[0] && counted[0].counted;
+  out.countHolds = counted[0] && counted[0].table.rows;
+  out.gauge = out.countedIds.includes('doughnut-gauge') || out.countedIds.includes('calendar-heatmap');
+
+  // Every column a chart leaves out is named, and the whole table travels.
+  const wide = io.parseTable('Firma,Name,City,Sales\n'
+    + 'c0a80101-0000-4000-8000-000000000001,Acme,Berlin,1\nc0a80101-0000-4000-8000-000000000002,Beta,Bonn,2\n'
+    + 'c0a80101-0000-4000-8000-000000000003,Gamma,Bonn,3', true);
+  const wideRanked = m.rankCharts(wide);
+  out.allNamed = wideRanked.partial.every((e) => (e.unused || []).length + e.table.headers.length >= wide.headers.length);
+  out.guidLabel = wideRanked.partial.filter((e) => e.table.headers[0] === 'Firma').map((e) => e.def.id);
+  out.noteSample = m.unusedNote(wideRanked.partial[0]);
+  m.handOff({ headers: ['Name', 'Sales'], rows: [['Acme', '1']] }, null, wide);
+  const taken = m.takeHandOff();
+  out.handOff = { part: taken.headers, source: taken.source && taken.source.headers };
+  m.clearHandOff();
+
+  // Repeats: added up where a chart can only keep one, and kept where it can keep all.
+  const dup = (head) => io.parseTable(`${head},value\nA,10\nA,20\nB,5`, true);
+  const place = io.parseTable('country,value\nFrance,10\nFrance,20\nSpain,5', true);
+  const day = io.parseTable('date,value\n2024-01-01,10\n2024-01-01,20\n2024-01-02,5', true);
+  out.summed = {};
+  for (const [id, table] of [
+    ['treemap', dup('label')], ['sunburst', dup('label')], ['icicle', dup('label')],
+    ['dendrogram', dup('label')], ['dendrogram-radial', dup('label')], ['calendar-heatmap', day],
+    ['choropleth', place], ['globe', place], ['dot-density-map', place], ['cartogram', place],
+  ]) {
+    const res = applied(id, table);
+    out.summed[id] = res.ok && /,30(\n|$|,)/.test(res.text) && /added together/.test(res.message);
+  }
+  const bars = applied('bar-vertical', dup('label'));
+  out.barRows = io.parseTable(bars.text, true).rows.length;
+  out.barRepeats = io.repeatsDrawnApart(getChart('bar-vertical'), dup('label'));
+  out.scatterRepeats = io.repeatsDrawnApart(getChart('scatter-basic'), dup('label'));
+  out.combined = io.combineRepeats(dup('label')).rows;
+
+  // In the editor: ticking brings a column back, undo takes it away again, and
+  // the ticks follow.
+  const def = getChart('bar-vertical');
+  const spec = newSpec(def);
+  const whole = io.parseTable('Name,City,Sales\nAcme,Berlin,1\nBeta,Bonn,2', true);
+  openDataDialog(def, spec, () => {}, { headers: ['Name', 'Sales'], rows: [['Acme', '1'], ['Beta', '2']] }, { source: whole });
+  const boxes = () => [...document.querySelectorAll('.dlg .table-column input')];
+  const heads = () => [...document.querySelectorAll('.dlg .dgrid-head-input')].map((i) => i.value).join();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  await sleep(50);
+  out.editorOpens = { ticks: boxes().map((b) => b.checked).join(), heads: heads() };
+  boxes()[1].click();
+  await sleep(50);
+  out.editorTicked = heads();
+  document.querySelector('.dlg .dgrid-undo').click();
+  await sleep(50);
+  out.editorUndone = { heads: heads(), ticks: boxes().map((b) => b.checked).join() };
+
+  // Applying a column of words asks, and the count lands where it can be seen.
+  boxes()[2].click();
+  await sleep(50);
+  out.lastBox = boxes().filter((b) => b.checked).length === 1 && boxes().find((b) => b.checked).disabled;
+  boxes()[1].click();
+  await sleep(50);
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Use this data/.test(b.textContent)).click();
+  await sleep(100);
+  const yes = [...document.querySelectorAll('.btn-primary')].find((b) => /Count rows per/.test(b.textContent));
+  out.askedToCount = yes ? yes.textContent : null;
+  if (yes) yes.click();
+  await sleep(100);
+  out.countInGrid = heads();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(50);
+  const left = [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Cancel|Close/.test(b.textContent));
+  if (left) left.click();
+  await sleep(50);
+  for (const b of document.querySelectorAll('.btn-primary')) if (/Discard|Close|Leave/.test(b.textContent)) b.click();
+  await sleep(300);
+
+  // A chart writes its first heading back as `label`, and the column in use is
+  // still the one it was handed.
+  const carried = m.countRows(whole, 1);
+  m.handOff(carried, null, whole);
+  const openedOn = newSpec(def);
+  io.applyData(def, openedOn, carried);
+  openDataDialog(def, openedOn, () => {});
+  await sleep(50);
+  out.handedTicks = boxes().map((b) => b.checked).join();
+  boxes()[0].click();
+  await sleep(50);
+  document.querySelector('.dlg .dgrid-undo').click();
+  await sleep(50);
+  out.handedUndone = boxes().map((b) => b.checked).join();
+  m.clearHandOff();
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Cancel|Close/.test(b.textContent))?.click();
+  await sleep(50);
+  for (const b of document.querySelectorAll('.btn-primary')) if (/Discard|Close|Leave/.test(b.textContent)) b.click();
+  return out;
+});
+check(keeps.handedTicks === 'false,true,false' && keeps.handedUndone === 'false,true,false',
+  'the column a chart was opened on is ticked, under whatever heading the chart wrote',
+  `${keeps.handedTicks} · ${keeps.handedUndone}`);
+check(keeps.refused.ok === false && keeps.refused.words.join() === 'City' && /City/.test(keeps.refused.message),
+  'a column of nothing but words is refused by name, not drawn as zeros', keeps.refused.message);
+check(keeps.mixedStillReads, 'a column with one bad cell keeps its existing flagged path');
+check(keeps.zeroes.length === 0, 'no chart offered for a table of words holds a zero it made up', keeps.zeroes.join());
+check(keeps.countedOn === 'City' && JSON.stringify(keeps.countHolds) === '[["Berlin","2"],["Bonn","1"]]',
+  'it is offered as a count of rows, most first', JSON.stringify(keeps.countHolds));
+check(keeps.countedIds.includes('bar-vertical') && keeps.countedIds.includes('pie') && keeps.countedIds.includes('treemap')
+  && !keeps.gauge && !keeps.countedIds.includes('line-basic'),
+  'only on charts where a count per category means something', `${keeps.countedIds.length}: ${keeps.countedIds.join()}`);
+check(keeps.allNamed && /^not used: /.test(keeps.noteSample || ''), 'every partial chart names what it leaves out', keeps.noteSample);
+check(keeps.guidLabel.length === 0, 'a column of GUIDs is not the default label beside a column of names', keeps.guidLabel.join());
+check(keeps.handOff.part.join() === 'Name,Sales' && keeps.handOff.source.join() === 'Firma,Name,City,Sales',
+  'the whole table goes to the studio with the chart', keeps.handOff.source.join());
+check(Object.values(keeps.summed).every(Boolean), 'the ten charts that key by label add repeats up, and say so',
+  Object.entries(keeps.summed).filter(([, v]) => !v).map(([k]) => k).join());
+check(keeps.barRows === 3 && keeps.barRepeats[0].label === 'A' && keeps.barRepeats[0].count === 2,
+  'a bar chart keeps each row and notices the repeat', JSON.stringify(keeps.barRepeats));
+check(keeps.scatterRepeats.length === 0, 'a scatter has no labels to repeat');
+check(JSON.stringify(keeps.combined) === '[["A","30"],["B","5"]]', 'Combine repeats adds them', JSON.stringify(keeps.combined));
+check(keeps.editorOpens.ticks === 'true,false,true' && keeps.editorOpens.heads === 'Name,Sales',
+  'the editor lists every column of the file, ticking the ones in use', JSON.stringify(keeps.editorOpens));
+check(keeps.editorTicked === 'Name,City,Sales', 'ticking a column brings it back where it was', keeps.editorTicked);
+check(keeps.editorUndone.heads === 'Name,Sales' && keeps.editorUndone.ticks === 'true,false,true',
+  'undo takes it away again and the ticks follow', JSON.stringify(keeps.editorUndone));
+check(keeps.lastBox, 'the last ticked column cannot be unticked');
+check(/Count rows per/.test(keeps.askedToCount || '') && /,Rows$/.test(keeps.countInGrid),
+  'applying a column of words asks, and the count lands in the grid', `${keeps.askedToCount} · ${keeps.countInGrid}`);
+console.log(`  ${green('✓')} keeps — sheets, columns, words and repeats stay the reader's`);
 
 /* Being text is not being a table.
  *

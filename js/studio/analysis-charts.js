@@ -107,11 +107,19 @@ export function recommendAnalysisCharts(table, profile = profileTable(table)) {
         why: 'Several measures on one time axis. Only dates where every measure has a valid value are drawn.' });
     }
   }
-  // Interleave analyses so the first page is useful before any filtering.
+  // Interleave analyses so the first page is useful before any filtering;
+  // measure-bearing views lead when the table has numbers to chart.
+  const order = [1, 2, 3, 4, 5, 0, 6, 7, 8];
   const plans = [];
   const longest = Math.max(...buckets.map((bucket) => bucket.length));
-  for (let i = 0; i < longest; i++) for (const bucket of buckets) if (bucket[i]) plans.push(bucket[i]);
+  for (let i = 0; i < longest; i++) for (const b of order) if (buckets[b][i]) plans.push(buckets[b][i]);
   return plans;
+}
+
+/** The columns no plan uses and why, in the profile's own sentences. */
+export function columnsInNoView(profile, plans) {
+  const used = new Set(plans.flatMap((plan) => plan.columns));
+  return profile.columns.filter((c) => !used.has(c.index));
 }
 
 /**
@@ -131,7 +139,7 @@ export function recipeOf(plan, headers) {
     case 'group':
       return { chart: plan.id, steps: [{ group: a, agg: plan.agg, values: [b] }] };
     case 'spread':
-      return { chart: plan.id, steps: [numeric(b)], columns: [a, b], roles: { group: a, value: b } };
+      return { chart: plan.id, steps: [{ sort: a }, numeric(b)], columns: [a, b], roles: { group: a, value: b } };
     case 'distribution':
       return { chart: plan.id, steps: [numeric(a)], columns: [a] };
     case 'relationship':
@@ -173,7 +181,13 @@ export function buildAnalysisChart(source, plan) {
     detail = corr.r === null ? 'Not enough paired variation for Pearson correlation.' : `Pearson r = ${corr.r}; association is not causation.`;
   } else if (plan.kind === 'spread') {
     const pairs = source.rows.map((row) => [String(row[plan.group] ?? '').trim() || '(blank)', toNumber(row[plan.measure])])
-      .filter((pair) => Number.isFinite(pair[1]));
+      .filter((pair) => Number.isFinite(pair[1]))
+      .sort((a, b) => {
+        const na = toNumber(a[0]);
+        const nb = toNumber(b[0]);
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+        return a[0].localeCompare(b[0]);
+      });
     usedRows = pairs.length;
     table = { headers: [source.headers[plan.group], source.headers[plan.measure]], rows: pairs.map(([k, v]) => [k, String(v)]) };
     detail = 'Every valid value is in its group; none are averaged away.';

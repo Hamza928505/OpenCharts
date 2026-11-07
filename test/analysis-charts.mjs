@@ -113,6 +113,25 @@ for (const plan of richPlans) {
   checked++;
 }
 assert.ok(checked >= 15, `${checked} recipes checked`);
+// Finding 7: box-plot view recipes sort their groups so numeric groups out of order stay clean and match the panel.
+const unsortedSpreadTable = {
+  headers: ['grade', 'score'],
+  rows: [
+    ['3', '81'], ['3', '85'], ['3', '79'], ['3', '88'], ['3', '82'], ['3', '84'], ['3', '80'], ['3', '86'],
+    ['1', '62'], ['1', '65'], ['1', '60'], ['1', '68'], ['1', '63'], ['1', '64'], ['1', '61'], ['1', '67'],
+    ['2', '72'], ['2', '75'], ['2', '70'], ['2', '78'], ['2', '73'], ['2', '74'], ['2', '71'], ['2', '76'],
+  ],
+};
+const spreadPlan = recommendAnalysisCharts(unsortedSpreadTable).find((p) => p.kind === 'spread');
+assert.ok(spreadPlan, 'unsorted numeric groups offer a spread view');
+const spreadRecipe = recipeOf(spreadPlan, unsortedSpreadTable.headers);
+assert.deepEqual(spreadRecipe.steps[0], { sort: 'grade' }, 'box-plot view recipe sorts groups first');
+const unsortedCsv = [unsortedSpreadTable.headers, ...unsortedSpreadTable.rows].map((r) => r.join(',')).join('\n') + '\n';
+const spreadRun = JSON.parse(spawnSync(process.execPath, [skill, '--json', '--recipe', JSON.stringify(spreadRecipe), '-'], { input: unsortedCsv, encoding: 'utf8' }).stdout);
+assert.equal(spreadRun.verify.clean, true, 'sorted box-plot view recipe has no group-order warning');
+assert.equal(spreadRun.holds.first[0], '1', 'first group in holds is sorted to 1, not 3');
+assert.deepEqual([...new Set(buildAnalysisChart(unsortedSpreadTable, spreadPlan).table.rows.map((r) => r[0]))], ['1', '2', '3']);
+
 const listing = spawnSync(process.execPath, [skill, '-'], { input: rawCsv, encoding: 'utf8' }).stdout;
 assert.match(listing, /Views of this table, aggregated/);
 assert.match(listing, /--recipe '\{"chart":"/, 'the skill prints a recipe for each view');

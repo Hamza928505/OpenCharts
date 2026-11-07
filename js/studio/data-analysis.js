@@ -5,7 +5,7 @@ import { applyData, toCSV } from './dataio.js';
 import { renderChart, destroyInstance } from './engines.js';
 import { onThemeChange } from './theme.js';
 import { escapeHtml as esc } from './StudioApp.js';
-import { recommendAnalysisCharts, buildAnalysisChart } from './analysis-charts.js';
+import { recommendAnalysisCharts, buildAnalysisChart, columnsInNoView } from './analysis-charts.js';
 import { handOff } from './DataMatch.js';
 
 function downloadTable(table, filename) {
@@ -22,8 +22,10 @@ function mountRecommendations(host, table, profile) {
   const family = (k) => (k === 'trendMulti' ? 'trend' : k);
   const kinds = { count: 'Counts', group: 'Grouped calculations', distribution: 'Distributions', relationship: 'Relationships', trend: 'Time trends', spread: 'Spread by group', composition: 'Shares', crosstab: 'Two-way grids' };
   const usedColumns = new Set(plans.flatMap((plan) => plan.columns));
+  const left = columnsInNoView(profile, plans);
   host.innerHTML = `<h4>Recommended charts for your data</h4>
     <p class="dlg-note">${CHARTS.length} chart types can produce many more views of your data. Explore different columns and calculations, using all eligible rows with missing values explained.</p>
+    ${left.length ? `<p class="dlg-note" data-columns-left><b>In no view below:</b> ${left.map((c) => esc(c.roleWhy || c.name)).join('; ')}. Explore calculations can still group by any of them.</p>` : ''}
     <p data-charts-count class="analysis-chart-count" role="status"></p>
     <div class="analysis-controls analysis-chart-controls">
       <label>Analysis type<select data-chart-kind><option value="all">All analyses</option>${[...new Set(plans.map((plan) => family(plan.kind)))].map((kind) => `<option value="${esc(kind)}">${esc(kinds[kind] || kind)}</option>`).join('')}</select></label>
@@ -75,7 +77,7 @@ function mountRecommendations(host, table, profile) {
         card.querySelector('[data-chart-source]').textContent = built.note;
         instances.push(renderChart(built.def, preview, built.spec, { height: 240, label: `${plan.title}. ${built.note}` }));
         const carry = (event) => {
-          if (!handOff(built.table, { chart: plan.id, spec: built.spec })) {
+          if (!handOff(built.table, { chart: plan.id, spec: built.spec }, table)) {
             event.preventDefault();
             status.textContent = 'Your browser could not keep this chart for the studio. Download its data, or allow local storage and try again.';
           }

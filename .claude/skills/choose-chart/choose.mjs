@@ -43,7 +43,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseTable, transposeTable, applyData, expectedFormat, looksNumeric } from '../../../js/studio/dataio.js';
 import { profileTable } from '../../../js/studio/profile.js';
-import { toNumber, numericColumns } from '../../../js/studio/transform.js';
+import { toNumber, numericColumns, ID_NAME } from '../../../js/studio/transform.js';
 import { RecipeError, checkRecipe, colIndex as recipeColIndex, applyRecipe } from '../../../js/studio/recipe.js';
 import { facetByColumn } from '../../../js/studio/facet.js';
 import { generateCode } from '../../../js/studio/engines.js';
@@ -70,8 +70,8 @@ const option = (name) => {
 // one object. The prose is still what is built; the object adds what a program
 // would otherwise have to take out of it again.
 const jsonMode = flag('--json');
-const log = jsonMode ? [] : null;
-const out = (line = '') => (log ? log.push(line) : console.log(line));
+const log = [];
+const out = (line = '') => { log.push(line); if (!jsonMode) console.log(line); };
 const fail = (message) => {
   if (jsonMode) console.log(JSON.stringify({ error: message }));
   else console.error(message);
@@ -120,10 +120,16 @@ const PER_ROW = new Set(['labelSeries', 'labelValue', 'items', 'matrix', 'rowSer
 
 /** Past 8 KB of path a web server refuses the request: GitHub Pages answers 414. */
 const SERVER_LIMIT = 8192;
+const MAX_ROWS = 50000;
 
 function readTable() {
   if (!source) return null;
-  const bytes = readFileSync(source === '-' ? 0 : source);
+  let bytes;
+  try {
+    bytes = readFileSync(source === '-' ? 0 : source);
+  } catch (e) {
+    fail(e.code === 'ENOENT' ? `No such file: ${source}` : `Could not read ${source}: ${e.message}`);
+  }
   // .xlsx is a ZIP and .xls an OLE file; the browser reads both, Node here
   // has no DOMParser to do it with.
   if ((bytes[0] === 0x50 && bytes[1] === 0x4b) || (bytes[0] === 0xd0 && bytes[1] === 0xcf)) {
@@ -134,6 +140,9 @@ function readTable() {
   // Bank file opens with a byte-order mark, which would be part of its first
   // column's name.
   const lines = bytes.toString('utf8').replace(/^﻿/, '').split(/\r?\n/);
+  if (lines.length > MAX_ROWS + 100) {
+    fail(`That table has over ${MAX_ROWS.toLocaleString('en-US')} rows; filter or aggregate it first.`);
+  }
   let lead = 0;
   while (lead < lines.length && /^\s*(#|$)/.test(lines[lead])) lead++;
   const comments = lines.slice(0, lead).filter((l) => l.trim()).length;
@@ -143,6 +152,9 @@ function readTable() {
   const text = rest.join('\n');
   const parsed = parseTable(text, header);
   if (!parsed.headers.length) fail('No table in that input — expected CSV, TSV or JSON rows.');
+  if (parsed.rows.length > MAX_ROWS) {
+    fail(`That table has ${parsed.rows.length.toLocaleString('en-US')} rows (over ${MAX_ROWS.toLocaleString('en-US')}); filter or aggregate it first.`);
+  }
   // A headerless table is turned without the `Label, Series 1` it was given.
   let table = swap
     ? transposeTable({ headers: parsed.hadHeader ? parsed.headers : [], rows: parsed.rows })
@@ -274,16 +286,24 @@ function report(def, whole, table, why) {
     // Read one group per column, a weekday or a score beside the measure is
     // drawn as a group of its own numbers. Few whole numbers, each in many
     // rows, is what a column naming groups looks like.
+    const idCols = new Set(profileTable(whole).columns.filter((c) => c.idLike).map((c) => c.name));
     const spread = table.headers.map((name, c) => {
       const vals = table.rows.map((r) => r[c]).filter((v) => String(v ?? '').trim() !== '');
-      const n = new Set(vals.map((v) => toNumber(v))).size;
+      const nums = vals.map((v) => toNumber(v)).filter(Number.isFinite);
+      const n = new Set(nums).size;
       const few = vals.length && n >= 2 && n <= 24 && n * 2 <= vals.length && vals.every((v) => Number.isInteger(toNumber(v)));
-      return { name, n, few };
+      const idLike = idCols.has(name) || ID_NAME.test(String(name || '').trim())
+        || (nums.length > 3 && nums[0] <= 1 && nums.every((v, i) => v === nums[0] + i));
+      return { name, n, few, idLike };
     });
     // The fewest values first, and the measure that varies most: births by
     // weekday, not by year or by day of the month.
-    const few = spread.filter((s) => s.few).sort((a, b) => a.n - b.n);
-    const value = (spread.filter((s) => !s.few).sort((a, b) => b.n - a.n)[0] || {}).name;
+    const nonId = spread.filter((s) => !s.idLike);
+    const fewAll = nonId.filter((s) => s.few).sort((a, b) => a.n - b.n);
+    const measures = nonId.filter((s) => !s.few);
+    const valuePool = measures.length ? measures : nonId.filter((s) => !fewAll.length || s.name !== fewAll[0].name);
+    const value = ([...valuePool].sort((a, b) => b.n - a.n)[0] || {}).name;
+    const few = fewAll.filter((s) => s.name !== value);
     if (few.length && value) {
       out(`   ! ${few.slice(0, 3).map((f) => `"${f.name}" holds ${f.n} different whole numbers`).join(', ')}`
         + `, drawn as ${few.length === 1 ? 'a group' : 'groups'} of ${few.length === 1 ? 'its' : 'their'} own values.`
@@ -304,11 +324,18 @@ function report(def, whole, table, why) {
         : 'Keep one with a step in a recipe, {"steps": [{"filter": "<column>", "is": "<value>"}]};'
           + ' the studio\'s Shape tab has the same steps.'));
   }
-  if (PER_ROW.has(shape) && named && labels < h.rows.length && !time && !h.split) {
+  const codedGroup = h.headers[0] !== 'x' && !named && labels >= 1 && labels <= 24 && labels * 2 <= h.rows.length;
+  if (PER_ROW.has(shape) && (named || codedGroup) && labels < h.rows.length && !time && !h.split) {
     out(`   ! labels repeat: one mark per row, ${h.rows.length} rows, ${labels} different label${labels === 1 ? '' : 's'}.`
       + (long ? ' It is the long table in the note above: a recipe there turns it.'
         : ' Fine for steps in time; for observations of a few groups, group them first (a "group" step,'
           + ' or the studio\'s Shape tab) or choose a chart made for raw rows.'));
+  } else if ((shape === 'links' || shape === 'dimensions') && table.rows.length > 1 && !h.split) {
+    const paths = new Set(table.rows.map((r) => r.slice(0, -1).map((c) => String(c ?? '').trim()).join('\u0000'))).size;
+    if (paths < table.rows.length) {
+      out(`   ! labels repeat: ${table.rows.length} rows, ${paths} different path${paths === 1 ? '' : 's'}.`
+        + ' For observations of a few groups, group them first (a "group" step, or a view recipe below) so the flow is a count or total you chose.');
+    }
   }
   if (shape === 'xyGroups' && labels > PALETTE.length) {
     out(`   ! ${labels} groups and ${PALETTE.length} colours${labels === h.rows.length ? ' (every row is its own group)' : ''}:`
@@ -492,7 +519,7 @@ async function link(def, spec, title) {
   const plain = url.toString();
   if (spec) url.searchParams.set('s', await encodeSpec(spec));
   const text = url.toString();
-  if (spec && url.pathname.length + url.search.length > SERVER_LIMIT) {
+  if (spec && (text.length > SERVER_LIMIT || url.pathname.length + url.search.length > SERVER_LIMIT)) {
     out(`${title} on its example, since no link can hold this table:`);
     out(`  ${plain}`);
     out(`  (With the table the link is ${text.length} characters, and web servers refuse links past ${SERVER_LIMIT}:`
@@ -500,14 +527,14 @@ async function link(def, spec, title) {
       + (html ? `${html} holds the chart with it.)`
         : 'Rerun with --html <file.html> for the chart and its data as one page, or --save <file.csv>'
           + ' for the columns it reads, to upload in the chart\'s data editor.)'));
-    return { url: plain, withData: false, tooLong: true, length: text.length };
+    return { url: plain, withData: false, tooLong: true, linkTooLong: true, length: text.length };
   }
   out(spec ? `${title} with this data:` : `${title} (example data):`);
   out(`  ${text}`);
   if (text.length > URL_COMFORTABLE) {
     out(`  (${text.length} characters: some apps cut long links. If it opens on the example, paste the table into the studio's data editor instead.)`);
   }
-  return { url: text, withData: !!spec, tooLong: false, length: text.length };
+  return { url: text, withData: !!spec, tooLong: false, linkTooLong: false, length: text.length };
 }
 
 /** The three recipes that turn a long table, one line each, one panel each, or one of them. */
@@ -590,7 +617,7 @@ function tableInfo(input, prof) {
       ...(c.roleWhy ? { roleWhy: c.roleWhy } : {}),
       ...(c.unit ? { unit: c.unit } : {}),
       ...(c.geo ? { geo: c.geo.kind } : {}),
-      ignored: !!c.idLike,
+      ignored: c.role === 'identifier',
     })),
     header: { had: !!input.hadHeader, guessed: header === undefined, titleRowsSkipped: input.skipped || 0 },
     commentLines: input.comments || 0,
@@ -654,7 +681,9 @@ if (list) {
   let said = [];
   let adjusted = [];
   let notes = [];
+  let prof = null;
   if (input) {
+    prof = profileTable(input.table);
     out();
     [, notes] = marked(() => describeInput(input));
     // Split by a column, the chart reads the rest of the table, once a panel.
@@ -669,7 +698,10 @@ if (list) {
       : part ? `Your table: it reads only ${names(body, part.using)}.`
         : `Your table: it cannot read it — ${(miss && miss.message) || 'the shape does not match'}`);
     const read = (fit || part) && ((fit || part).table || body);
-    if (read) [h, said] = marked(() => report(def, input.table, withSplit(read, input.table, by), null));
+    const why = columns === null && !recipe.steps?.length && !recipe.roles && by < 0
+      ? (recommendCharts(prof, new Set([def.id]), 6, { intent: question }).suggestions.find((s) => s.id === def.id) || {}).why || null
+      : null;
+    if (read) [h, said] = marked(() => report(def, input.table, withSplit(read, input.table, by), why));
     if (h) [, adjusted] = marked(() => fitToData(def, h, read));
     if (save && read) saveTable(withSplit(read, input.table, by));
     if (html) writePage(def, h && h.spec);
@@ -685,8 +717,11 @@ if (list) {
         howToRead: help.read || '', watch: help.watch || '',
       },
       ...(input ? {
-        table: tableInfo(input, profileTable(input.table)),
-        notes: notes.filter((l) => /^Note/.test(l)),
+        table: tableInfo(input, prof),
+        notes: [
+          ...notes.filter((l) => /^Note/.test(l)),
+          ...prof.quality.map((q) => `Note (${q.level}): ${q.text}`),
+        ],
         readable,
         holds: holdsOf(h),
         warnings,
@@ -694,6 +729,7 @@ if (list) {
         verify: verifyOf(readable, h, warnings),
       } : {}),
       link: where,
+      linkTooLong: !!(where && where.tooLong),
       ...(html ? { page: html } : {}),
     });
   }
@@ -710,8 +746,10 @@ if (list) {
 
   out(`Table: ${summarise(prof)}`);
   out(`Columns: ${prof.columns.map((c) => `${c.name} (${c.idLike ? 'id, ignored' : c.type})`).join(', ')}`);
-  const [, inputLines] = marked(() => describeInput(input));
-  prof.quality.forEach((q) => out(`Note (${q.level}): ${q.text}`));
+  const [, inputLines] = marked(() => {
+    describeInput(input);
+    prof.quality.forEach((q) => out(`Note (${q.level}): ${q.text}`));
+  });
   if (picked.intent) out(`Question: read as "${picked.intent}".${picked.intentNote ? ` ${picked.intentNote}` : ''}`);
 
   const holds = new Map();
@@ -753,15 +791,23 @@ if (list) {
 
   out();
   out(`${rank.fits.length} charts read this table as is; ${rank.partial.length} more read some of its columns.`);
-  const top = suggestions.length ? readable.get(suggestions[0].id) : rank.fits[0] || rank.partial[0];
+  const cleanPick = suggestions.find((s) => !warningsOf(said.get(s.id) || []).length);
+  const chosenPick = cleanPick || suggestions[0];
+  const top = chosenPick ? readable.get(chosenPick.id) : rank.fits[0] || rank.partial[0];
+  const topWarnings = chosenPick ? warningsOf(said.get(chosenPick.id) || []) : [];
   let where = null;
   let adjusted = [];
+  let topHeld = null;
   if (top) {
-    const h = holds.get(top.def.id) || held(top.def, top.table || table);
-    if (h) [, adjusted] = marked(() => fitToData(top.def, h, top.table || table));
+    topHeld = holds.get(top.def.id) || held(top.def, top.table || table);
+    if (topHeld) [, adjusted] = marked(() => fitToData(top.def, topHeld, top.table || table));
     if (save) saveTable(top.table || table);
-    if (html) writePage(top.def, h && h.spec);
-    where = await link(top.def, h && h.spec, `Open ${top.def.id}`);
+    if (html) writePage(top.def, topHeld && topHeld.spec);
+    const label = topWarnings.length
+      ? `Open ${top.def.id} (has ! warnings above; run a --recipe or --columns first)`
+      : `Open ${top.def.id}`;
+    where = await link(top.def, topHeld && topHeld.spec, label);
+    if (where) Object.assign(where, { chart: top.def.id, clean: topWarnings.length === 0 });
     out('Another chart, other columns or rows: --chart <id> [--columns a,b,c], or --recipe, and the same input.');
   } else {
     out('No chart reads this table. Try --swap, or --header / --no-header.');
@@ -791,7 +837,9 @@ if (list) {
       })),
       counts: { fits: rank.fits.length, partial: rank.partial.length },
       adjustments: adjusted,
+      verify: top ? verifyOf(top.using ? 'partial' : 'fits', topHeld, topWarnings) : null,
       link: where,
+      linkTooLong: !!(where && where.tooLong),
       ...(html ? { page: html } : {}),
     });
   }

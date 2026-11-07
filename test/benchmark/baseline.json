@@ -5,32 +5,32 @@
     "suggestions": {
       "p1": 0.625,
       "p3": 0.375,
-      "ndcg5": 0.437,
+      "ndcg5": 0.432,
       "top1Gold": 0.188,
       "reachGold": 0.5,
       "reachGood": 0.875,
       "invalidRate": 0
     },
     "views": {
-      "p1": 0.125,
-      "p3": 0.271,
-      "ndcg5": 0.356,
+      "p1": 0.313,
+      "p3": 0.396,
+      "ndcg5": 0.419,
       "top1Gold": 0,
-      "reachGold": 0.438,
+      "reachGold": 0.5,
       "reachGood": 0.938,
       "invalidRate": 0
     },
     "offered": {
       "p1": 0.625,
       "p3": 0.375,
-      "ndcg5": 0.437,
+      "ndcg5": 0.432,
       "top1Gold": 0.188,
       "reachGold": 0.563,
       "reachGood": 0.938,
       "invalidRate": 0
     },
     "distinctTop1": 0.25,
-    "distinctOffered": 19,
+    "distinctOffered": 20,
     "diversity": 1
   },
   "dev": {
@@ -38,32 +38,32 @@
     "suggestions": {
       "p1": 0.5,
       "p3": 0.278,
-      "ndcg5": 0.389,
+      "ndcg5": 0.382,
       "top1Gold": 0.167,
       "reachGold": 0.5,
       "reachGood": 0.833,
       "invalidRate": 0
     },
     "views": {
-      "p1": 0.167,
-      "p3": 0.25,
-      "ndcg5": 0.364,
+      "p1": 0.25,
+      "p3": 0.333,
+      "ndcg5": 0.406,
       "top1Gold": 0,
-      "reachGold": 0.5,
+      "reachGold": 0.583,
       "reachGood": 0.917,
       "invalidRate": 0
     },
     "offered": {
       "p1": 0.5,
       "p3": 0.278,
-      "ndcg5": 0.389,
+      "ndcg5": 0.382,
       "top1Gold": 0.167,
       "reachGold": 0.583,
       "reachGood": 0.917,
       "invalidRate": 0
     },
     "distinctTop1": 0.333,
-    "distinctOffered": 18,
+    "distinctOffered": 19,
     "diversity": 1
   },
   "heldout": {
@@ -78,9 +78,9 @@
       "invalidRate": 0
     },
     "views": {
-      "p1": 0,
-      "p3": 0.333,
-      "ndcg5": 0.332,
+      "p1": 0.5,
+      "p3": 0.583,
+      "ndcg5": 0.458,
       "top1Gold": 0,
       "reachGold": 0.25,
       "reachGood": 1,
