@@ -23,7 +23,14 @@ const el = (tag, className, text) => {
 
 /** What a column holds, in the words the matcher's report uses. */
 function roleOf(table, column) {
-  const cells = table.rows.slice(0, 40).map((r) => String(r[column] ?? '').trim()).filter(Boolean);
+  // The first filled cells rather than the first rows: in a stack of sheets a
+  // column may hold nothing until the one sheet that has it.
+  const cells = [];
+  for (const row of table.rows) {
+    const cell = String(row[column] ?? '').trim();
+    if (cell) cells.push(cell);
+    if (cells.length === 40) break;
+  }
   if (!cells.length) return 'empty';
   if (cells.every(looksNumeric)) return 'numbers';
   return cells.filter(looksDateLike).length / cells.length >= 0.9 ? 'dates' : 'words';

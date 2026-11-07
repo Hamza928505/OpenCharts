@@ -1981,8 +1981,31 @@ const keeps = await page.evaluate(async () => {
   if (left) left.click();
   await sleep(50);
   for (const b of document.querySelectorAll('.btn-primary')) if (/Discard|Close|Leave/.test(b.textContent)) b.click();
+  await sleep(300);
+
+  // A chart writes its first heading back as `label`, and the column in use is
+  // still the one it was handed.
+  const carried = m.countRows(whole, 1);
+  m.handOff(carried, null, whole);
+  const openedOn = newSpec(def);
+  io.applyData(def, openedOn, carried);
+  openDataDialog(def, openedOn, () => {});
+  await sleep(50);
+  out.handedTicks = boxes().map((b) => b.checked).join();
+  boxes()[0].click();
+  await sleep(50);
+  document.querySelector('.dlg .dgrid-undo').click();
+  await sleep(50);
+  out.handedUndone = boxes().map((b) => b.checked).join();
+  m.clearHandOff();
+  [...document.querySelectorAll('.dlg-foot .btn')].find((b) => /Cancel|Close/.test(b.textContent))?.click();
+  await sleep(50);
+  for (const b of document.querySelectorAll('.btn-primary')) if (/Discard|Close|Leave/.test(b.textContent)) b.click();
   return out;
 });
+check(keeps.handedTicks === 'false,true,false' && keeps.handedUndone === 'false,true,false',
+  'the column a chart was opened on is ticked, under whatever heading the chart wrote',
+  `${keeps.handedTicks} · ${keeps.handedUndone}`);
 check(keeps.refused.ok === false && keeps.refused.words.join() === 'City' && /City/.test(keeps.refused.message),
   'a column of nothing but words is refused by name, not drawn as zeros', keeps.refused.message);
 check(keeps.mixedStillReads, 'a column with one bad cell keeps its existing flagged path');

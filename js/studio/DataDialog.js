@@ -203,9 +203,11 @@ export function openDataDialog(def, spec, onApply, seed, from = {}) {
       status.className = 'dlg-status';
       // Adding or renaming a column changes what can be split on.
       refreshFacet();
-      tableControls.showing(grid.getData().headers);
+      const { headers } = grid.getData();
+      tableControls.showing(headers.join() === start.headers.join() ? openingNames : headers);
     },
   });
+  let openingNames = start.headers;
 
   /* ── tabs ───────────────────────────────────────────────────────────── */
 
@@ -277,9 +279,13 @@ export function openDataDialog(def, spec, onApply, seed, from = {}) {
   // No column of the file in the grid means nothing is ticked rather than a
   // guess: a chart that refused the table still shows its own example, and the
   // reader's columns are there to tick into it.
-  const fileTable = from.source || (seed ? start : takeHandOff()?.source);
+  const handed = seed ? null : takeHandOff();
+  const fileTable = from.source || (seed ? start : handed?.source);
+  // A chart writes its first heading back as its own word (`label`), so the
+  // table it was handed is what says which of the file's columns are in use.
+  openingNames = handed && handed.headers.length === start.headers.length ? handed.headers : start.headers;
   if (from.file) tableControls.setFile(from.file);
-  if (fileTable) tableControls.setTable(fileTable, start.headers);
+  if (fileTable) tableControls.setTable(fileTable, openingNames);
 
   /* Tab 1 — the grid */
   const gridPanel = el('div', 'dlg-gridwrap');
